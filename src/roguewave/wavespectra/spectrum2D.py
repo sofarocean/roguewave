@@ -11,7 +11,7 @@ Authors: Pieter Bart Smit
 import numpy
 from .wavespectrum import WaveSpectrum, WaveSpectrumInput
 from typing import List, Union
-from .tools import datetime_to_iso_time_string
+from roguewave.tools import datetime_to_iso_time_string
 
 
 class WaveSpectrum2DInput(WaveSpectrumInput):

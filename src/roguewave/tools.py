@@ -12,9 +12,6 @@ Authors: Pieter Bart Smit
 from datetime import datetime, timezone
 import typing
 
-def datetime_to_iso_time_string(time: datetime):
-    return time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
 def to_datetime(time: typing.Union[float, int, datetime, str]):
     if time is None:
         return None
@@ -32,3 +29,9 @@ def to_datetime(time: typing.Union[float, int, datetime, str]):
     else:
         return datetime.fromtimestamp(time, tz=timezone.utc)
 
+def datetime_to_iso_time_string(time: typing.Union[float, int, datetime, str]):
+    if time is None:
+        return None
+
+    time = to_datetime(time)
+    return time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")

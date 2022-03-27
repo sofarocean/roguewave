@@ -10,7 +10,7 @@ Sofar Ocean Technologies
 Authors: Pieter Bart Smit
 """
 import numpy
-from .tools import to_datetime, datetime_to_iso_time_string
+from roguewave.tools import to_datetime, datetime_to_iso_time_string
 from typing import TypedDict, List
 
 class WaveSpectrumInput(TypedDict):

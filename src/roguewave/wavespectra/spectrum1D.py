@@ -12,7 +12,7 @@ Authors: Pieter Bart Smit
 import numpy
 from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from .wavespectrum import WaveSpectrum, WaveSpectrumInput
-from .tools import to_datetime, datetime_to_iso_time_string
+from roguewave.tools import datetime_to_iso_time_string
 from .mem import mem
 from typing import List, Union
 

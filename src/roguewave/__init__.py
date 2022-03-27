@@ -1,0 +1,1 @@
+from .externaldata.spotter import get_spectrum_from_sofar_spotter_api

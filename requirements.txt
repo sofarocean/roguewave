@@ -1,0 +1,4 @@
+pysofar
+pytest
+numpy
+wheel

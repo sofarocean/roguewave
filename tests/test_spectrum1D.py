@@ -32,21 +32,3 @@ def test_methods_1d():
 
         error = f'Output of {key} from WaveSpectrum1D is {result} but should be {value}'
         assert difference == 0.0 , error
-
-def test_methods_2d():
-    test_data = json.loads(
-        pkg_resources.read_text(resources, 'spectrum1D_data.json'))
-
-    spectrum = get_spectrum().spectrum2d(36)
-    for key,value in test_data.items():
-        func=getattr(spectrum,key)
-
-        if type(func)==types.MethodType:
-            result = func()
-        else:
-            result = func
-
-        difference = numpy.sum(numpy.abs(result - value))
-
-        error = f'Output of {key} from WaveSpectrum2D is {result} but should be {value}, difference {difference}'
-        assert difference <= 1.0e-6, error

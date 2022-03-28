@@ -2,3 +2,4 @@ pysofar
 pytest
 numpy
 wheel
+netCDF4

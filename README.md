@@ -5,6 +5,8 @@ Python toolbox to interact with Sofar Ocean Spotter API.
 - Python3
 - pysofar
 - numpy
+- netCDF4
+- wheel (If developing/Contributing)
 - Pytest (If developing/Contributing)
 - Setuptools (If developing/Contributing)
 
@@ -12,10 +14,17 @@ Python toolbox to interact with Sofar Ocean Spotter API.
 1. Make sure that you have the requirements listed above
 2. `pip install roguewave` to your desired python environment
 3. Test with `python3 -c 'import roguewave'`. If this runs successfully, chances are everything worked.
+4. To interact with the api's you need to add the access tokens into an environmental file. 
+   Specifically create a file called `sofar_api.env` in your user directory containing
+```shell
+WF_API_TOKEN=_wavefleet_token_
+SPECTRAL_API_TOKEN=_spectral_api_token_
+```
+
+
 
 # Examples
-
-### Retrieve Spectrum from API
+### Retrieve Spectrum from observational Spotter API
 ```python
 from roguewave import get_spectrum_from_sofar_spotter_api
 from pysofar.spotter import Spotter
@@ -50,3 +59,30 @@ plt.yscale('log')
 plt.title(f'spectrum for {spotter_id} at time {spectra[0].timestamp}')
 plt.grid()
 plt.show()
+```
+
+### Retrieve Spectrum from model Spectral API
+```python
+from roguewave.externaldata.sofarspectralapi import SofarSpectralAPI,load_spectral_file
+import matplotlib.pyplot as plt
+
+# Create an api Object
+api = SofarSpectralAPI()
+
+# Get all the points accessible for this particular user. This returns a list
+# dictionaries containing latitudes and longitudes
+points = api.points()
+
+# Lets get the first point. This will download the netcdf containing the spectral
+# forcast into the given directory.
+file = api.download_spectral_file(**points[0],directory='./')
+
+# Lets load the point. This will open the Netcdf file and return a Spectrum2D
+# object. This object supports all the methods of the Spectrum1D object (hm0, 
+# tm02, etc.)
+data = load_spectral_file(file)
+
+# Lets plot it
+plt.pcolormesh( data[0].frequency,data[0].direction,data[0].variance_density )
+plt.show()
+```

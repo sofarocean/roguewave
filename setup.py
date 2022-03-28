@@ -10,7 +10,8 @@ setuptools.setup(
     license='Apache 2 Licesnse',
     install_requires=[
         'pysofar',
-        'numpy'
+        'numpy',
+        'netCDF4'
     ],
     description='Python package to interact with Sofar wave data',
     long_description=readme_contents,

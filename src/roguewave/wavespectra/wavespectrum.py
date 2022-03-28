@@ -11,14 +11,21 @@ Authors: Pieter Bart Smit
 """
 import numpy
 from roguewave.tools import to_datetime, datetime_to_iso_time_string
-from typing import TypedDict, List
+from typing import TypedDict, List, Tuple, Union
+from .windSpotter import U10
+from roguewave.wavetheory.lineardispersion import \
+    inverse_intrinsic_dispersion_relation, phase_velocity
+from datetime import datetime
+
+
 
 class WaveSpectrumInput(TypedDict):
     frequency: List[float]
     varianceDensity: List
-    timestamp: str
+    timestamp: Union[str,datetime,int,float]
     latitude: float
     longitude: float
+
 
 class WaveSpectrum():
     """
@@ -32,9 +39,9 @@ class WaveSpectrum():
     def __init__(self,
                  wave_spectrum_input: WaveSpectrumInput
                  ):
-
         self.frequency = numpy.array(wave_spectrum_input['frequency'])
-        self.variance_density = numpy.array(wave_spectrum_input['varianceDensity'])
+        self.variance_density = numpy.array(
+            wave_spectrum_input['varianceDensity'])
         self.direction = None
         self._a1 = None
         self._b1 = None
@@ -48,7 +55,7 @@ class WaveSpectrum():
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
         pass
 
-    def _create_wave_spectrum_input(self)->WaveSpectrumInput:
+    def _create_wave_spectrum_input(self) -> WaveSpectrumInput:
         return WaveSpectrumInput(
             frequency=list(self.frequency),
             varianceDensity=list(self.variance_density),
@@ -57,7 +64,7 @@ class WaveSpectrum():
             longitude=self.longitude
         )
 
-    def _range(self, fmin=0.0, fmax=numpy.inf)->numpy.ndarray:
+    def _range(self, fmin=0.0, fmax=numpy.inf) -> numpy.ndarray:
         return (self.frequency >= fmin) & (self.frequency < fmax)
 
     @property
@@ -163,7 +170,7 @@ class WaveSpectrum():
         return self._spread(self.a1, self.b1)
 
     def _spectral_weighted(self, property, fmin=0, fmax=numpy.inf):
-        range = (self._range(fmin,fmax)) & numpy.isfinite( property )
+        range = (self._range(fmin, fmax)) & numpy.isfinite(property)
 
         return numpy.trapz(property[range] * self.e[range],
                            self.frequency[range]) / self.m0(fmin, fmax)
@@ -186,3 +193,32 @@ class WaveSpectrum():
 
     def bulk_b2(self, fmin=0, fmax=numpy.inf):
         return self._spectral_weighted(self.b2, fmin, fmax)
+
+    def U10(self, **kwargs) -> Tuple[float]:
+        windspeed, winddirection, _ = U10(self.e, self.frequency, self.a1,
+                                          self.b1, **kwargs)
+        return windspeed, winddirection
+
+    def Ustar(self, **kwargs) -> float:
+        _, _, _Ustar = U10(self.e, self.frequency, self.a1,
+                           self.b1, **kwargs)
+        return _Ustar
+
+    def wavenumber(self, depth=numpy.inf, **kwargs):
+        return inverse_intrinsic_dispersion_relation(self.radian_frequency,
+                                                     depth, **kwargs)
+
+    def peak_wavenumber(self, depth=numpy.inf):
+        index = self.peak_index()
+        return inverse_intrinsic_dispersion_relation(
+            self.radian_frequency[index], depth)
+
+    def peak_wave_age(self, ustar=None, depth=numpy.inf):
+        if ustar is None:
+            ustar = self.Ustar()
+        return phase_velocity(self.peak_wavenumber(depth), depth) / ustar
+
+    def wave_age(self, ustar=None, depth=numpy.inf):
+        if ustar is None:
+            ustar = self.Ustar()
+        return phase_velocity(self.wavenumber(depth), depth) / ustar

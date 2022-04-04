@@ -93,7 +93,8 @@ class SofarSpectralAPI(SofarConnection):
             self.download_spectral_file(point['latitude'], point['longitude'],
                                         directory) for point in points]
 
-def load_spectral_file(file)->typing.List[WaveSpectrum2D]:
+
+def load_spectral_file(file) -> typing.List[WaveSpectrum2D]:
     dataset = netCDF4.Dataset(file)
 
     nt = dataset.dimensions['time'].size
@@ -101,16 +102,17 @@ def load_spectral_file(file)->typing.List[WaveSpectrum2D]:
     directions = dataset.variables['directions'][:]
 
     spectra = []
-    for ii in range(0,nt):
+    for ii in range(0, nt):
         unixepochtime = dataset.variables['time'][ii]
         latitude = dataset.variables['latitude'][0]
         longitude = dataset.variables['longitude'][0]
         variance_density = \
-            numpy.squeeze(dataset.variables['frequency_direction_spectrum'][ii,:,:])
+            numpy.squeeze(
+                dataset.variables['frequency_direction_spectrum'][ii, :, :])
 
         spectrum2D_input = WaveSpectrum2DInput(
-            frequency=frequencies,varianceDensity=variance_density,
-            timestamp=unixepochtime,latitude=latitude,longitude=longitude,
+            frequency=frequencies, varianceDensity=variance_density,
+            timestamp=unixepochtime, latitude=latitude, longitude=longitude,
             directions=directions
         )
         spectra.append(WaveSpectrum2D(spectrum2D_input))

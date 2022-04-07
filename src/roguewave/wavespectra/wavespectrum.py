@@ -131,8 +131,9 @@ class WaveSpectrum():
 
     def peak_index(self, fmin=0, fmax=numpy.inf) -> float:
         range = self._range(fmin, fmax)
-
-        return numpy.argmax(self.e[range])
+        tmp = self.e[:]
+        tmp[~range] = 0
+        return numpy.argmax(tmp)
 
     def peak_frequency(self, fmin=0, fmax=numpy.inf) -> float:
         return self.frequency[self.peak_index(fmin, fmax)]

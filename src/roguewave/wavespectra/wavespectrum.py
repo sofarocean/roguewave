@@ -18,13 +18,12 @@ from roguewave.wavetheory.lineardispersion import \
 from datetime import datetime
 
 
-
 class WaveSpectrumInput(TypedDict):
     frequency: List[float]
     varianceDensity: List
-    timestamp: Union[str,datetime,int,float]
-    latitude: float
-    longitude: float
+    timestamp: Union[str, datetime, int, float]
+    latitude: Union[float, None]
+    longitude: Union[float, None]
 
 
 class WaveSpectrum():
@@ -171,7 +170,8 @@ class WaveSpectrum():
         return self._spread(self.a1, self.b1)
 
     def _spectral_weighted(self, property, fmin=0, fmax=numpy.inf):
-        range = (self._range(fmin, fmax)) & numpy.isfinite(property)
+        range = (self._range(fmin, fmax)) & numpy.isfinite(
+            property) & numpy.isfinite(self.e)
 
         return numpy.trapz(property[range] * self.e[range],
                            self.frequency[range]) / self.m0(fmin, fmax)

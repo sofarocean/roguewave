@@ -36,7 +36,8 @@ class WaveSpectrum1D(WaveSpectrum):
         self._e = numpy.array(wave_spectrum1D_input['varianceDensity'])
 
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
-        range = self._range(fmin,fmax)
+
+        range = (self._range(fmin,fmax)) & numpy.isfinite(self.e)
 
         return numpy.trapz(
             self.variance_density[range] * self.frequency[range] ** power,

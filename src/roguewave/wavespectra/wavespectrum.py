@@ -25,6 +25,43 @@ class WaveSpectrumInput(TypedDict):
     latitude: Union[float, None]
     longitude: Union[float, None]
 
+class BulkVariables():
+    def __init__(self,spectrum):
+        if spectrum:
+            self.m0 = spectrum.m0()
+            self.hm0 = spectrum.hm0()
+            self.tm01 = spectrum.tm01()
+            self.tm02 = spectrum.tm02()
+            self.peak_period = spectrum.peak_period()
+            self.peak_direction = spectrum.peak_direction()
+            self.peak_spread = spectrum.peak_spread()
+            self.bulk_direction = spectrum.bulk_direction()
+            self.bulk_spread = spectrum.bulk_spread()
+            self.peak_frequency = spectrum.peak_frequency()
+            self.peak_wavenumber = spectrum.peak_wavenumber()
+            self.timestamp = spectrum.timestamp
+            self.latitude = spectrum.latitude
+            self.longitude = spectrum.longitude
+        else:
+            self._nanify()
+            self.timestamp = numpy.nan
+            self.latitude = numpy.nan
+            self.longitude = numpy.nan
+
+    def _nanify(self):
+        self.m0 = numpy.nan
+        self.hm0 = numpy.nan
+        self.tm01 = numpy.nan
+        self.tm02 = numpy.nan
+        self.peak_period = numpy.nan
+        self.peak_direction = numpy.nan
+        self.peak_spread = numpy.nan
+        self.bulk_direction = numpy.nan
+        self.bulk_spread = numpy.nan
+        self.peak_frequency = numpy.nan
+        self.peak_wavenumber = numpy.nan
+
+
 
 class WaveSpectrum():
     """
@@ -195,7 +232,7 @@ class WaveSpectrum():
     def bulk_b2(self, fmin=0, fmax=numpy.inf):
         return self._spectral_weighted(self.b2, fmin, fmax)
 
-    def U10(self, **kwargs) -> Tuple[float]:
+    def U10(self, **kwargs) -> Tuple[float,float]:
         windspeed, winddirection, _ = U10(self.e, self.frequency, self.a1,
                                           self.b1, **kwargs)
         return windspeed, winddirection
@@ -223,3 +260,7 @@ class WaveSpectrum():
         if ustar is None:
             ustar = self.Ustar()
         return phase_velocity(self.wavenumber(depth), depth) / ustar
+
+    def bulk_variables(self)->BulkVariables:
+        return BulkVariables(self)
+

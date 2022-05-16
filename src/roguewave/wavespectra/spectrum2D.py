@@ -24,6 +24,9 @@ class WaveSpectrum2D(WaveSpectrum):
 
         super().__init__(wave_spectrum2D_input)
         self.direction = wave_spectrum2D_input['directions']
+        self._update()
+
+    def _update(self):
         self._a1 = self._directional_moment('a', 1, normalized=True)
         self._b1 = self._directional_moment('b', 1, normalized=True)
         self._a2 = self._directional_moment('a', 2, normalized=True)
@@ -71,3 +74,14 @@ class WaveSpectrum2D(WaveSpectrum):
             latitude=self.latitude,
             longitude=self.longitude,
         )
+
+def empty_spectrum2D_like(spectrum:WaveSpectrum2D)->WaveSpectrum2D:
+    input = WaveSpectrum2DInput(
+        frequency=spectrum.frequency,
+        varianceDensity=numpy.zeros_like(spectrum.variance_density),
+        timestamp=spectrum.timestamp,
+        latitude=spectrum.latitude,
+        longitude=spectrum.longitude,
+        directions=spectrum.direction
+    )
+    return WaveSpectrum2D(input)

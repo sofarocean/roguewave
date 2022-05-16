@@ -3,14 +3,14 @@ from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, \
 import typing
 from pysofar.spotter import Spotter
 from datetime import datetime
-from roguewave.tools import datetime_to_iso_time_string
+from roguewave.tools import datetime_to_iso_time_string, to_datetime
+from datetime import timedelta
 from .exceptions import ExceptionNoFrequencyData
 from pandas import read_csv, to_numeric
 import numpy
 import os
 
-
-def get_spectrum_from_sofar_spotter_api(
+def _get_spectrum_from_sofar_spotter_api(
         spotter: Spotter,
         start_date: typing.Union[datetime, str] = None,
         end_date: typing.Union[datetime, str] = None,
@@ -26,8 +26,9 @@ def get_spectrum_from_sofar_spotter_api(
     :return: Data as a FrequencyDataList Object
     """
 
-    start_date = datetime_to_iso_time_string(start_date)
-    end_date = datetime_to_iso_time_string(end_date)
+
+    start_date = to_datetime(start_date)
+    end_date = to_datetime(end_date)
 
     json_data = spotter.grab_data(
         limit=limit,
@@ -50,6 +51,35 @@ def get_spectrum_from_sofar_spotter_api(
         wave_spectrum_input = WaveSpectrum1DInput(**spectrum)
 
         out.append(WaveSpectrum1D(wave_spectrum_input))
+
+    return out
+
+
+def get_spectrum_from_sofar_spotter_api(
+        spotter: Spotter,
+        start_date: typing.Union[datetime, str] = None,
+        end_date: typing.Union[datetime, str] = None,
+        limit: int = 20,
+) -> typing.List[WaveSpectrum1D]:
+    """
+    Grabs the requested spectra for this spotter based on the given keyword arguments
+
+    :param limit: The limit for data to grab. Defaults to 20, For frequency data max of 100 samples at a time.
+    :param start_date: ISO 8601 formatted date string. If not included defaults to beginning of spotters history
+    :param end_date: ISO 8601 formatted date string. If not included defaults to end of spotter history
+
+    :return: Data as a FrequencyDataList Object
+    """
+
+    out = []
+    while True:
+        next = _get_spectrum_from_sofar_spotter_api(spotter,start_date,end_date)
+        out += next
+        if len(next) < 20:
+            break
+        else:
+            start_date = to_datetime(next[-1].timestamp) + timedelta(seconds=900)
+
 
     return out
 

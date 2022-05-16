@@ -10,10 +10,8 @@ Authors: Pieter Bart Smit
 """
 
 import numpy
-from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from .wavespectrum import WaveSpectrum, WaveSpectrumInput
 from roguewave.tools import datetime_to_iso_time_string
-from .mem import mem
 from typing import List, Union
 
 class WaveSpectrum1DInput(WaveSpectrumInput):
@@ -55,41 +53,3 @@ class WaveSpectrum1D(WaveSpectrum):
             a2=list(self.a2),
             b2=list(self.b2)
             )
-
-    def spectrum2d(self, number_of_directions: int,
-                   method:str='maximum_entropy_method')->WaveSpectrum2D:
-        """
-        Construct a 2D spectrum based on the 1.5D spectrum and a spectral
-        reconstruction method.
-
-        :param number_of_directions: length of the directional vector for the
-        2D spectrum. Directions returned are in degrees
-        """
-        direction = numpy.linspace(0, 360, number_of_directions,
-                                   endpoint=False)
-
-        # Jacobian to transform distribution as function of radian angles into
-        # degrees.
-        Jacobian = numpy.pi / 180
-
-        if method.lower() in ['maximum_entropy_method', 'mem']:
-            # reconstruct the directional distribution using the maximum entropy
-            # method.
-            D = mem(direction * numpy.pi / 180, self.a1, self.b1, self.a2,
-                    self.b2) * Jacobian
-        else:
-            raise Exception(f'unsupported spectral estimator method: {method}')
-
-        wave_spectrum2D_input = WaveSpectrum2DInput(
-            frequency=self.frequency,
-            directions=direction,
-            varianceDensity=self.variance_density[:, None] * D,
-            timestamp=self.timestamp,
-            longitude=self.longitude,
-            latitude=self.latitude
-        )
-
-        # We return a 2D wave spectrum object.
-        return WaveSpectrum2D(wave_spectrum2D_input)
-
-

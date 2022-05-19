@@ -1,6 +1,4 @@
 """
-This file is part of pysofar: A client for interfacing with Sofar Oceans Spotter API
-
 Contents: Abstract implementation Spectrum (see Spectrum1D and Spectrum2D for
 implementations)
 
@@ -263,4 +261,7 @@ class WaveSpectrum():
 
     def bulk_variables(self)->BulkVariables:
         return BulkVariables(self)
+
+    def copy(self):
+        pass
 

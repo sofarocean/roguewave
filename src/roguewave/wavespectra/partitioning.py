@@ -1,25 +1,42 @@
+"""
+Contents: Partitioning
+
+Copyright (C) 2022
+Sofar Ocean Technologies
+
+Authors: Pieter Bart Smit
+======================
+
+Partitioning routines that can be used to partition the spectrum.
+
+Classes:
+
+- `SeaSwellData`, return type that contains the partitioned data.
+- `Partition`, data class that describes a partition
+
+Functions:
+
+- `neighbours`,
+
+How To Use This Module
+======================
+(See the individual functions for details.)
+
+1. Import it: ``import partitioning`` or ``from partitioning import ...``.
+2.
+"""
+
 from .spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
 from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput, \
     empty_spectrum2D_like
+from .operators import spectrum1D_time_filter, spectrum2D_time_filter
 from .wavespectrum import WaveSpectrum, BulkVariables
 from .parametric import pierson_moskowitz_frequency
 from pandas import DataFrame
 import numpy
 import scipy.ndimage
 import typing
-from . import spect2d_from_spec1d
-
-"""
-This module implements a partitioning algorith for use on 2D spectra.
-
-# Usage
-
-
-# Implementation
-
-"""
-
-NOT_ASSIGNED = -1
+from .estimators import spect2d_from_spec1d
 
 default_partition_config = {
     'minimumEnergyFraction': 0.01,
@@ -28,6 +45,9 @@ default_partition_config = {
 
 
 class SeaSwellData(typing.TypedDict):
+    """
+
+    """
     sea: DataFrame
     total_swell: DataFrame
     partitions_swell: typing.List[DataFrame]
@@ -113,8 +133,38 @@ class Partition():
         return not self.is_sea_partition()
 
 
-def neighbours(peak_direction_index, peak_frequency_index,
-               number_of_directions, number_of_frequencies, diagonals=True):
+def neighbours(peak_direction_index: int, peak_frequency_index: int,
+               number_of_directions: int, number_of_frequencies: int,
+               diagonals=True) -> typing.Tuple[numpy.ndarray, numpy.ndarray]:
+    """
+    Find all indices that correspond to the 2D neighbours of a given point
+    with indices (i, j) in a rectangular raster spanned by frequencies and
+    directions. There are potentially 8 neighbours:
+
+            + (i+1,j-1)   + (i+1,   j)   +  (i+1,j+1)    ( + = neighbour, x is point )
+
+            + (i  ,j-1)   x (i  ,   j)   +  (i  ,j+1)
+
+            + (i-1,j-1)   + (i-1,   j)   +  (i-1,j+1)
+
+    resulting in output:
+
+            frequency_indices = [i  , i  , i-1, i-1, i-1, i+1, i+1, i+1]
+            direction_indices = [j-1, j+1, j-1, j  , j+1, j-1, j  , j+1]
+
+    Note that due to directional wrapping j-1 and j+1 always exist; but
+    i+1 and i-1 may not. The ordering of the output is due to  ease of
+    implementation
+
+    :param peak_direction_index: central direction index
+    :param peak_frequency_index: central frequency index
+    :param number_of_directions: number of direction in the grid
+    :param number_of_frequencies: number of frequencies in the grid
+    :param diagonals: (optional), whether or not to include the diagonal indices
+    as neighbours.
+    :return: ( frequency_indices, direction_indices  )
+    """
+
     # First we need to calculate the next/prev angles in frequency ann
     # direction space, noting that direction space is periodic.
     next_direction_index = (peak_direction_index + 1) % number_of_directions
@@ -123,35 +173,48 @@ def neighbours(peak_direction_index, peak_frequency_index,
     next_frequency_index = peak_frequency_index + 1
 
     # Add the
-    ii = [peak_frequency_index, peak_frequency_index]
-    jj = [prev_direction_index, next_direction_index]
+    frequency_indices = [peak_frequency_index, peak_frequency_index]
+    direction_indices = [prev_direction_index, next_direction_index]
+
     if diagonals:
+        # The diagonals are included
         if peak_frequency_index > 0:
-            ii += [prev_frequency_index, prev_frequency_index,
-                   prev_frequency_index]
-            jj += [prev_direction_index, peak_direction_index,
-                   next_direction_index]
+            # add the neighbours at the previous frequency
+            frequency_indices += [prev_frequency_index, prev_frequency_index,
+                                  prev_frequency_index]
+            direction_indices += [prev_direction_index, peak_direction_index,
+                                  next_direction_index]
+
         if peak_frequency_index < number_of_frequencies - 1:
-            ii += [next_frequency_index, next_frequency_index,
-                   next_frequency_index]
-            jj += [prev_direction_index, peak_direction_index,
-                   next_direction_index]
+            # add the neighbours at the next frequency
+            frequency_indices += [next_frequency_index, next_frequency_index,
+                                  next_frequency_index]
+            direction_indices += [prev_direction_index, peak_direction_index,
+                                  next_direction_index]
     else:
+        # The diagonals are not included
+
         if peak_frequency_index > 0:
-            ii += [prev_frequency_index]
-            jj += [peak_direction_index]
+            # add the neighbours at the previous frequency
+            frequency_indices += [prev_frequency_index]
+            direction_indices += [peak_direction_index]
         if peak_frequency_index < number_of_frequencies - 1:
-            ii += [next_frequency_index]
-            jj += [peak_direction_index]
+            # add the neighbours at the next frequency
+            frequency_indices += [next_frequency_index]
+            direction_indices += [peak_direction_index]
 
-    return numpy.array(ii), numpy.array(jj)
+    return numpy.array(frequency_indices, dtype='int64'), numpy.array(
+        direction_indices, dtype='int64')
 
 
-def floodfill(spectral_density: numpy.ndarray, partition_label: numpy.ndarray,
-              peak_frequency_index: int, peak_direction_index: int):
+NOT_ASSIGNED = -1
+
+
+def floodfill2(spectral_density: numpy.ndarray, partition_label: numpy.ndarray,
+               peak_frequency_index: int, peak_direction_index: int):
     """
     Flood fill algorithm. We try to find the region that belongs to a peak according
-    to inverse waterfall.
+    to inverse watershed.
 
     :param spectral_density: 2d-ndarray, first dimension frequency, second direction
     :param partition_label: 2d-integer-ndarray, of same shape as [spectral_density].
@@ -233,6 +296,99 @@ def floodfill(spectral_density: numpy.ndarray, partition_label: numpy.ndarray,
     return numpy.unique(proximate_partitions)
 
 
+def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
+              spectral_density: numpy.ndarray, partition_label: numpy.ndarray,
+              peak_frequency_indices: numpy.array,
+              peak_direction_indices: numpy.array):
+    """
+    Flood fill algorithm. We try to find the region that belongs to a peak according
+    to inverse watershed.
+
+    :param spectral_density: 2d-ndarray, first dimension frequency, second direction
+    :param partition_label: 2d-integer-ndarray, of same shape as [spectral_density].
+    for each entry contains label to which the current entry belongs. Negative
+    label is unasigned.
+
+    :param peak_frequency_index: frequency index of local peak
+    :param peak_direction_index: direction index of local peak
+    :return:
+
+    We start at a local peak indicated by [peak_frequency_index]
+    and [peak_direction_index], label that peak with the given [label]
+
+
+    """
+
+    def distance(freq1, angle1, freq2, angle2, grav=9.81):
+        k1 = (freq1 * numpy.pi) ** 2 / grav
+        k2 = (freq2 * numpy.pi) ** 2 / grav
+
+        return numpy.sqrt(
+            (k1 * numpy.cos(angle1) - k2 * numpy.cos(angle2)) ** 2 +
+            (k1 * numpy.sin(angle1) - k2 * numpy.sin(angle2)) ** 2
+        )
+
+    label = partition_label.max() + 1
+    number_of_directions = spectral_density.shape[1]
+    number_of_frequencies = spectral_density.shape[0]
+    proximate_partitions = []
+
+    current_label = NOT_ASSIGNED
+    for start_frequency_index in range(0, number_of_frequencies):
+        for start_direction_index in range(0, number_of_directions):
+
+            # if already assigned - continue
+            if partition_label[start_frequency_index,start_direction_index] > NOT_ASSIGNED:
+                continue
+
+            ii = [start_frequency_index]
+            jj = [start_direction_index]
+
+            while True:
+                direction_index = jj[-1]
+                frequency_index = ii[-1]
+                neighbour_frequency_indices, neighbour_direction_indices = neighbours(
+                    direction_index, frequency_index,
+                    number_of_directions, number_of_frequencies)
+
+                delta_k = distance(frequency[neighbour_frequency_indices],
+                                   direction[neighbour_direction_indices],
+                                   frequency[frequency_index],
+                                   direction[direction_index])
+                node_value = spectral_density[frequency_index, direction_index]
+                delta = (spectral_density[
+                    neighbour_frequency_indices, neighbour_direction_indices] - node_value)/delta_k
+
+
+                if numpy.all(delta < 0) or (partition_label[frequency_index,direction_index] > NOT_ASSIGNED):
+                    # this is a peak, or already leads to a peak
+                    ii = numpy.array( ii,dtype='int64')
+                    jj = numpy.array( jj,dtype='int64')
+
+                    if partition_label[frequency_index,direction_index] > NOT_ASSIGNED:
+                        current_label += 1
+                        label = current_label
+                    else:
+                        label = partition_label[frequency_index,direction_index]
+                    partition_label[ii,jj] = label
+                    break
+
+                else:
+                    # Note that for the pathalogical case where all deltas are
+                    # equal (we are in a flat zone) we just get the first
+                    # index. Only likely for *0* values in the spectra which
+                    # result from some sort of filtering.
+                    steepest_index = numpy.argmax(delta)
+                    ii.append(neighbour_frequency_indices[steepest_index])
+                    jj.append(neighbour_direction_indices[steepest_index])
+                    continue
+
+
+        #
+
+    return numpy.unique(proximate_partitions)
+
+
 def find_peaks(density: numpy.ndarray):
     """
     Find the peaks of the frequency-direction spectrum.
@@ -245,9 +401,10 @@ def find_peaks(density: numpy.ndarray):
     # create a search region
     neighborhood = scipy.ndimage.generate_binary_structure(density.ndim, 2)
 
-    # Find local maxima, use wrap. Note that technically frequency wrapping is
-    # incorrect- but unlikely to cause issues. First we apply the maximum filter
-    # with 9 point footprint to set each pixel of the output to the local maximum
+    # Set the local neighbourhood to the the maximum value, use wrap.
+    # Note that technically frequency wrapping is incorrect- but unlikely to
+    # cause issues. First we apply the maximum filter .with 9 point footprint
+    # to set each pixel of the output to the local maximum
     filtered = scipy.ndimage.maximum_filter(
         density, footprint=neighborhood
     )
@@ -264,17 +421,18 @@ def find_peaks(density: numpy.ndarray):
     # return indices of maxima
     ii, jj = numpy.where(maximum_mask)
 
+    # sort from lowest maximum value to largest maximum value.
     sorted = numpy.flip(numpy.argsort(density[ii, jj]))
 
     return ii[sorted], jj[sorted]
 
 
-def find_partitions(density):
+def find_partitions(frequency, direction, density):
     #
     density = density.copy()
     #
-    peak_frequencty_indices, peak_direction_indices = find_peaks(density)
-    partition_label = numpy.zeros_like(density, dtype='int64') - 1
+    #peak_frequencty_indices, peak_direction_indices = find_peaks(density)
+    partition_label = numpy.zeros_like(density, dtype='int64') + NOT_ASSIGNED
 
     proximate_partitions_adjacency_list = []
     number_of_partitions = 0
@@ -320,16 +478,34 @@ def label_to_index_mapping(partitions):
 
 
 def find_index_closest_partition(index, partitions: typing.List[Partition]):
+    """
+    Find the partition whose peak is closest to the partition under considiration
+    Only proximate partitions are considered. Basically: find the partition whose
+    maximum is closest to the peak of the current partition.
+
+    :param index:
+    :param partitions:
+    :return:
+    """
+
+    # Map the label used to mark the the partition to the ordinal numeral in
+    # the list. E.g.: the partition with Label=3 might be the first in our list
+    # of partitions (i.e partitions[0].label=3).
     label_to_index = label_to_index_mapping(partitions)
+
+    # find the labels of the neighbouring partitions.
     proximate_labels = partitions[index].proximate_partitions
 
+    # find the wavenumbers associated with the peak
     kx = partitions[index].peak_wavenumber_east
     ky = partitions[index].peak_wavenumber_north
     k = partitions[index].peak_wavenumber
 
+    # Make sure that we do not consider the "self" label as proximate.
     mask = proximate_labels != partitions[index].label
     proximate_labels = proximate_labels[mask]
 
+    # Initialize the numpy arrays for distance and indices.
     distance = numpy.zeros((len(proximate_labels),))
     indices = numpy.zeros((len(proximate_labels),), dtype='int32')
 
@@ -341,7 +517,7 @@ def find_index_closest_partition(index, partitions: typing.List[Partition]):
         distance[ii] = numpy.sqrt(delta_kx ** 2 + delta_ky ** 2) / k
         indices[ii] = proximate_index
 
-        minimum_index = numpy.argmin(distance)
+    minimum_index = numpy.argmin(distance)
     return indices[minimum_index], distance[minimum_index]
 
 
@@ -584,7 +760,8 @@ def _homogonize_bulk_swell(bulk: typing.List[BulkPartitionVariables]) -> \
 
 
 def sea_swell_data(spectra: typing.List[WaveSpectrum],
-                   time_smooth=True) -> SeaSwellData:
+                   time_filter=True, verbose=True,
+                   filter_window=None) -> SeaSwellData:
     """
 
     :param spectra: list of wavespectra objects.
@@ -594,59 +771,34 @@ def sea_swell_data(spectra: typing.List[WaveSpectrum],
           "partitions_swell": list[pandas dataframe]
 
     """
-
-    def get_spec2D(spectrum: WaveSpectrum) -> WaveSpectrum2D:
-        # If 1D spectrum- make 2D using mem estimate for directions.
-        if isinstance(spectrum, WaveSpectrum1D):
-            return spect2d_from_spec1d(spectrum)
-        elif isinstance(spectrum, WaveSpectrum2D):
-            return spectrum
-        else:
-            raise Exception('Unknown spectral format')
-
     bulk = []
     # For each partition do:
 
+    if time_filter:
+        if isinstance(spectra[0], WaveSpectrum1D):
+            spectra: typing.List[WaveSpectrum1D]
+            spectra = spectrum1D_time_filter(spectra, filter_window)
+        elif isinstance(spectra[0], WaveSpectrum2D):
+            spectra: typing.List[WaveSpectrum2D]
+            spectra = spectrum2D_time_filter(spectra, filter_window)
+
     for ii, spectrum in enumerate(spectra):
-        print(ii)
-        if time_smooth:
-            density = (0.25 * spectra[max(ii - 1, 0)].variance_density +
-                       0.5 * spectra[ii].variance_density +
-                       0.25 * spectra[
-                           min(ii + 1, len(spectra) - 1)].variance_density
-                       )
-            a1 = (0.25 * spectra[max(ii - 1, 0)].a1 +
-                  0.5 * spectra[ii].a1 +
-                  0.25 * spectra[min(ii + 1, len(spectra) - 1)].a1
-                  )
-            b1 = (0.25 * spectra[max(ii - 1, 0)].b1 +
-                  0.5 * spectra[ii].b1 +
-                  0.25 * spectra[min(ii + 1, len(spectra) - 1)].b1
-                  )
-            a2 = (0.25 * spectra[max(ii - 1, 0)].a2 +
-                  0.5 * spectra[ii].a2 +
-                  0.25 * spectra[min(ii + 1, len(spectra) - 1)].a2
-                  )
-            b2 = (0.25 * spectra[max(ii - 1, 0)].b2 +
-                  0.5 * spectra[ii].b2 +
-                  0.25 * spectra[min(ii + 1, len(spectra) - 1)].b2
-                  )
-            spec1d = WaveSpectrum1D(WaveSpectrum1DInput(frequency=
-                                                 spectrum.frequency, varianceDensity=density,
-                                                 timestamp=spectrum.timestamp,
-                                                 latitude=spectrum.latitude,
-                                                 longitude=spectrum.longitude, a1=a1, b1=b1,
-                                                 a2=a2, b2=b2))
-            spec2d = spect2d_from_spec1d(spec1d)
-        else:
+
+        if verbose:
+            pass
+
+        if isinstance(spectrum, WaveSpectrum1D):
             spec2d = spect2d_from_spec1d(spectrum)
+        elif isinstance(spectrum, WaveSpectrum2D):
+            spec2d = spectrum
+        else:
+            raise Exception('Unknown spectral type')
 
         # Partition the spectrum
         partition, _ = partition_spectrum(spec2d)
 
         # calculate bulk variables for each partition
         bulk.append(BulkPartitionVariables(partition))
-
 
     sea = _gen_dataframe_from_partitions([b.sea for b in bulk])
     total_swell = _gen_dataframe_from_partitions([b.total_swell for b in bulk])

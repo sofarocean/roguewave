@@ -75,13 +75,25 @@ class WaveSpectrum2D(WaveSpectrum):
             longitude=self.longitude,
         )
 
+    def copy(self)->"WaveSpectrum2D":
+        input = WaveSpectrum2DInput(
+            frequency=self.frequency.copy(),
+            directions=self.direction.copy(),
+            varianceDensity=self.variance_density.copy(),
+            timestamp=self.timestamp,
+            latitude=self.latitude,
+            longitude=self.longitude
+        )
+        return WaveSpectrum2D(input)
+
+
 def empty_spectrum2D_like(spectrum:WaveSpectrum2D)->WaveSpectrum2D:
     input = WaveSpectrum2DInput(
-        frequency=spectrum.frequency,
+        frequency=spectrum.frequency.copy(),
         varianceDensity=numpy.zeros_like(spectrum.variance_density),
         timestamp=spectrum.timestamp,
         latitude=spectrum.latitude,
         longitude=spectrum.longitude,
-        directions=spectrum.direction
+        directions=spectrum.direction.copy()
     )
     return WaveSpectrum2D(input)

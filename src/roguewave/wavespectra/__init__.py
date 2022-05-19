@@ -1,103 +1,30 @@
 from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from .spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
-from .estimators import mem, maximize_entrophy, ridge_regression
-from scipy.ndimage import gaussian_filter
-import numpy
-import typing
+from .estimators import mem, maximize_shannon_entrophy, ridge_regression, spect2d_from_spec1d, spec1d_from_spec2d
 
-def spect2d_from_spec1d(spectrum1D:WaveSpectrum1D, number_of_directions: int = 36,
-               method:str='ridge', frequency_smoothing=True,smoothing_lengthscale=1)->WaveSpectrum2D:
-    """
-    Construct a 2D spectrum based on the 1.5D spectrum and a spectral
-    reconstruction method.
 
-    :param number_of_directions: length of the directional vector for the
-    2D spectrum. Directions returned are in degrees
-
-    :param method: Choose a method in ['mem','ridge','nlmem']
-        mem: Lygre, A., & Krogstad, H. E. (1986). Explicit expression and
-        fast but tends to create narrow spectra anderroneous secondary peaks.
-
-        nlmem: use actual entrophy (in the Shannon sense) to maximize. Likely
-        best method see- Benoit, M. (1993). Is rather slow because we solve
-        a general nonlinear constrained optimization problem.
-
-        ridge: solve underdetermined constrained problem using ridge regression
-        as regulizer. Performant because efficient solutions to constrained
-        quadratic programming problems exist. The spectra compare well to
-        nlmen- though are somewhat broader in general. Does not suffer from
-        the spurious peak issue of mem. Default method for there reasons.
-
-    REFERENCES:
-    Benoit, M. (1993). Practical comparative performance survey of methods
-        used for estimating directional wave spectra from heave-pitch-roll data.
-        In Coastal Engineering 1992 (pp. 62-75).
-
-    Lygre, A., & Krogstad, H. E. (1986). Maximum entropy estimation of the
-        directional distribution in ocean wave spectra.
-        Journal of Physical Oceanography, 16(12), 2052-2060.
-
-    """
-    direction = numpy.linspace(0, 360, number_of_directions,
-                               endpoint=False)
-
-    # Jacobian to transform distribution as function of radian angles into
-    # degrees.
-    Jacobian = numpy.pi / 180
-
-    a1 = spectrum1D.a1
-    b1 = spectrum1D.b1
-    a2 = spectrum1D.a2
-    b2 = spectrum1D.b2
-    e  = spectrum1D.e
-    if frequency_smoothing:
-        e  = gaussian_filter(spectrum1D.e,smoothing_lengthscale)
-        a1 = gaussian_filter(a1*spectrum1D.e,smoothing_lengthscale)/e
-        a2 = gaussian_filter(a2*spectrum1D.e, smoothing_lengthscale)/e
-        b1 = gaussian_filter(b1*spectrum1D.e, smoothing_lengthscale)/e
-        b2 = gaussian_filter(b2*spectrum1D.e, smoothing_lengthscale)/e
-
-        scale = spectrum1D.m0() / numpy.trapz(e,spectrum1D.frequency)
-        e = e * scale
-
-    if method.lower() in ['maximum_entropy_method', 'mem']:
-        # reconstruct the directional distribution using the maximum entropy
-        # method.
-        directional_distribution = mem(direction * numpy.pi / 180, a1, b1, a2,
-                                       b2) * Jacobian
-    elif method.lower() in ['ridge_regression', 'ridge']:
-        directional_distribution = ridge_regression(direction * numpy.pi / 180, a1, b1, a2,
-                                                    b2) * Jacobian
-    elif method.lower() in ['nonlinear_maximum_entrophy', 'nlmem']:
-        directional_distribution = maximize_entrophy(direction * numpy.pi / 180, a1, b1, a2,
-                                                     b2) * Jacobian
-    else:
-        raise Exception(f'unsupported spectral estimator method: {method}')
-
-    wave_spectrum2D_input = WaveSpectrum2DInput(
-        frequency=spectrum1D.frequency,
-        directions=direction,
-        varianceDensity=e[:, None] * directional_distribution,
-        timestamp=spectrum1D.timestamp,
-        longitude=spectrum1D.longitude,
-        latitude=spectrum1D.latitude
+def spectrum1D( frequency , varianceDensity ,a1=None,b1=None,a2=None,b2=None, latitude=None, longitude=None, timestamp=None)->WaveSpectrum1D:
+    input = WaveSpectrum1DInput(
+        frequency=frequency,
+        varianceDensity=varianceDensity,
+        timestamp=timestamp,
+        latitude=latitude,
+        longitude=longitude,
+        a1=a1,
+        b1=b1,
+        a2=a2,
+        b2=b2
     )
-
-    # We return a 2D wave spectrum object.
-    return WaveSpectrum2D(wave_spectrum2D_input)
+    return WaveSpectrum1D(input)
 
 
-def spec1d_from_spec2d(spectrum:WaveSpectrum2D)->WaveSpectrum1D:
-    wave_spectrum1D_input = WaveSpectrum1DInput(
-        frequency=spectrum.frequency,
-        varianceDensity=spectrum.e,
-        timestamp=spectrum.timestamp,
-        longitude=spectrum.longitude,
-        latitude=spectrum.latitude,
-        a1=spectrum.a1,
-        b1=spectrum.b1,
-        a2=spectrum.a2,
-        b2=spectrum.b2,
+def spectrum2D( frequency , directions, varianceDensity, latitude=None, longitude=None, timestamp=None)->WaveSpectrum2D:
+    input = WaveSpectrum2DInput(
+        frequency=frequency,
+        varianceDensity=varianceDensity,
+        timestamp=timestamp,
+        latitude=latitude,
+        longitude=longitude,
+        directions=directions
     )
-    return WaveSpectrum1D(wave_spectrum1D_input)
-
+    return WaveSpectrum2D(input)

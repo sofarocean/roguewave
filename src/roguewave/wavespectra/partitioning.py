@@ -26,32 +26,21 @@ How To Use This Module
 2.
 """
 
-from .spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
-from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput, \
-    empty_spectrum2D_like
-from .operators import spectrum1D_time_filter, spectrum2D_time_filter
-from .wavespectrum import WaveSpectrum, BulkVariables
+from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from .parametric import pierson_moskowitz_frequency
 from pandas import DataFrame
 import numpy
 import scipy.ndimage
 import typing
-from .estimators import spect2d_from_spec1d
 import numba
 
 default_partition_config = {
     'minimumEnergyFraction': 0.01,
-    'minimumRelativeDistance': 0.1,
+    'minimumRelativeDistance': 0.01,
 }
 
 
-class SeaSwellData(typing.TypedDict):
-    """
 
-    """
-    sea: DataFrame
-    total_swell: DataFrame
-    partitions_swell: typing.List[DataFrame]
 
 
 class Partition():
@@ -133,7 +122,7 @@ class Partition():
     def is_swell_partition(self):
         return not self.is_sea_partition()
 
-numba.njit()
+@numba.njit()
 def neighbours(peak_direction_index: int, peak_frequency_index: int,
                number_of_directions: int, number_of_frequencies: int,
                diagonals=True) -> typing.Tuple[numpy.ndarray, numpy.ndarray]:
@@ -318,54 +307,10 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
     return proximate_partitions
 
 
-def find_peaks(density: numpy.ndarray):
-    """
-    Find the peaks of the frequency-direction spectrum.
-    :param density: 2D variance density
-    :return: List of indices indicating the maximum
-    """
-
-    density[0:5, :] = 0.0
-
-    # create a search region
-    neighborhood = scipy.ndimage.generate_binary_structure(density.ndim, 2)
-
-    # Set the local neighbourhood to the the maximum value, use wrap.
-    # Note that technically frequency wrapping is incorrect- but unlikely to
-    # cause issues. First we apply the maximum filter .with 9 point footprint
-    # to set each pixel of the output to the local maximum
-    filtered = scipy.ndimage.maximum_filter(
-        density, footprint=neighborhood
-    )
-
-    # Then we find maxima based on equality with input array
-    maximum_mask = filtered == density
-
-    # Remove possible background (0's)
-    background_mask = density == 0
-
-    # Remove peaks in background
-    maximum_mask[background_mask] = False
-
-    # return indices of maxima
-    ii, jj = numpy.where(maximum_mask)
-
-    # sort from lowest maximum value to largest maximum value.
-    sorted = numpy.flip(numpy.argsort(density[ii, jj]))
-
-    return ii[sorted], jj[sorted]
-
 numba.njit()
 def find_partitions(frequency, direction, density):
     #
-    density = density.copy()
-    #
-    # peak_frequencty_indices, peak_direction_indices = find_peaks(density)
     partition_label = numpy.zeros_like(density, dtype='int64') + NOT_ASSIGNED
-
-    proximate_partitions_adjacency_list = []
-
-
     proximate_partitions_adjacency_list = floodfill(frequency, direction,
                                                     density, partition_label)
 
@@ -489,7 +434,7 @@ def merge_sea_spectra(partitions: typing.List[Partition],
 def merge_partitions(source_index: int,
                      target_index: int,
                      partitions: typing.List[Partition],
-                     partition_label_array: numpy.ndarray
+                     partition_label_array: numpy.ndarray = None
                      ) -> None:
     """
     Merge one partition into another partition. (**Has side-effects**)
@@ -532,7 +477,8 @@ def merge_partitions(source_index: int,
             proximate_partition.proximate_partitions)
 
     # update the labels in the array
-    partition_label_array[source.mask] = target.label
+    if partition_label_array is not None:
+        partition_label_array[source.mask] = target.label
 
     return None
 
@@ -582,167 +528,3 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> typing.Tuple[
     # Return the partitions and the label array.
     return partitions, partition_label_array
 
-
-class BulkPartitionVariables():
-    def __init__(self, partitions: typing.List[Partition]):
-        self._partitions_swell = []
-
-        total_swell_spectrum = empty_spectrum2D_like(partitions[0].spectrum)
-        self._sea = total_swell_spectrum.bulk_variables()
-
-        for partition in partitions:
-            spectrum = partition.spectrum
-            if partition.is_sea_partition():
-                self._sea = spectrum.bulk_variables()
-            else:
-                self._partitions_swell.append(spectrum.bulk_variables())
-                total_swell_spectrum.variance_density = (
-                        total_swell_spectrum.variance_density +
-                        spectrum.variance_density)
-        total_swell_spectrum._update()
-        self._total_swell = total_swell_spectrum.bulk_variables()
-
-        if self._sea.hm0 == 0:
-            self._sea._nanify()
-
-        if not self._partitions_swell:
-            self._partitions_swell = [self._total_swell]
-
-    @property
-    def sea(self) -> BulkVariables:
-        return self._sea
-
-    @property
-    def total_swell(self) -> BulkVariables:
-        return self._total_swell
-
-    @property
-    def partitions_swell(self) -> typing.List[BulkVariables]:
-        return self._partitions_swell
-
-    @property
-    def number_of_swells(self):
-        return len(self._partitions_swell)
-
-    def fill_to(self, n):
-        number_of_swells = self.number_of_swells
-        if number_of_swells == n:
-            return
-
-        if number_of_swells > n:
-            self._partitions_swell = self._partitions_swell[:n]
-            return
-
-        bulk = BulkVariables(None)
-        bulk.timestamp = self.total_swell.timestamp
-        bulk.latitude = self.total_swell.latitude
-        bulk.longitude = self.total_swell.longitude
-        for ii in range(number_of_swells, n):
-            self._partitions_swell.append(bulk)
-
-
-def _gen_dataframe_from_partitions(
-        bulk: typing.List[BulkVariables]) -> DataFrame:
-    """
-    From a partition, create a dataframe.
-    :param bulk:
-    :return:
-    """
-    n = len(bulk)
-    data = {}
-    properties = ['m0', 'hm0', 'tm01', 'tm02', 'peak_period', 'peak_direction',
-                  'peak_spread',
-                  'bulk_direction', 'bulk_spread', 'peak_frequency',
-                  'peak_wavenumber', 'latitude', 'longitude', 'timestamp']
-
-    for key in properties:
-        if key == 'timestamp':
-            data[key] = numpy.empty((n,), dtype=object)
-        else:
-            data[key] = numpy.zeros((n,))
-
-    for i, b in enumerate(bulk):
-        for key in properties:
-            data[key][i] = getattr(b, key)
-
-    return DataFrame.from_dict(data)
-
-
-def _homogonize_bulk_swell(bulk: typing.List[BulkPartitionVariables]) -> \
-        typing.List[BulkPartitionVariables]:
-    """
-    Ensure that all entries in the list have the same number of swell partitions
-    :param bulk:
-    :return:
-    """
-    max_partitions = numpy.array([b.number_of_swells for b in bulk]).max()
-    for b in bulk:
-        b.fill_to(max_partitions)
-    return bulk
-
-
-def sea_swell_data(spectra: typing.List[WaveSpectrum],
-                   time_filter=True, verbose=True,
-                   filter_window=None) -> SeaSwellData:
-    """
-
-    :param spectra: list of wavespectra objects.
-    :return: dictionary (typed: SeaSwellData) that contains:
-        { "sea": pandas dataframe
-          "total_swell": pandas dataframe
-          "partitions_swell": list[pandas dataframe]
-
-    """
-    bulk = []
-    # For each partition do:
-
-    if time_filter:
-        if isinstance(spectra[0], WaveSpectrum1D):
-            spectra: typing.List[WaveSpectrum1D]
-            spectra = spectrum1D_time_filter(spectra, filter_window)
-        elif isinstance(spectra[0], WaveSpectrum2D):
-            spectra: typing.List[WaveSpectrum2D]
-            spectra = spectrum2D_time_filter(spectra, filter_window)
-
-    for ii, spectrum in enumerate(spectra):
-
-        if verbose:
-            print(ii)
-
-        if isinstance(spectrum, WaveSpectrum1D):
-            spec2d = spect2d_from_spec1d(spectrum)
-        elif isinstance(spectrum, WaveSpectrum2D):
-            spec2d = spectrum
-        else:
-            raise Exception('Unknown spectral type')
-
-        # Partition the spectrum
-        partition, _ = partition_spectrum(spec2d)
-
-        # calculate bulk variables for each partition
-        bulk.append(BulkPartitionVariables(partition))
-
-    sea = _gen_dataframe_from_partitions([b.sea for b in bulk])
-    total_swell = _gen_dataframe_from_partitions([b.total_swell for b in bulk])
-
-    #
-    # Create a list of bulk descriptions of the swell, and make sure that all
-    # bulk descriptions contain the same number of swells. This makes processing
-    # easier (no other reason).
-    #
-    bulk = _homogonize_bulk_swell(bulk)
-
-    # now all data have the same number of swell partitions
-    max_partitions = bulk[0].number_of_swells
-
-    # For each partition, create the dataframe.
-    partitions_swell = []
-    for ii in range(0, max_partitions):
-        partitions_swell.append(
-            _gen_dataframe_from_partitions(
-                [b.partitions_swell[ii] for b in bulk])
-        )
-
-    # Return Data
-    return SeaSwellData(sea=sea, total_swell=total_swell,
-                        partitions_swell=partitions_swell)

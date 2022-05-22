@@ -26,11 +26,8 @@ How To Use This Module
 2.
 """
 
-from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
-from .parametric import pierson_moskowitz_frequency
-from pandas import DataFrame
+from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput, empty_spectrum2D_like
 import numpy
-import scipy.ndimage
 import typing
 import numba
 
@@ -39,88 +36,6 @@ default_partition_config = {
     'minimumRelativeDistance': 0.01,
 }
 
-
-
-
-
-class Partition():
-    def __init__(self, source_spectrum: WaveSpectrum2D, partition_labels,
-                 proximate_partitions, label):
-        self.proximate_partitions = proximate_partitions
-        self.mask = partition_labels == label
-        self.label = label
-
-        partition_density = numpy.zeros_like(source_spectrum.variance_density)
-        partition_density[self.mask] = source_spectrum.variance_density[
-            self.mask]
-
-        self.spectrum = WaveSpectrum2D(
-            WaveSpectrum2DInput(frequency=source_spectrum.frequency,
-                                varianceDensity=partition_density,
-                                timestamp=source_spectrum.timestamp,
-                                latitude=source_spectrum.latitude,
-                                longitude=source_spectrum.longitude,
-                                directions=source_spectrum.direction))
-        self._update()
-
-    def merge(self, density, proximate_regions, mask, label):
-        self.spectrum.variance_density = self.spectrum.variance_density + density
-        self.spectrum._update()
-        self.mask = self.mask | mask
-        self.proximate_partitions = \
-            numpy.unique(numpy.concatenate(
-                (self.proximate_partitions, proximate_regions)))
-        mask = self.proximate_partitions != label
-        self.proximate_partitions = self.proximate_partitions[mask]
-
-    def _update(self):
-        self.peak_wavenumber = self.spectrum.peak_wavenumber()
-        self.direction = self.spectrum.peak_direction()
-        self.peak_wavenumber_east = numpy.cos(
-            self.direction * numpy.pi / 180) * self.peak_wavenumber
-        self.peak_wavenumber_north = numpy.sin(
-            self.direction * numpy.pi / 180) * self.peak_wavenumber
-        self.m0 = self.spectrum.m0()
-        self.tm01 = self.spectrum.peak_period()
-        self.directional_width = self.spectrum.bulk_spread()
-
-    def is_sea_partition(self) -> bool:
-        """
-        Identify whether or not it is a sea partion. Use 1D method for 2D
-        spectra in section 3 of:
-
-        Portilla, J., Ocampo-Torres, F. J., & Monbaliu, J. (2009).
-        Spectral partitioning and identification of wind sea and swell.
-        Journal of atmospheric and oceanic technology, 26(1), 107-122.
-
-        :return: boolean indicting it is sea
-        """
-        portilla = True
-        spec1D = self.spectrum.e
-        peak_index = numpy.argmax(spec1D)
-        peak_frequency = self.spectrum.frequency[peak_index]
-        if portilla:
-            density = spec1D[peak_index]
-            return pierson_moskowitz_frequency(peak_frequency, peak_frequency
-                                               ) <= density
-        else:
-            freq = self.spectrum.frequency
-            pm = pierson_moskowitz_frequency(freq, peak_frequency)
-            index = numpy.nonzero(pm < self.spectrum.e)[0]
-
-            if len(index) == 0:
-                return False
-
-            factor = numpy.mean(
-                self.spectrum.e[index[0]:] / pm[index[0]:]) > 0.8
-            m0_tail = self.spectrum.m0(fmin=freq[index[0]])
-            m0_peak = self.spectrum.m0(fmax=freq[index[0]])
-            energy_fraction = m0_tail / m0_peak > 0.5
-
-            return factor & energy_fraction
-
-    def is_swell_partition(self):
-        return not self.is_sea_partition()
 
 @numba.njit()
 def neighbours(peak_direction_index: int, peak_frequency_index: int,
@@ -199,9 +114,11 @@ def neighbours(peak_direction_index: int, peak_frequency_index: int,
 
 NOT_ASSIGNED = -1
 
-numba.njit()
+
+@numba.njit()
 def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
-              spectral_density: numpy.ndarray, partition_label: numpy.ndarray):
+              spectral_density: numpy.ndarray) -> typing.Tuple[
+    numpy.ndarray, typing.Dict[int, typing.List[int]]]:
     """
     Flood fill algorithm. We try to find the region that belongs to a peak according
     to inverse watershed.
@@ -222,25 +139,27 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
     """
 
     def distance(freq1, angle1, freq2, angle2, grav=9.81):
-        k1 = (freq1 * numpy.pi) ** 2 / grav
-        k2 = (freq2 * numpy.pi) ** 2 / grav
+        k1 = (2*freq1 * numpy.pi) ** 2 / grav
+        k2 = (2*freq2 * numpy.pi) ** 2 / grav
 
         return numpy.sqrt(
             (k1 * numpy.cos(angle1) - k2 * numpy.cos(angle2)) ** 2 +
             (k1 * numpy.sin(angle1) - k2 * numpy.sin(angle2)) ** 2
         )
 
-    def jacobian(frequency_hertz,grav=9.81):
-        return 1/(8*numpy.pi**2) * grav/frequency_hertz
+    def jacobian(frequency_hertz, grav=9.81):
+        return 1 / (8 * numpy.pi ** 2) * grav / frequency_hertz
 
     number_of_directions = spectral_density.shape[1]
     number_of_frequencies = spectral_density.shape[0]
-    proximate_partitions = []
 
     current_label = NOT_ASSIGNED
+    proximate_partitions = {} # type: typing.Dict[int,typing.List[int]]
+    # proximate_partitions = []
 
-    proximate_partitions = []
-
+    partition_label = numpy.zeros(
+        (number_of_frequencies, number_of_directions),
+        dtype='int32') + NOT_ASSIGNED
     for start_frequency_index in range(0, number_of_frequencies):
         for start_direction_index in range(0, number_of_directions):
             # if already assigned - continue
@@ -250,9 +169,9 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
 
             ii = [start_frequency_index]
             jj = [start_direction_index]
-
             proximate_partitions_work = []
             while True:
+
                 direction_index = jj[-1]
                 frequency_index = ii[-1]
 
@@ -264,34 +183,53 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
                                    direction[neighbour_direction_indices],
                                    frequency[frequency_index],
                                    direction[direction_index])
-                node_value = spectral_density[frequency_index, direction_index]
-                delta = (spectral_density[
-                             neighbour_frequency_indices, neighbour_direction_indices] - node_value) / delta_k
+                node_value = spectral_density[frequency_index, direction_index] #*jacobian(frequency[frequency_index])
 
-                neighbour_assigned_mask = partition_label[
-                                              neighbour_frequency_indices, neighbour_direction_indices] > NOT_ASSIGNED
-                neighbour_assigned_labels = partition_label[
-                    neighbour_frequency_indices[neighbour_assigned_mask],
-                    neighbour_direction_indices[neighbour_assigned_mask]]
-                proximate_partitions_work += [ii for ii in neighbour_assigned_labels]
+                delta = numpy.zeros_like(delta_k)
+                neighbour_assigned_mask = numpy.zeros_like(delta_k,dtype='bool')
+
+                for index, ifreq, idir in zip(
+                        range(0, len(neighbour_frequency_indices)),
+                        neighbour_frequency_indices,
+                        neighbour_direction_indices):
+
+                    delta[index] = (spectral_density[
+                                        ifreq, idir] - node_value)
+                    neighbour_assigned_mask[index] = partition_label[ifreq,idir] > NOT_ASSIGNED
+
+                    if neighbour_assigned_mask[index]:
+                        proximate_partitions_work.append(partition_label[ifreq,idir])
+                # delta = (spectral_density[
+                #            neighbour_frequency_indices, neighbour_direction_indices] - node_value) / delta_k
+
+                #neighbour_assigned_mask = partition_label[
+                #                              neighbour_frequency_indices, neighbour_direction_indices] > NOT_ASSIGNED
+                #neighbour_assigned_labels = partition_label[
+                #    neighbour_frequency_indices[neighbour_assigned_mask],
+                #    neighbour_direction_indices[neighbour_assigned_mask]]
+                # proximate_partitions_work += [ii for ii in
+                #                               neighbour_assigned_labels]
 
                 if numpy.all(delta <= 0) or (partition_label[
-                                                frequency_index, direction_index] > NOT_ASSIGNED):
+                                                 frequency_index, direction_index] > NOT_ASSIGNED):
                     # this is a peak, or already leads to a peak
-                    ii = numpy.array(ii, dtype='int64')
-                    jj = numpy.array(jj, dtype='int64')
+                    #ii = numpy.array(ii, dtype='int64')
+                    #jj = numpy.array(jj, dtype='int64')
 
                     if partition_label[
                         frequency_index, direction_index] == NOT_ASSIGNED:
                         current_label += 1
                         label = current_label
-                        proximate_partitions.append(proximate_partitions_work)
+                        proximate_partitions[label] = numpy.array(proximate_partitions_work,dtype='int64')
                     else:
                         label = partition_label[
                             frequency_index, direction_index]
                         proximate_partitions[
-                            label] += proximate_partitions_work
-                    partition_label[ii, jj] = label
+                            label] = numpy.append(proximate_partitions[
+                            label],proximate_partitions_work)
+
+                    for i,j in zip(ii,jj):
+                        partition_label[i, j] = label
 
                     break
 
@@ -302,46 +240,29 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
                     continue
 
         #
-    for ii in range(0,len(proximate_partitions)):
-        proximate_partitions[ii] = numpy.unique(proximate_partitions[ii])
-    return proximate_partitions
+    for label in proximate_partitions:
+        proximate_partitions[label] = numpy.unique(proximate_partitions[label])
+        mask = proximate_partitions[label] == label
+        proximate_partitions[label] = proximate_partitions[label][~mask]
+        #if label in proximate_partitions[label]:
+
+            #proximate_partitions[label].pop(
+            #    proximate_partitions[label].index(label))
+
+    for label_source, item in proximate_partitions.items():
+        for label_target in item:
+            if label_source == label_target:
+                continue
+
+            if label_source not in proximate_partitions[label_target]:
+                proximate_partitions[label_target] = numpy.append( proximate_partitions[label_target],label_source)
+
+    return partition_label, proximate_partitions
 
 
-numba.njit()
-def find_partitions(frequency, direction, density):
-    #
-    partition_label = numpy.zeros_like(density, dtype='int64') + NOT_ASSIGNED
-    proximate_partitions_adjacency_list = floodfill(frequency, direction,
-                                                    density, partition_label)
-
-    number_of_partitions = len(proximate_partitions_adjacency_list)
-    for ii in range(0, number_of_partitions):
-        proximate_partition_indices = proximate_partitions_adjacency_list[ii]
-        for proximate_partition_index in proximate_partition_indices:
-            proximate_partitions_adjacency_list[proximate_partition_index] = (
-                numpy.append(
-                    proximate_partitions_adjacency_list[
-                        proximate_partition_index],
-                    ii)
-            )
-
-    for ii in range(0, number_of_partitions):
-        proximate_partitions_adjacency_list[ii] = numpy.unique(
-            proximate_partitions_adjacency_list[ii])
-
-    return partition_label, proximate_partitions_adjacency_list, numpy.arange(
-        0, number_of_partitions)
-
-
-def label_to_index_mapping(partitions):
-    labels = numpy.array([x.label for x in partitions])
-    label_to_index = {}
-    for index, label in enumerate(labels):
-        label_to_index[label] = index
-    return label_to_index
-
-
-def find_index_closest_partition(index, partitions: typing.List[Partition]):
+def find_label_closest_partition(label,
+                                 proximity: typing.Dict[int, typing.List[int]],
+                                 partitions: typing.Dict[int, WaveSpectrum2D]):
     """
     Find the partition whose peak is closest to the partition under considiration
     Only proximate partitions are considered. Basically: find the partition whose
@@ -352,90 +273,54 @@ def find_index_closest_partition(index, partitions: typing.List[Partition]):
     :return:
     """
 
-    # Map the label used to mark the the partition to the ordinal numeral in
-    # the list. E.g.: the partition with Label=3 might be the first in our list
-    # of partitions (i.e partitions[0].label=3).
-    label_to_index = label_to_index_mapping(partitions)
-
     # find the labels of the neighbouring partitions.
-    proximate_labels = partitions[index].proximate_partitions
+    proximate_labels = proximity[label]
 
     # find the wavenumbers associated with the peak
-    kx = partitions[index].peak_wavenumber_east
-    ky = partitions[index].peak_wavenumber_north
-    k = partitions[index].peak_wavenumber
-
-    # Make sure that we do not consider the "self" label as proximate.
-    mask = proximate_labels != partitions[index].label
-    proximate_labels = proximate_labels[mask]
+    kx = partitions[label].peak_wavenumber_east()
+    ky = partitions[label].peak_wavenumber_north()
 
     # Initialize the numpy arrays for distance and indices.
     distance = numpy.zeros((len(proximate_labels),))
     indices = numpy.zeros((len(proximate_labels),), dtype='int32')
 
-    for ii, label in enumerate(proximate_labels):
-        proximate_index = label_to_index[label]
+    for ii, local_label in enumerate(proximate_labels):
+        delta_kx = partitions[local_label].peak_wavenumber_east() - kx
+        delta_ky = partitions[local_label].peak_wavenumber_north() - ky
+        distance[ii] = numpy.sqrt(delta_kx ** 2 + delta_ky ** 2)
+        indices[ii] = local_label
 
-        delta_kx = partitions[proximate_index].peak_wavenumber_east - kx
-        delta_ky = partitions[proximate_index].peak_wavenumber_north - ky
-        distance[ii] = numpy.sqrt(delta_kx ** 2 + delta_ky ** 2) / k
-        indices[ii] = proximate_index
-
-    minimum_index = numpy.argmin(distance)
-    return indices[minimum_index], distance[minimum_index]
+    return indices[numpy.argmin(distance)]
 
 
-def filter_for_low_energy(partitions: typing.List[Partition], total_energy,
-                          partition_label_array, config):
-    index = 0
-    while True:
-        partition = partitions[index]
-        if len(partitions) == 1:
-            break
+def filter_for_low_energy(partitions: typing.Dict[int, WaveSpectrum2D],
+                          proximity: typing.Dict[int, typing.List[int]],
+                          total_energy, config):
+    for label in list(partitions.keys()):
 
-        closest_index, distance = find_index_closest_partition(index,
-                                                               partitions)
+        if label not in partitions:
+            continue
 
-        if ((partition.m0 < config['minimumEnergyFraction'] * total_energy) or
-                (distance < config['minimumRelativeDistance'])
-        ):
+        partition = partitions[label]
+
+        if partition.hm0() == 0:
+            closest_label = proximity[label][0]
+        else:
+            closest_label = find_label_closest_partition(
+                label, proximity, partitions)
+
+
+        if (partition.m0() < config['minimumEnergyFraction'] * total_energy):
             #
             # Merge with the closest partition
-            merge_partitions(index, closest_index, partitions,
-                             partition_label_array)
+            merge_partitions(label, closest_label, partitions,
+                             proximity)
 
-            # pop
-            partitions.pop(index)
-
-        else:
-            index += 1
-
-        if index >= len(partitions):
-            break
-
-
-def merge_sea_spectra(partitions: typing.List[Partition],
-                      partition_label_array, config):
-    sea_partitions = []
-    for index, partition in enumerate(partitions):
-        if partition.is_sea_partition():
-            sea_partitions.append(index)
-
-    if len(sea_partitions) > 1:
-        for index in sea_partitions[1:]:
-            merge_partitions(index, sea_partitions[0], partitions,
-                             partition_label_array)
-
-        for index in sorted(sea_partitions[1:], reverse=True):
-            del partitions[index]
-
-
-
-def merge_partitions(source_index: int,
-                     target_index: int,
-                     partitions: typing.List[Partition],
-                     partition_label_array: numpy.ndarray = None
-                     ) -> None:
+def merge_partitions(
+        source_label,
+        target_label,
+        partitions: typing.Dict[int, WaveSpectrum2D],
+        proximity: typing.Dict[int, typing.List[int]]) -> WaveSpectrum2D:
     """
     Merge one partition into another partition. (**Has side-effects**)
     :param source_index: source index of the partition to merge in the list
@@ -448,43 +333,32 @@ def merge_partitions(source_index: int,
     """
 
     # Get source/target partitions
-    source = partitions[source_index]
-    target = partitions[target_index]
+    partitions[target_label] = partitions[target_label] + partitions[
+        source_label]
+    partitions.pop(source_label)
 
-    # Merge source into target
-    target.merge(
-        source.spectrum.variance_density,
-        source.proximate_partitions,
-        source.mask,
-        source.label
-    )
+    for proximate_labels_to_source_label in proximity[source_label]:
+        proximate_to_update = proximity[proximate_labels_to_source_label]
+        index = proximate_to_update.index(source_label)
 
-    # update all the labels so that they now point to the new partition
-    label_to_index = label_to_index_mapping(partitions)
-
-    # Update the list of proximate partitions of the source to indicate they
-    # are now proximate to the target
-    for proximate_partition_label in source.proximate_partitions:
-        if proximate_partition_label == source.label:
+        if proximate_labels_to_source_label == target_label:
+            proximity[target_label].pop(index)
             continue
-        proximate_index = label_to_index[proximate_partition_label]
-        proximate_partition = partitions[proximate_index]
-        mask = proximate_partition.proximate_partitions == source.label
-        proximate_partition.proximate_partitions[mask] = target.label
 
-        # Make sure the list remains unique (if the target was already proximate)
-        proximate_partition.proximate_partitions = numpy.unique(
-            proximate_partition.proximate_partitions)
+        #
+        if proximate_labels_to_source_label not in proximity[target_label]:
+            proximity[target_label].append(proximate_labels_to_source_label)
 
-    # update the labels in the array
-    if partition_label_array is not None:
-        partition_label_array[source.mask] = target.label
+        if target_label in proximate_to_update:
+            proximate_to_update.pop(index)
+        else:
+            proximate_to_update[index] = target_label
 
-    return None
+    return partitions[target_label]
 
 
-def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> typing.Tuple[
-    typing.List[Partition], numpy.ndarray]:
+def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
+        typing.Tuple[ typing.Dict[int, WaveSpectrum2D], typing.Dict[int, typing.List[int]] ]:
     """
     Create partitioned spectra from a given 2D wavespectrum
     :param spectrum: 2D wavespectrum
@@ -505,26 +379,47 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> typing.Tuple[
     # labels for each cell in the spectrum to which partition it belongs, an
     # ordered list with the label as index containing which partitions are
     # adjacent to the current partition and the labels.
-    partition_label_array, proximate_partitions, labels = find_partitions(
-        spectrum.frequency, spectrum.direction * numpy.pi/180, density)
+    partition_label, proximate = floodfill(
+        spectrum.frequency, spectrum.direction * numpy.pi / 180, density)
+    # We need to convert back to a list, and we need to do it in a somewhat
+    # roundabout way as numba does not support dicts of lists (note, proximate
+    # currently is a "numba" dictionarly of numpy arrays)
+    proximate_partitions = {}
+    for label in proximate:
+        proximate_partitions[label] = list(proximate[label])
 
     # Create Partition objects given the label array from the floodfill.
-    partitions = []
+    partitions = {}
 
-    # Create a list of all draft partitions
-    for proximate_region, label in zip(proximate_partitions, labels):
-        partitions.append(
-            Partition(spectrum, partition_label_array, proximate_region,
-                      label))
-
-    # merge low energy partitions
-    filter_for_low_energy(partitions, spectrum.m0(), partition_label_array,
+    # Create a dict of all draft partitions
+    for label, proximity_list in proximate_partitions.items():
+        mask = partition_label == label
+        partitions[label] = spectrum.extract(mask)
+    #
+    # # merge low energy partitions
+    filter_for_low_energy(partitions, proximate_partitions, spectrum.m0(),
                           config)
 
     #  if there are multiple sea spectra merge them into a single sea-spectrum
-    merge_sea_spectra(partitions, partition_label_array,
-                      config)
+    # merge_sea_spectra(partitions, proximate_partitions, config)
 
     # Return the partitions and the label array.
-    return partitions, partition_label_array
+    return partitions, proximate_partitions
 
+
+def partition_marker_array(
+        partitions: typing.Dict[int, WaveSpectrum2D]) -> numpy.ndarray:
+    a_label = list(partitions.keys())[0]
+    marker_array = numpy.zeros(
+        partitions[a_label].variance_density.shape) + numpy.nan
+    for label, partition in partitions.items():
+        mask = ~partition.variance_density.mask
+        marker_array[mask] = label
+    return marker_array
+
+def sum_partitions(partitions: typing.Dict[int, WaveSpectrum2D]) -> WaveSpectrum2D:
+    key = list(partitions.keys())[0]
+    sum_spec = empty_spectrum2D_like(partitions[key])
+    for _, spec in partitions.items():
+        sum_spec = spec + sum_spec
+    return sum_spec

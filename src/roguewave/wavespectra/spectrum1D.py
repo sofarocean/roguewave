@@ -34,6 +34,11 @@ class WaveSpectrum1D(WaveSpectrum):
         self._a2 = numpy.array(wave_spectrum1D_input['a2'])
         self._e = numpy.array(wave_spectrum1D_input['varianceDensity'])
 
+    @WaveSpectrum.variance_density.setter
+    def variance_density(self,val:numpy.ndarray):
+        self._variance_density = val
+        self._e = val
+
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
         range = (self._range(fmin, fmax)) & numpy.isfinite(self.e)
 
@@ -67,6 +72,23 @@ class WaveSpectrum1D(WaveSpectrum):
             b2=list(self.b2)
         )
         return WaveSpectrum1D(input)
+
+    def __add__(self, other:"WaveSpectrum1D")->"WaveSpectrum1D":
+        spectrum = self.copy()
+        spectrum.variance_density = (spectrum.variance_density +
+            other.variance_density)
+        return spectrum
+
+    def __sub__(self, other:"WaveSpectrum1D")->"WaveSpectrum1D":
+        spectrum = self.copy()
+        spectrum.variance_density = (spectrum.variance_density -
+            other.variance_density)
+        return spectrum
+
+    def __neg__(self, other:"WaveSpectrum1D")->"WaveSpectrum1D":
+        spectrum = self.copy()
+        spectrum.variance_density = -spectrum.variance_density
+        return spectrum
 
 
 def empty_spectrum1D_like(spectrum: WaveSpectrum1D) -> WaveSpectrum1D:

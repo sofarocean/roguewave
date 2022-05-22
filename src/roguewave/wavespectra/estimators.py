@@ -362,12 +362,13 @@ def ridge_regression(directions_radians: numpy.ndarray, a1, b1, a2,
 
         directional_distribution[ifreq, :] = res
 
+    directional_distribution[directional_distribution<0] = 0
     return numpy.squeeze(directional_distribution)
 
 
 def spect2d_from_spec1d(spectrum1D: WaveSpectrum1D,
                         number_of_directions: int = 36,
-                        method: str = 'ridge', frequency_smoothing=True,
+                        method: str = 'ridge', frequency_smoothing=False,
                         smoothing_lengthscale=1) -> WaveSpectrum2D:
     """
     Construct a 2D spectrum based on the 1.5D spectrum and a spectral

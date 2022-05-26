@@ -354,6 +354,7 @@ def merge_partitions(
         else:
             proximate_to_update[index] = target_label
 
+    proximity.pop(source_label)
     return partitions[target_label]
 
 

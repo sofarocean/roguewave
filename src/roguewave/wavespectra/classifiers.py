@@ -6,6 +6,8 @@ from .parametric import pierson_moskowitz_frequency
 from .partitioning import merge_partitions, find_label_closest_partition
 import typing
 import numpy
+from . import logger
+import logging
 
 
 def is_sea_spectrum(spectrum: WaveSpectrum) -> bool:
@@ -47,24 +49,26 @@ def is_swell_spectrum(spectrum: WaveSpectrum) -> bool:
 
 
 def find_matching_partition(source_spectrum: WaveSpectrum2D,
-                            spectra: typing.Dict[int, WaveSpectrum2D])->typing.Tuple[int,float]:
-    correlation =numpy.zeros( (len(spectra), ))
-    labels = numpy.zeros( (len(spectra), ),dtype='int64')
+                            spectra: typing.Dict[int, WaveSpectrum2D]) -> \
+typing.Tuple[int, float]:
+    correlation = numpy.zeros((len(spectra),))
+    labels = numpy.zeros((len(spectra),), dtype='int64')
 
-    source = source_spectrum.variance_density[:] - \
-             numpy.mean(source_spectrum.variance_density[:])
-    source = source.flatten()
+    # source = source_spectrum.variance_density[:] - \
+    #          numpy.mean(source_spectrum.variance_density[:])
+    source = source_spectrum.variance_density.flatten()
 
     ii = -1
     for label, target_spectrum in spectra.items():
-        ii+=1
+        ii += 1
         labels[ii] = label
         if target_spectrum is not None:
-            target = target_spectrum.variance_density[:] - numpy.mean(
-                target_spectrum.variance_density[:])
-            target = target.flatten()
+            # target = target_spectrum.variance_density[:] - numpy.mean(
+            #     target_spectrum.variance_density[:])
+            target = target_spectrum.variance_density.flatten()
             correlation[ii] = \
-                numpy.corrcoef(source.flatten(), target.flatten(), )[0, 1]
+                numpy.nansum( source*target)
+                #numpy.corrcoef(source.flatten(), target.flatten(), )[0, 1]
         else:
             correlation[ii] = 0
 
@@ -83,176 +87,184 @@ def find_all_matching_partitions(
     return correlation
 
 
+def check_for_orphaned_label(paths,label,proximity,curr):
+    if paths[label][0] is None and paths[label][1] is None:
+        target = find_label_closest_partition(label,
+                                          proximity, curr)
+        merge_partitions(label, target, curr, proximity)
+        paths.pop(label)
+
 def link_partitions(prev: typing.Dict[int, WaveSpectrum2D],
                     curr: typing.Dict[int, WaveSpectrum2D],
                     next: typing.Dict[int, WaveSpectrum2D],
-                    proximity: typing.Dict[int,typing.List[int]],
+                    proximity: typing.Dict[int, typing.List[int]],
+                    is_first=False,
+                    is_last=False,
                     threshold=0.1):
+    curr_to_prev = find_all_matching_partitions(curr, prev)
 
-    curr_to_prev = find_all_matching_partitions( curr, prev)
-    curr_to_next = find_all_matching_partitions( curr, next)
 
     labels = list(curr.keys())
 
-    connections = {label_prev: { label_next: [   ] for label_next in next  }
-                   for label_prev in prev
-                   }
+    start = {}
+    end = {}
+    paths = {}
 
-    def filter_for_dual_paths(connections, curr, proximity):
-        for prev_label, next_dict in connections.items():
-            for next_label, label_list in next_dict.items():
-                if len(label_list)<2:
-                    continue
 
-                labels = [ x[0] for x in label_list ]
-                icorr = numpy.argmax([ x[1]*x[2] for x in label_list ])
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"\t correlation between current, previous and next")
+        logger.debug(f"\t\t strength prev curr next strength")
+        for label in labels:
+            prev_label, strength_prev = curr_to_prev[label]
+            logger.debug(
+                f"\t\t{strength_prev:4.2e} {prev_label:04d} {label:04d} "
+            )
 
-                for label in labels:
-                    if labels[icorr] == label:
-                        continue
+    for label in labels:
+        prev_label, strength_prev = curr_to_prev[label]
 
-                    target = find_label_closest_partition(label,proximity,curr)
-                    merge_partitions(label,target,curr,proximity)
-                connections[prev_label][next_label] =
+        prev_in_start = prev_label in start
+
+        # not a path with same start point
+        if prev_in_start:
+            if strength_prev > start[prev_label]['correlation']:
+                # replace
+                paths[ start[prev_label]['label'] ][0] = None
+                check_for_orphaned_label( paths, start[prev_label]['label'],proximity,curr  )
+                start[prev_label] = {'label': label,
+                                     'correlation': strength_prev}
+            else:
+                prev_label = None
+        else:
+            start[prev_label] = {'label': label,'correlation': strength_prev}
+
+
+        paths[label] = [prev_label, None]
+
+    # Step two- check for the threshold
+    labels = list(paths.keys())
+    for label in labels:
+        path = paths[label]
+        if path[0] is not None:
+            if start[path[0]]['correlation'] < threshold:
+                path[0] = None
+
+        #check_for_orphaned_label(paths,label,proximity,curr)
+
+    return paths
+
+
+def link_partitions_old(prev: typing.Dict[int, WaveSpectrum2D],
+                    curr: typing.Dict[int, WaveSpectrum2D],
+                    next: typing.Dict[int, WaveSpectrum2D],
+                    proximity: typing.Dict[int, typing.List[int]],
+                    is_first=False,
+                    is_last=False,
+                    threshold=0.1):
+    curr_to_prev = find_all_matching_partitions(curr, prev)
+    curr_to_next = find_all_matching_partitions(curr, next)
+
+    labels = list(curr.keys())
+
+    start = {}
+    end = {}
+    paths = {}
+
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"\t correlation between current, previous and next")
+        logger.debug(f"\t\t strength prev curr next strength")
+        for label in labels:
+            prev_label, strength_prev = curr_to_prev[label]
+            next_label, strength_next = curr_to_next[label]
+            logger.debug(
+                f"\t\t{strength_prev:4.2e} {prev_label:04d} {label:04d} {next_label:04d} {strength_next:4.2e} "
+            )
 
     for label in labels:
         prev_label, strength_prev = curr_to_prev[label]
         next_label, strength_next = curr_to_next[label]
 
-        connections[ prev_label ][next_label].append( (label , strength_prev, strength_next ))
+        prev_in_start = prev_label in start
+        next_in_end = next_label in end
 
+        if prev_in_start and next_in_end:
+            # already assigned - likely a path with the same start and end
+            # points already exists
+            if start[prev_label]['label'] == end[next_label]['label']:
 
-
-    paths = []
-    end_point = { key: [] for key in next.keys() }
-    start_point = {key: [] for key in prev.keys()}
-    jj = -1
-    for prev_label, next_dict in connections.items():
-        for next_label, label_list in next_dict.items():
-            if not label_list:
-                continue
-            jj +=1
-
-            if len(label_list) == 1:
-                #
-                label, strength_prev, strength_next = label_list[0]
-                if strength_prev > threshold and strength_next > threshold:
-                    paths.append( [prev_label, label, next_label] )
-                    end_point[next_label].append( ( strength_next, len(paths)-1 ) )
-                    start_point[prev_label].append(
-                        (strength_prev, len(paths) - 1))
-                elif strength_prev < threshold and strength_next > threshold:
-                    paths.append( [None, label, next_label] )
-                    end_point[next_label].append((strength_next, len(paths) - 1))
-                    
-                elif strength_prev > threshold and strength_next < threshold:
-                    paths.append( [prev_label, label, None] )
-                    start_point[prev_label].append(
-                        (strength_prev, len(paths) - 1))
+                # check if the current candiate has stronger correlations
+                if strength_prev * strength_next > start[prev_label][
+                    'correlation'] * end[next_label]['correlation']:
+                    # if so replace
+                    label_to_remove = start[prev_label]['label']
+                    start[prev_label] = {'label': label,
+                                         'correlation': strength_prev}
+                    end[next_label] = {'label': label,
+                                       'correlation': strength_next}
+                    paths.pop(label_to_remove)
+                    paths[label] = [prev_label,next_label]
                 else:
-                    # Orphaned - lets delete
-                    target = find_label_closest_partition(label,proximity,curr)
-                    merge_partitions(label, target, curr, proximity)
+                    # if not- remove the current candiate path
+                    label_to_remove = label
+
+                target = find_label_closest_partition(label_to_remove,
+                                                      proximity, curr)
+                merge_partitions(label_to_remove, target, curr, proximity)
+                continue
             else:
-                # dual paths
-                labels = [ x[0] for x in label_list ]
-                icorr = numpy.argmax([ x[1]*x[2] for x in label_list ])
-                paths.append([prev_label, labels[icorr], next_label])
+                pass
 
-                end_point[next_label].append((strength_next, len(paths) - 1))
-                start_point[prev_label].append(
-                    (strength_prev, len(paths) - 1))
+        # not a path with same start and end point
+        if prev_in_start:
+            if strength_prev > start[prev_label]['correlation']:
+                # replace
+                paths[ start[prev_label]['label'] ][0] = None
+                check_for_orphaned_label( paths, start[prev_label]['label'],proximity,curr  )
+                start[prev_label] = {'label': label,
+                                     'correlation': strength_prev}
+            else:
+                prev_label = None
+        else:
+            start[prev_label] = {'label': label,'correlation': strength_prev}
 
-                for label in labels:
-                    if labels[icorr] == label:
-                        continue
+        if next_in_end:
+            if strength_next > end[next_label]['correlation']:
+                # replace
+                paths[ end[next_label]['label'] ][1] = None
+                check_for_orphaned_label( paths, end[next_label]['label'],proximity,curr  )
+                end[next_label] = {'label': label,
+                                   'correlation': strength_prev}
+            else:
+                next_label = None
+        else:
+            end[next_label] = {'label': label, 'correlation': strength_next}
 
-                    target = find_label_closest_partition(label,proximity,curr)
-                    merge_partitions(label,target,curr,proximity)
+        if (next_label is None) and (prev_label is None):
+            target = find_label_closest_partition(label,
+                                                  proximity, curr)
+            merge_partitions(label, target, curr, proximity)
+        else:
+            paths[label] = [prev_label, next_label]
 
-
-    to_pop = []
-    for label, paths_ending in end_point.items():
-        if len(paths_ending) > 1:
-            # multiple paths are ending here, lets only keep the one with the
-            # strongest correlation
-            imax = numpy.argmax(numpy.array([ x[0] for x in paths_ending ]))
-
-            for ii, entry in enumerate(paths_ending):
-                # for all the paths that end here do
-                if ii == imax:
-                    continue
-
-                path_index = entry[1]
-                path = paths[path_index]
-                path[2] = None
-
-                if not path[0]:
-                    # Orphaned - lets delete
-                    source = path[1]
-                    target = find_label_closest_partition(source, proximity,
-                                                          curr)
-                    merge_partitions(source, target, curr, proximity)
-                    to_pop.append( path_index )
-
-    for index in sorted(to_pop,reverse=True):
-        paths.pop(index)
-
-    to_pop = []
-    for label, paths_starting in start_point.items():
-        if len(paths_starting) > 1:
-            # multiple paths are starting here, lets only keep the one with the
-            # strongest correlation
-            imax = numpy.argmax(numpy.array([x[0] for x in paths_starting]))
-
-            for ii, entry in enumerate(paths_starting):
-                # for all the paths that end here do
-                if ii == imax:
-                    continue
-
-                path_index = entry[1]
-                path = paths[path_index]
+    # Step two- check for the threshold
+    labels = list(paths.keys())
+    for label in labels:
+        path = paths[label]
+        if path[0] is not None:
+            if start[path[0]]['correlation'] < threshold:
                 path[0] = None
 
-                if not path[2]:
-                    # Orphaned - lets delete
-                    source = path[1]
-                    target = find_label_closest_partition(source, proximity,
-                                                          curr)
-                    merge_partitions(source, target, curr, proximity)
-                    to_pop.append(path_index)
+        if is_last and path[0] is None:
+            path[1] = None
 
-    for index in sorted(to_pop, reverse=True):
-        paths.pop(index)
+        if path[1] is not None:
+            if end[path[1]]['correlation'] < threshold:
+                path[1] = None
+
+        if is_first and path[1] is None:
+            path[0] = None
+
+        check_for_orphaned_label(paths,label,proximity,curr)
 
     return paths
-
-
-def prune_multiple_start_or_exit( is_start:bool ,paths, list_of_converging_paths: typing.Dict[int,typing.Tuple[int,int]] ):
-    to_pop = []
-    for label, paths_converging in list_of_converging_paths.items():
-        if len(paths_converging) > 1:
-            # multiple paths are ending here, lets only keep the one with the
-            # strongest correlation
-            imax = numpy.argmax(numpy.array([x[0] for x in paths_converging]))
-
-            for ii, entry in enumerate(paths_converging):
-                # for all the paths that end here do
-                if ii == imax:
-                    continue
-
-                path_index = entry[1]
-                path = paths[path_index]
-                path[2] = None
-
-                if not path[0]:
-                    # Orphaned - lets delete
-                    source = path[1]
-                    target = find_label_closest_partition(source, proximity,
-                                                          curr)
-                    merge_partitions(source, target, curr, proximity)
-                    to_pop.append(path_index)
-
-    for index in sorted(to_pop, reverse=True):
-        paths.pop(index)
-

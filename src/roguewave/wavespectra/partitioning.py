@@ -32,7 +32,7 @@ import typing
 import numba
 
 default_partition_config = {
-    'minimumEnergyFraction': 0.01,
+    'minimumEnergyFraction': 0.1,
     'minimumRelativeDistance': 0.01,
 }
 

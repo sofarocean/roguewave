@@ -14,7 +14,8 @@ setuptools.setup(
         'netCDF4',
         'pandas',
         'qpsolvers',
-        'scipy'
+        'scipy',
+        'numba'
     ],
     description='Python package to interact with Sofar wave data',
     long_description=readme_contents,

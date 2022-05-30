@@ -30,9 +30,10 @@ from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput, empty_spectrum2D_li
 import numpy
 import typing
 import numba
+from scipy.ndimage import maximum_filter, generate_binary_structure
 
 default_partition_config = {
-    'minimumEnergyFraction': 0.1,
+    'minimumEnergyFraction': 0.01,
     'minimumRelativeDistance': 0.01,
 }
 
@@ -424,3 +425,10 @@ def sum_partitions(partitions: typing.Dict[int, WaveSpectrum2D]) -> WaveSpectrum
     for _, spec in partitions.items():
         sum_spec = spec + sum_spec
     return sum_spec
+
+def is_neighbour( partition_1:WaveSpectrum2D , partition_2:WaveSpectrum2D )->int:
+    footprint = generate_binary_structure(partition_2.variance_density.ndim, 1)
+    mask_1 = maximum_filter(partition_1.variance_density,footprint=footprint,mode='wrap')
+    mask_2 = partition_1.variance_density
+    return numpy.nansum(mask_1*mask_2)
+

@@ -3,7 +3,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from .spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
-from .estimators import mem, maximize_shannon_entrophy, ridge_regression, spect2d_from_spec1d, spec1d_from_spec2d
+from .estimators import spect2d_from_spec1d, spec1d_from_spec2d
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

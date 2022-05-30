@@ -5,3 +5,4 @@ from .wavespectra.spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from .wavespectra import spectrum1D, spectrum2D
 from .wavespectra.partitioning.observations import \
     partition_observations_spectra, partition_observations_bulk
+from .wavespectra.io import load_spectrum,save_spectrum

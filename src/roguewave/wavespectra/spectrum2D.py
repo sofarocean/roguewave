@@ -28,14 +28,15 @@ class WaveSpectrum2D(WaveSpectrum):
                  ):
 
         super().__init__(wave_spectrum2D_input)
-        self.direction = wave_spectrum2D_input['directions']
+        self.direction = numpy.array(wave_spectrum2D_input['directions'])
         self._frequency_peak_indices = None
         self._direction_peak_indices = None
         self._update()
 
     @WaveSpectrum.variance_density.setter
     def variance_density(self,val:numpy.ndarray):
-        self._variance_density = MaskedArray(val)
+        mask = val < 0
+        self._variance_density = MaskedArray(val,mask=mask)
         self._update()
 
     def _update(self):
@@ -82,10 +83,11 @@ class WaveSpectrum2D(WaveSpectrum):
                            self.frequency[range])
 
     def _create_wave_spectrum_input(self)->WaveSpectrum2DInput:
+        data = self.variance_density.filled(-1)
         return WaveSpectrum2DInput(
             frequency=list(self.frequency),
             directions=list(self.direction),
-            varianceDensity=list(self.variance_density),
+            varianceDensity=data.tolist(),
             timestamp=datetime_to_iso_time_string(self.timestamp),
             latitude=self.latitude,
             longitude=self.longitude,

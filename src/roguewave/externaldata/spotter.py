@@ -1,7 +1,7 @@
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, \
     WaveSpectrum1DInput
 import typing
-from pysofar.spotter import Spotter
+from pysofar.spotter import Spotter, SofarApi
 from datetime import datetime
 from roguewave.tools import datetime_to_iso_time_string, to_datetime
 from datetime import timedelta
@@ -10,11 +10,13 @@ from pandas import read_csv, to_numeric
 import numpy
 import os
 
+MAX_LOCAL_LIMIT = 20
+
 def _get_spectrum_from_sofar_spotter_api(
         spotter: Spotter,
         start_date: typing.Union[datetime, str] = None,
         end_date: typing.Union[datetime, str] = None,
-        limit: int = 20,
+        limit: int = MAX_LOCAL_LIMIT,
 ) -> typing.List[WaveSpectrum1D]:
     """
     Grabs the requested spectra for this spotter based on the given keyword arguments
@@ -56,11 +58,13 @@ def _get_spectrum_from_sofar_spotter_api(
 
 
 def get_spectrum_from_sofar_spotter_api(
-        spotter: Spotter,
+        spotter_ids: typing.Union[str,typing.List[str]],
         start_date: typing.Union[datetime, str] = None,
         end_date: typing.Union[datetime, str] = None,
-        limit: int = 20,
-) -> typing.List[WaveSpectrum1D]:
+        session: SofarApi=None,
+        verbose = False,
+        limit=None
+) -> typing.Dict[str, typing.List[WaveSpectrum1D]]:
     """
     Grabs the requested spectra for this spotter based on the given keyword arguments
 
@@ -71,24 +75,40 @@ def get_spectrum_from_sofar_spotter_api(
     :return: Data as a FrequencyDataList Object
     """
 
-    out = []
-    while True:
-        try:
-            next = _get_spectrum_from_sofar_spotter_api(spotter,start_date,end_date)
-        except ExceptionNoFrequencyData as e:
-            if not len(out):
-                raise e
-            else:
+    if not isinstance( spotter_ids, list ):
+        spotter_ids = [spotter_ids]
+
+    if session is None:
+        session = SofarApi()
+
+
+    data = {}
+    for spotter_id in spotter_ids:
+        spotter = Spotter(spotter_id,spotter_id,session=session)
+
+        data[spotter_id] = []
+        while True:
+            if limit:
+                if len(data) >= limit:
+                    break
+
+            local_limit = min( limit-len(data), MAX_LOCAL_LIMIT)
+
+            try:
+                next = _get_spectrum_from_sofar_spotter_api(spotter,start_date,end_date,local_limit)
+            except ExceptionNoFrequencyData as e:
+                if not len(data[spotter_id]):
+                    raise e
+                else:
+                    break
+
+            data[spotter_id] += next
+            if len(next) < 20:
                 break
+            else:
+                start_date = to_datetime(next[-1].timestamp) + timedelta(seconds=900)
 
-        out += next
-        if len(next) < 20:
-            break
-        else:
-            start_date = to_datetime(next[-1].timestamp) + timedelta(seconds=900)
-
-
-    return out
+    return data
 
 
 def get_spectrum_from_parser_output(path: str)->typing.List[WaveSpectrum1D]:

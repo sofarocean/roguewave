@@ -29,6 +29,7 @@ SPECTRAL_API_TOKEN=_spectral_api_token_
 from roguewave import get_spectrum_from_sofar_spotter_api
 from pysofar.spotter import Spotter
 from datetime import datetime, timezone
+import matplotlib.pyplot as plt
 
 # The Spotter we want the data from
 spotter_id = 'SPOT-0740'

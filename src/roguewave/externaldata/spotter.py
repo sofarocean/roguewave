@@ -73,7 +73,14 @@ def get_spectrum_from_sofar_spotter_api(
 
     out = []
     while True:
-        next = _get_spectrum_from_sofar_spotter_api(spotter,start_date,end_date)
+        try:
+            next = _get_spectrum_from_sofar_spotter_api(spotter,start_date,end_date)
+        except ExceptionNoFrequencyData as e:
+            if not len(out):
+                raise e
+            else:
+                break
+
         out += next
         if len(next) < 20:
             break

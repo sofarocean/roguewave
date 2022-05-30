@@ -3,7 +3,7 @@ from .wavefields import wave_fields_from, filter_fields, create_graph, \
 from .partitioning import partition_spectrum, default_partition_config
 from roguewave.wavespectra import spec1d_from_spec2d, WaveSpectrum1D
 from roguewave.wavespectra.operators import spectrum1D_time_filter
-from roguewave.wavespectra.estimators import spect2d_from_spec1d
+from roguewave.wavespectra.estimators import spec2d_from_spec1d
 from typing import List
 from datetime import timedelta
 from pandas import DataFrame
@@ -49,7 +49,7 @@ def partition_observations_spectra(spectra: List[WaveSpectrum1D],
         spectra = spectrum1D_time_filter(spectra)
 
     # Step 2: Create 2D wavefields from 1D spectra using a spectral estimator
-    spectra2D = [spect2d_from_spec1d(
+    spectra2D = [spec2d_from_spec1d(
         spectrum,
         method=config['estimator']['method'],
         number_of_directions=config['estimator']['numberOfDirections'],

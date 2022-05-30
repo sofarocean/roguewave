@@ -40,10 +40,49 @@ from scipy.ndimage import gaussian_filter
 from roguewave.wavespectra.spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
 
-def spect2d_from_spec1d(spectrum1D: WaveSpectrum1D,
-                        number_of_directions: int = 36,
-                        method: str = 'mem2', frequency_smoothing=False,
-                        smoothing_lengthscale=1) -> WaveSpectrum2D:
+
+def convert_to_2d(data):
+    if isinstance(data,dict):
+        out = {}
+        for key in data:
+            out[key] = convert_to_2d(data[key])
+        return out
+    elif isinstance(data,list):
+        out = []
+        for item in data:
+            out.append(convert_to_2d(item))
+        return out
+    elif isinstance(data,WaveSpectrum1D):
+        return spec2d_from_spec1d(data)
+    elif isinstance(data,WaveSpectrum2D):
+        return data
+    else:
+        raise Exception('Cannot convert to 2D spectrum')
+
+
+def convert_to_1d(data):
+    if isinstance(data,dict):
+        out = {}
+        for key in data:
+            out[key] = convert_to_1d(data[key])
+        return out
+    elif isinstance(data,list):
+        out = []
+        for item in data:
+            out.append(convert_to_1d(item))
+        return out
+    elif isinstance(data,WaveSpectrum1D):
+        return data
+    elif isinstance(data,WaveSpectrum2D):
+        return spec1d_from_spec2d(data)
+    else:
+        raise Exception('Cannot convert to 2D spectrum')
+
+
+def spec2d_from_spec1d(spectrum1D: WaveSpectrum1D,
+                       number_of_directions: int = 36,
+                       method: str = 'mem2', frequency_smoothing=False,
+                       smoothing_lengthscale=1) -> WaveSpectrum2D:
     """
     Construct a 2D spectrum based on the 1.5D spectrum and a spectral
     reconstruction method.

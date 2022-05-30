@@ -92,7 +92,9 @@ def get_spectrum_from_sofar_spotter_api(
                 if len(data) >= limit:
                     break
 
-            local_limit = min( limit-len(data), MAX_LOCAL_LIMIT)
+                local_limit = min( limit-len(data), MAX_LOCAL_LIMIT)
+            else:
+                local_limit = MAX_LOCAL_LIMIT
 
             try:
                 next = _get_spectrum_from_sofar_spotter_api(spotter,start_date,end_date,local_limit)

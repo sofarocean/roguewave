@@ -4,7 +4,7 @@ import numpy
 from pandas import DataFrame
 
 from roguewave import WaveSpectrum1D, WaveSpectrum2D
-from roguewave.wavespectra import spect2d_from_spec1d
+from roguewave.wavespectra import spec2d_from_spec1d
 from roguewave.wavespectra.operators import spectrum1D_time_filter, \
     spectrum2D_time_filter
 from roguewave.wavespectra.partitioning import Partition, \
@@ -306,7 +306,7 @@ def sea_swell_data(spectra: typing.List[WaveSpectrum],
             print(ii)
 
         if isinstance(spectrum, WaveSpectrum1D):
-            spec2d = spect2d_from_spec1d(spectrum)
+            spec2d = spec2d_from_spec1d(spectrum)
         elif isinstance(spectrum, WaveSpectrum2D):
             spec2d = spectrum
         else:

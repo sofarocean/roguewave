@@ -3,3 +3,5 @@ pytest
 numpy
 wheel
 netCDF4
+pandas
+qpsolvers

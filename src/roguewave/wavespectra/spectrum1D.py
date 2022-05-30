@@ -1,6 +1,4 @@
 """
-This file is part of pysofar: A client for interfacing with Sofar Oceans Spotter API
-
 Contents: 1D Spectrum Class
 
 Copyright (C) 2022
@@ -10,11 +8,11 @@ Authors: Pieter Bart Smit
 """
 
 import numpy
-from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from .wavespectrum import WaveSpectrum, WaveSpectrumInput
 from roguewave.tools import datetime_to_iso_time_string
-from .mem import mem
 from typing import List, Union
+from datetime import timedelta
+
 
 class WaveSpectrum1DInput(WaveSpectrumInput):
     a1: Union[List[float], numpy.ndarray]
@@ -22,11 +20,12 @@ class WaveSpectrum1DInput(WaveSpectrumInput):
     a2: Union[List[float], numpy.ndarray]
     b2: Union[List[float], numpy.ndarray]
 
+
 class WaveSpectrum1D(WaveSpectrum):
     spectral_density_units = 'm**2/Hertz'
 
     def __init__(self,
-                 wave_spectrum1D_input:WaveSpectrum1DInput
+                 wave_spectrum1D_input: WaveSpectrum1DInput
                  ):
         super().__init__(wave_spectrum1D_input)
         self._a1 = numpy.array(wave_spectrum1D_input['a1'])
@@ -35,14 +34,19 @@ class WaveSpectrum1D(WaveSpectrum):
         self._a2 = numpy.array(wave_spectrum1D_input['a2'])
         self._e = numpy.array(wave_spectrum1D_input['varianceDensity'])
 
+    @WaveSpectrum.variance_density.setter
+    def variance_density(self,val:numpy.ndarray):
+        self._variance_density = val
+        self._e = val
+
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
-        range = self._range(fmin,fmax)
+        range = (self._range(fmin, fmax)) & numpy.isfinite(self.e)
 
         return numpy.trapz(
             self.variance_density[range] * self.frequency[range] ** power,
             self.frequency[range])
 
-    def _create_wave_spectrum_input(self)->WaveSpectrum1DInput:
+    def _create_wave_spectrum_input(self) -> WaveSpectrum1DInput:
         return WaveSpectrum1DInput(
             frequency=list(self.frequency),
             varianceDensity=list(self.variance_density),
@@ -53,42 +57,52 @@ class WaveSpectrum1D(WaveSpectrum):
             b1=list(self.b1),
             a2=list(self.a2),
             b2=list(self.b2)
-            )
-
-    def spectrum2d(self, number_of_directions: int,
-                   method:str='maximum_entropy_method')->WaveSpectrum2D:
-        """
-        Construct a 2D spectrum based on the 1.5D spectrum and a spectral
-        reconstruction method.
-
-        :param number_of_directions: length of the directional vector for the
-        2D spectrum. Directions returned are in degrees
-        """
-        direction = numpy.linspace(0, 360, number_of_directions,
-                                   endpoint=False)
-
-        # Jacobian to transform distribution as function of radian angles into
-        # degrees.
-        Jacobian = numpy.pi / 180
-
-        if method.lower() in ['maximum_entropy_method', 'mem']:
-            # reconstruct the directional distribution using the maximum entropy
-            # method.
-            D = mem(direction * numpy.pi / 180, self.a1, self.b1, self.a2,
-                    self.b2) * Jacobian
-        else:
-            raise Exception(f'unsupported spectral estimator method: {method}')
-
-        wave_spectrum2D_input = WaveSpectrum2DInput(
-            frequency=self.frequency,
-            directions=direction,
-            varianceDensity=self.variance_density[:, None] * D,
-            timestamp=self.timestamp,
-            longitude=self.longitude,
-            latitude=self.latitude
         )
 
-        # We return a 2D wave spectrum object.
-        return WaveSpectrum2D(wave_spectrum2D_input)
+    def copy(self) -> "WaveSpectrum1D":
+        input = WaveSpectrum1DInput(
+            frequency=self.frequency.copy(),
+            varianceDensity=self.variance_density.copy(),
+            timestamp=self.timestamp,
+            latitude=self.latitude,
+            longitude=self.longitude,
+            a1=list(self.a1),
+            b1=list(self.b1),
+            a2=list(self.a2),
+            b2=list(self.b2)
+        )
+        return WaveSpectrum1D(input)
+
+    def __add__(self, other:"WaveSpectrum1D")->"WaveSpectrum1D":
+        spectrum = self.copy()
+        spectrum.variance_density = (spectrum.variance_density +
+            other.variance_density)
+        return spectrum
+
+    def __sub__(self, other:"WaveSpectrum1D")->"WaveSpectrum1D":
+        spectrum = self.copy()
+        spectrum.variance_density = (spectrum.variance_density -
+            other.variance_density)
+        return spectrum
+
+    def __neg__(self, other:"WaveSpectrum1D")->"WaveSpectrum1D":
+        spectrum = self.copy()
+        spectrum.variance_density = -spectrum.variance_density
+        return spectrum
+
+
+def empty_spectrum1D_like(spectrum: WaveSpectrum1D) -> WaveSpectrum1D:
+    input = WaveSpectrum1DInput(
+        frequency=spectrum.frequency.copy(),
+        varianceDensity=numpy.zeros_like(spectrum.variance_density),
+        timestamp=spectrum.timestamp,
+        latitude=spectrum.latitude,
+        longitude=spectrum.longitude,
+        a1=list(spectrum.a1),
+        b1=list(spectrum.b1),
+        a2=list(spectrum.a2),
+        b2=list(spectrum.b2)
+    )
+    return WaveSpectrum1D(input)
 
 

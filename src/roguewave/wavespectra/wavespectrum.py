@@ -1,6 +1,4 @@
 """
-This file is part of pysofar: A client for interfacing with Sofar Oceans Spotter API
-
 Contents: Abstract implementation Spectrum (see Spectrum1D and Spectrum2D for
 implementations)
 
@@ -16,15 +14,53 @@ from .windSpotter import U10
 from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, phase_velocity
 from datetime import datetime
-
+from numpy.ma import MaskedArray
+import typing
 
 
 class WaveSpectrumInput(TypedDict):
     frequency: List[float]
     varianceDensity: List
-    timestamp: Union[str,datetime,int,float]
-    latitude: float
-    longitude: float
+    timestamp: Union[str, datetime, int, float]
+    latitude: Union[float, None]
+    longitude: Union[float, None]
+
+
+class BulkVariables():
+    def __init__(self, spectrum):
+        if spectrum:
+            self.m0 = spectrum.m0()
+            self.hm0 = spectrum.hm0()
+            self.tm01 = spectrum.tm01()
+            self.tm02 = spectrum.tm02()
+            self.peak_period = spectrum.peak_period()
+            self.peak_direction = spectrum.peak_direction()
+            self.peak_spread = spectrum.peak_spread()
+            self.bulk_direction = spectrum.bulk_direction()
+            self.bulk_spread = spectrum.bulk_spread()
+            self.peak_frequency = spectrum.peak_frequency()
+            self.peak_wavenumber = spectrum.peak_wavenumber()
+            self.timestamp = spectrum.timestamp
+            self.latitude = spectrum.latitude
+            self.longitude = spectrum.longitude
+        else:
+            self._nanify()
+            self.timestamp = numpy.nan
+            self.latitude = numpy.nan
+            self.longitude = numpy.nan
+
+    def _nanify(self):
+        self.m0 = numpy.nan
+        self.hm0 = numpy.nan
+        self.tm01 = numpy.nan
+        self.tm02 = numpy.nan
+        self.peak_period = numpy.nan
+        self.peak_direction = numpy.nan
+        self.peak_spread = numpy.nan
+        self.bulk_direction = numpy.nan
+        self.bulk_spread = numpy.nan
+        self.peak_frequency = numpy.nan
+        self.peak_wavenumber = numpy.nan
 
 
 class WaveSpectrum():
@@ -35,19 +71,23 @@ class WaveSpectrum():
     angular_units = 'Degrees'
     spectral_density_units = 'm**2/Hertz'
     angular_convention = 'Wave travel direction (going-to), measured anti-clockwise from East'
+    bulk_properties = (
+        'm0', 'hm0', 'tm01', 'tm02', 'peak_period', 'peak_direction',
+        'peak_spread','bulk_direction', 'bulk_spread', 'peak_frequency',
+        'peak_wavenumber', 'latitude', 'longitude', 'timestamp')
 
     def __init__(self,
                  wave_spectrum_input: WaveSpectrumInput
                  ):
-        self.frequency = numpy.array(wave_spectrum_input['frequency'])
-        self.variance_density = numpy.array(
-            wave_spectrum_input['varianceDensity'])
-        self.direction = None
         self._a1 = None
         self._b1 = None
         self._a2 = None
         self._b2 = None
         self._e = None
+        self.direction = None
+        self.frequency = numpy.array(wave_spectrum_input['frequency'])
+        self.variance_density = MaskedArray(
+            wave_spectrum_input['varianceDensity'])
         self.timestamp = to_datetime(wave_spectrum_input['timestamp'])
         self.longitude = wave_spectrum_input['longitude']
         self.latitude = wave_spectrum_input['latitude']
@@ -63,6 +103,14 @@ class WaveSpectrum():
             latitude=self.latitude,
             longitude=self.longitude
         )
+
+    @property
+    def variance_density(self) -> numpy.ndarray:
+        return self._variance_density
+
+    @variance_density.setter
+    def variance_density(self, val: numpy.ndarray):
+        self._variance_density = MaskedArray(val)
 
     def _range(self, fmin=0.0, fmax=numpy.inf) -> numpy.ndarray:
         return (self.frequency >= fmin) & (self.frequency < fmax)
@@ -131,8 +179,9 @@ class WaveSpectrum():
 
     def peak_index(self, fmin=0, fmax=numpy.inf) -> float:
         range = self._range(fmin, fmax)
-
-        return numpy.argmax(self.e[range])
+        tmp = self.e[:]
+        tmp[~range] = 0
+        return numpy.argmax(tmp)
 
     def peak_frequency(self, fmin=0, fmax=numpy.inf) -> float:
         return self.frequency[self.peak_index(fmin, fmax)]
@@ -170,7 +219,8 @@ class WaveSpectrum():
         return self._spread(self.a1, self.b1)
 
     def _spectral_weighted(self, property, fmin=0, fmax=numpy.inf):
-        range = (self._range(fmin, fmax)) & numpy.isfinite(property)
+        range = (self._range(fmin, fmax)) & numpy.isfinite(
+            property) & numpy.isfinite(self.e)
 
         return numpy.trapz(property[range] * self.e[range],
                            self.frequency[range]) / self.m0(fmin, fmax)
@@ -194,7 +244,7 @@ class WaveSpectrum():
     def bulk_b2(self, fmin=0, fmax=numpy.inf):
         return self._spectral_weighted(self.b2, fmin, fmax)
 
-    def U10(self, **kwargs) -> Tuple[float]:
+    def U10(self, **kwargs) -> Tuple[float, float]:
         windspeed, winddirection, _ = U10(self.e, self.frequency, self.a1,
                                           self.b1, **kwargs)
         return windspeed, winddirection
@@ -213,6 +263,16 @@ class WaveSpectrum():
         return inverse_intrinsic_dispersion_relation(
             self.radian_frequency[index], depth)
 
+    def peak_wavenumber_east(self, depth=numpy.inf):
+        wave_number = self.peak_wavenumber()
+        wave_direction = self.peak_direction() * numpy.pi / 180
+        return wave_number * numpy.cos(wave_direction)
+
+    def peak_wavenumber_north(self, depth=numpy.inf):
+        wave_number = self.peak_wavenumber()
+        wave_direction = self.peak_direction() * numpy.pi / 180
+        return wave_number * numpy.cos(wave_direction)
+
     def peak_wave_age(self, ustar=None, depth=numpy.inf):
         if ustar is None:
             ustar = self.Ustar()
@@ -222,3 +282,28 @@ class WaveSpectrum():
         if ustar is None:
             ustar = self.Ustar()
         return phase_velocity(self.wavenumber(depth), depth) / ustar
+
+    def bulk_variables(self) -> BulkVariables:
+        return BulkVariables(self)
+
+    def copy(self):
+        pass
+
+    def __add__(self, other) -> "WaveSpectrum":
+        pass
+
+
+def extract_bulk_parameter(parameter, spectra: typing.List[WaveSpectrum]):
+
+    if parameter == 'timestamp':
+        output = numpy.empty(len(spectra),dtype='object')
+    else:
+        output = numpy.empty(len(spectra))
+
+    for index, spectrum in enumerate(spectra):
+        temp = getattr(spectrum, parameter)
+        if callable(temp):
+            output[index] = temp()
+        else:
+            output[index] = temp
+    return output

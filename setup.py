@@ -6,12 +6,15 @@ with open('README.md', 'r') as file:
 
 setuptools.setup(
     name='roguewave',
-    version='0.1.3',
-    license='Apache 2 Licesnse',
+    version='0.1.5',
+    license='Apache 2 License',
     install_requires=[
         'pysofar',
         'numpy',
-        'netCDF4'
+        'netCDF4',
+        'pandas',
+        'qpsolvers',
+        'scipy'
     ],
     description='Python package to interact with Sofar wave data',
     long_description=readme_contents,
@@ -25,7 +28,7 @@ setuptools.setup(
 
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent"
     ],

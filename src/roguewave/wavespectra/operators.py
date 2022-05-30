@@ -1,12 +1,8 @@
 import numpy
-from typing import List, Dict, Tuple
+from typing import List
 from .spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
 from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
-from .wavespectrum import WaveSpectrum, extract_bulk_parameter
-from pandas import DataFrame
-from . import logger
 from datetime import timedelta
-import logging
 
 def spectrum1D_time_filter(spectra: List[WaveSpectrum1D],
                          window: numpy.ndarray = None,
@@ -133,13 +129,3 @@ def spectrum2D_time_filter(spectra: List[WaveSpectrum2D],
             )
         )
     return spectra
-
-
-def bulk_parameters_partitions( partitions:List[List[WaveSpectrum2D]] ):
-    bulk = []
-    for label,partition in enumerate(partitions):
-        df = DataFrame()
-        for variable in WaveSpectrum.bulk_properties:
-            df[variable] = extract_bulk_parameter(variable, partition)
-        bulk.append(df)
-    return bulk

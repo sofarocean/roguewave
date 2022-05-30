@@ -130,8 +130,16 @@ class WaveSpectrum2D(WaveSpectrum):
         spectrum.variance_density = -spectrum.variance_density
         return spectrum
 
-    def extract(self,mask:numpy.ndarray)->"WaveSpectrum2D":
+    def extract(self,mask:numpy.ndarray, minimum_ratio=None)->"WaveSpectrum2D":
         spectrum = self.copy()
+
+        if minimum_ratio:
+            ii,jj = self.find_peak_indices()
+            peak_density = self._variance_density[ ii[0], jj[0] ]
+            if peak_density > 0.0:
+                mask = mask & (spectrum.variance_density/peak_density > minimum_ratio)
+            else:
+                print('eh')
         density = numpy.ma.masked_array( spectrum.variance_density, mask=~mask)
         spectrum.variance_density = density
         return spectrum

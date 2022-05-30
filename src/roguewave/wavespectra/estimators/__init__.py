@@ -32,7 +32,7 @@ How To Use This Module
 """
 
 import numpy
-from .mem2 import mem2, mem2_optimize
+from .mem2 import mem2
 from .mem import mem
 from .loglikelyhood import log_likelyhood
 from scipy.ndimage import gaussian_filter
@@ -109,10 +109,6 @@ def spect2d_from_spec1d(spectrum1D: WaveSpectrum1D,
                                                     b2) * Jacobian
     elif method.lower() in ['maximum_entrophy_method2', 'mem2']:
         directional_distribution = mem2(
-            direction * numpy.pi / 180, a1, b1, a2,
-            b2) * Jacobian
-    elif method.lower() in ['mem2_legacyy']:
-        directional_distribution = mem2_optimize(
             direction * numpy.pi / 180, a1, b1, a2,
             b2) * Jacobian
     else:

@@ -39,7 +39,7 @@ default_partition_config = {
 }
 
 
-@numba.njit()
+@numba.njit(cache=True)
 def neighbours(peak_direction_index: int, peak_frequency_index: int,
                number_of_directions: int, number_of_frequencies: int,
                diagonals=True) -> typing.Tuple[numpy.ndarray, numpy.ndarray]:
@@ -117,7 +117,7 @@ def neighbours(peak_direction_index: int, peak_frequency_index: int,
 NOT_ASSIGNED = -1
 
 
-@numba.njit()
+@numba.njit(cache=True)
 def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
               spectral_density: numpy.ndarray, min_val=0.0) -> typing.Tuple[
     numpy.ndarray, typing.Dict[int, typing.List[int]]]:

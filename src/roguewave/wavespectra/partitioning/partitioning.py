@@ -39,7 +39,7 @@ default_partition_config = {
 }
 
 
-@numba.njit()
+@numba.njit(cache=True)
 def neighbours(peak_direction_index: int, peak_frequency_index: int,
                number_of_directions: int, number_of_frequencies: int,
                diagonals=True) -> typing.Tuple[numpy.ndarray, numpy.ndarray]:
@@ -117,9 +117,9 @@ def neighbours(peak_direction_index: int, peak_frequency_index: int,
 NOT_ASSIGNED = -1
 
 
-@numba.njit()
+@numba.njit(cache=True)
 def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
-              spectral_density: numpy.ndarray) -> typing.Tuple[
+              spectral_density: numpy.ndarray, min_val=0.0) -> typing.Tuple[
     numpy.ndarray, typing.Dict[int, typing.List[int]]]:
     """
     Flood fill algorithm. We try to find the region that belongs to a peak according
@@ -140,28 +140,27 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
 
     """
 
-    def distance(freq1, angle1, freq2, angle2, grav=9.81):
-        k1 = (2 * freq1 * numpy.pi) ** 2 / grav
-        k2 = (2 * freq2 * numpy.pi) ** 2 / grav
-
-        return numpy.sqrt(
-            (k1 * numpy.cos(angle1) - k2 * numpy.cos(angle2)) ** 2 +
-            (k1 * numpy.sin(angle1) - k2 * numpy.sin(angle2)) ** 2
-        )
-
-    def jacobian(frequency_hertz, grav=9.81):
-        return 1 / (8 * numpy.pi ** 2) * grav / frequency_hertz
-
     number_of_directions = spectral_density.shape[1]
     number_of_frequencies = spectral_density.shape[0]
 
-    current_label = NOT_ASSIGNED
     proximate_partitions = {}  # type: typing.Dict[int,typing.List[int]]
     # proximate_partitions = []
 
     partition_label = numpy.zeros(
         (number_of_frequencies, number_of_directions),
         dtype='int32') + NOT_ASSIGNED
+
+    current_label = 0
+    assigned = False
+    for start_frequency_index in range(0, number_of_frequencies):
+        for start_direction_index in range(0, number_of_directions):
+            if spectral_density[start_frequency_index,start_direction_index]==min_val:
+                assigned = True
+                partition_label[start_frequency_index,start_direction_index] = current_label
+
+    if assigned:
+        proximate_partitions[current_label] = numpy.array([0], dtype='int64')
+
     for start_frequency_index in range(0, number_of_frequencies):
         for start_direction_index in range(0, number_of_directions):
             # if already assigned - continue
@@ -181,32 +180,23 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
                     direction_index, frequency_index,
                     number_of_directions, number_of_frequencies)
 
-                delta_k = distance(frequency[neighbour_frequency_indices],
-                                   direction[neighbour_direction_indices],
-                                   frequency[frequency_index],
-                                   direction[direction_index])
                 node_value = spectral_density[frequency_index, direction_index]
 
-                delta = numpy.zeros_like(delta_k)
-                neighbour_assigned_mask = numpy.zeros_like(delta_k,
-                                                           dtype='bool')
-
+                delta = numpy.zeros_like(neighbour_frequency_indices,dtype='float64')
                 for index, ifreq, idir in zip(
                         range(0, len(neighbour_frequency_indices)),
                         neighbour_frequency_indices,
                         neighbour_direction_indices):
 
-                    delta[index] = (spectral_density[
-                                        ifreq, idir] - node_value)
-                    neighbour_assigned_mask[index] = partition_label[
-                                                         ifreq, idir] > NOT_ASSIGNED
+                    delta[index] = (spectral_density[ifreq, idir] - node_value)
 
-                    if neighbour_assigned_mask[index]:
+                    if partition_label[ifreq, idir] > NOT_ASSIGNED:
                         proximate_partitions_work.append(
                             partition_label[ifreq, idir])
 
                 if numpy.all(delta <= 0) or (partition_label[
                                                  frequency_index, direction_index] > NOT_ASSIGNED):
+
                     # this is a peak, or already leads to a peak
                     if partition_label[
                         frequency_index, direction_index] == NOT_ASSIGNED:
@@ -226,7 +216,6 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
                         partition_label[i, j] = label
 
                     break
-
                 else:
                     steepest_index = numpy.argmax(delta)
                     ii.append(neighbour_frequency_indices[steepest_index])
@@ -238,10 +227,6 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
         proximate_partitions[label] = numpy.unique(proximate_partitions[label])
         mask = proximate_partitions[label] == label
         proximate_partitions[label] = proximate_partitions[label][~mask]
-        # if label in proximate_partitions[label]:
-
-        # proximate_partitions[label].pop(
-        #    proximate_partitions[label].index(label))
 
     for label_source, item in proximate_partitions.items():
         for label_target in item:
@@ -367,7 +352,6 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
 
     # Update config if provided
     config = default_partition_config | (config if config else {})
-
     # Make sure there are no NaN (undifined) values
     density = spectrum.variance_density.copy()
     density[numpy.isnan(density)] = 0.0
@@ -388,7 +372,6 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
 
     # Create Partition objects given the label array from the floodfill.
     partitions = {}
-
     # Create a dict of all draft partitions
     for label, proximity_list in proximate_partitions.items():
         mask = partition_label == label
@@ -398,7 +381,6 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
     # # merge low energy partitions
     filter_for_low_energy(partitions, proximate_partitions, spectrum.m0(),
                           config)
-
     #  if there are multiple sea spectra merge them into a single sea-spectrum
     # merge_sea_spectra(partitions, proximate_partitions, config)
 

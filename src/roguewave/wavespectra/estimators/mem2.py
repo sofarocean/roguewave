@@ -19,7 +19,7 @@ from numba import njit
 from .utils import get_direction_increment
 
 
-@njit()
+@njit(cache=True)
 def nonlinear_equations_for_lagrange_multipliers(
         lambdas, sine_and_cosine, a1, b1, a2, b2,direction_increment):
     """
@@ -53,7 +53,7 @@ def nonlinear_equations_for_lagrange_multipliers(
         (b2 - sine_and_cosine[3, :]) * dist * direction_increment)
     return out
 
-@njit()
+@njit(cache=True)
 def reconstruction(
         lambdas,
         direction_increment,
@@ -80,7 +80,7 @@ def reconstruction(
         - (sum_vector + lambda0)
     )
 
-@njit()
+@njit(cache=True)
 def initial_value(a1, b1, a2, b2):
     """
     Initial guess of the Lagrange Multipliers according to the "MEM AP2" approximation

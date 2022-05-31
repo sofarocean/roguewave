@@ -24,15 +24,19 @@ default_config = {'smoothInTime': False,
                   }
                   }
 
+def _print(verbose,*narg,**kwargs):
+   if verbose:
+       print(*narg,**kwargs)
+
 def partition_observations_bulk(spectra: List[WaveSpectrum1D],
                            minimum_duration: timedelta,
-                           config=None)->List[DataFrame]:
-    wave_fields = partition_observations_spectra(spectra, minimum_duration,config = config)
+                           config=None, verbose=False)->List[DataFrame]:
+    wave_fields = partition_observations_spectra(spectra, minimum_duration,config = config, verbose=verbose)
     return bulk_parameters_partitions(wave_fields)
 
 def partition_observations_spectra(spectra: List[WaveSpectrum1D],
                            minimum_duration: timedelta,
-                           config=None)->List[List[WaveSpectrum2D]]:
+                           config=None, verbose=False)->List[List[WaveSpectrum2D]]:
     if config:
         for key in config:
             assert key in default_config, f"{key} is not a valid conficuration entry"
@@ -41,37 +45,51 @@ def partition_observations_spectra(spectra: List[WaveSpectrum1D],
     else:
         config = default_config
 
-    # Step 1: Pre-Processing:
-
+    # Step 1: Pre-Processing
+    # :
     # Prior to constructing spectra - smoothing the wave field can help create
     # more stable results.
+
+    _print(verbose,'*** Partitioning Data ***\n'+80*'-'+'\n')
     if config['smoothInTime']:
+        _print(verbose,' - Smoothing in time')
         spectra = spectrum1D_time_filter(spectra)
 
     # Step 2: Create 2D wavefields from 1D spectra using a spectral estimator
-    spectra2D = [spec2d_from_spec1d(
-        spectrum,
-        method=config['estimator']['method'],
-        number_of_directions=config['estimator']['numberOfDirections'],
-        frequency_smoothing=config['estimator']['frequencySmoothing'],
-        smoothing_lengthscale=config['estimator']['smoothingLengthscale']
-    ) for spectrum in spectra]
+    spectra2D = []
+    _print(verbose, ' - Create 2D Spectra')
+    for index, spectrum in enumerate(spectra):
+        _print(verbose, f'\t {index:05d} out of {len(spectra)}')
+        spectra2D.append(
+            spec2d_from_spec1d(
+            spectrum,
+            method=config['estimator']['method'],
+            number_of_directions=config['estimator']['numberOfDirections'],
+            frequency_smoothing=config['estimator']['frequencySmoothing'],
+            smoothing_lengthscale=config['estimator']['smoothingLengthscale']
+            )
+        )
 
     # Step 3: Partition the data
+    _print(verbose, ' - Partition Data')
     raw_partitions = []
-    for spectrum in spectra2D:
+    for index, spectrum in enumerate(spectra2D):
+        _print(verbose, f'\t {index:05d} out of {len(spectra2D)}')
         partitions, _ = partition_spectrum(spectrum, config['partitionConfig'])
         raw_partitions.append(partitions)
 
     # Step 4: create a graph
+    _print(verbose, ' - Create Graph')
     graph = create_graph(raw_partitions, minimum_duration)
 
     # Step 5: create wave field from the graph
+    _print(verbose, ' - Create Wave Fields From Graph')
     wave_fields = wave_fields_from(graph)
 
     # Step 6: Postprocessing
 
     # Apply a filter on the bulk parameters
+    _print(verbose, ' - Apply Bulk Filter')
     if config['fieldFiltersettings']['filter']:
         wave_fields = filter_fields(
             wave_fields,
@@ -80,5 +98,5 @@ def partition_observations_spectra(spectra: List[WaveSpectrum1D],
             max_delta_direction=config['fieldFiltersettings'][
                 'maxDeltaDirection']
         )
-
+    _print(verbose, '*** Done ***\n' + 80 * '-' + '\n\n')
     return wave_fields

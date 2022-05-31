@@ -24,6 +24,10 @@ default_config = {'smoothInTime': False,
                   }
                   }
 
+def _print(verbose,*narg,**kwargs):
+   if verbose:
+       print(*narg,**kwargs)
+
 def partition_observations_bulk(spectra: List[WaveSpectrum1D],
                            minimum_duration: timedelta,
                            config=None)->List[DataFrame]:
@@ -32,7 +36,7 @@ def partition_observations_bulk(spectra: List[WaveSpectrum1D],
 
 def partition_observations_spectra(spectra: List[WaveSpectrum1D],
                            minimum_duration: timedelta,
-                           config=None)->List[List[WaveSpectrum2D]]:
+                           config=None, verbose=False)->List[List[WaveSpectrum2D]]:
     if config:
         for key in config:
             assert key in default_config, f"{key} is not a valid conficuration entry"
@@ -41,21 +45,30 @@ def partition_observations_spectra(spectra: List[WaveSpectrum1D],
     else:
         config = default_config
 
-    # Step 1: Pre-Processing:
-
+    # Step 1: Pre-Processing
+    # :
     # Prior to constructing spectra - smoothing the wave field can help create
     # more stable results.
+
+    _print(verbose,'Partitioning Data\n'+80*'-'+'\n\n')
     if config['smoothInTime']:
+        _print(verbose,' - Smoothing in time')
         spectra = spectrum1D_time_filter(spectra)
 
     # Step 2: Create 2D wavefields from 1D spectra using a spectral estimator
-    spectra2D = [spec2d_from_spec1d(
-        spectrum,
-        method=config['estimator']['method'],
-        number_of_directions=config['estimator']['numberOfDirections'],
-        frequency_smoothing=config['estimator']['frequencySmoothing'],
-        smoothing_lengthscale=config['estimator']['smoothingLengthscale']
-    ) for spectrum in spectra]
+    spectra2D = []
+    _print(verbose, ' - Create 2D Spectra')
+    for index, spectrum in enumerate(spectra):
+        _print(verbose, f'\t\t {index:05d} out of {len(spectra)}')
+        spectra2D.append(
+            spec2d_from_spec1d(
+            spectrum,
+            method=config['estimator']['method'],
+            number_of_directions=config['estimator']['numberOfDirections'],
+            frequency_smoothing=config['estimator']['frequencySmoothing'],
+            smoothing_lengthscale=config['estimator']['smoothingLengthscale']
+            )
+        )
 
     # Step 3: Partition the data
     raw_partitions = []

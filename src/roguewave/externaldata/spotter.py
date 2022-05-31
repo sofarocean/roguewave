@@ -85,7 +85,7 @@ def get_spectrum_from_sofar_spotter_api(
     data = {}
     for spotter_id in spotter_ids:
         spotter = Spotter(spotter_id,spotter_id,session=session)
-
+        _start_date = start_date
         data[spotter_id] = []
         while True:
             if limit:
@@ -97,7 +97,7 @@ def get_spectrum_from_sofar_spotter_api(
                 local_limit = MAX_LOCAL_LIMIT
 
             try:
-                next = _get_spectrum_from_sofar_spotter_api(spotter,start_date,end_date,local_limit)
+                next = _get_spectrum_from_sofar_spotter_api(spotter,_start_date,end_date,local_limit)
             except ExceptionNoFrequencyData as e:
                 if not len(data[spotter_id]):
                     raise e
@@ -105,10 +105,10 @@ def get_spectrum_from_sofar_spotter_api(
                     break
 
             data[spotter_id] += next
-            if len(next) < 20:
+            if len(next) < local_limit:
                 break
             else:
-                start_date = to_datetime(next[-1].timestamp) + timedelta(seconds=900)
+                _start_date = to_datetime(next[-1].timestamp) + timedelta(seconds=900)
 
     return data
 

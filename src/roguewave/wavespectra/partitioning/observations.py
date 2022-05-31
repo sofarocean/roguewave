@@ -4,39 +4,89 @@ from .partitioning import partition_spectrum, default_partition_config
 from roguewave.wavespectra import spec1d_from_spec2d, WaveSpectrum1D
 from roguewave.wavespectra.operators import spectrum1D_time_filter
 from roguewave.wavespectra.estimators import spec2d_from_spec1d
-from typing import List
+from typing import List, Dict, Union
 from datetime import timedelta
 from pandas import DataFrame
 from roguewave.wavespectra import WaveSpectrum2D
 
-default_config = {'smoothInTime': False,
-                  'estimator': {
-                      'method': 'mem2',
-                      'numberOfDirections': 36,
-                      'frequencySmoothing': False,
-                      'smoothingLengthscale': 1
-                  },
-                  'partitionConfig': default_partition_config,
-                  'fieldFiltersettings': {
-                      'filter': True,
-                      'maxDeltaPeriod': 2,
-                      'maxDeltaDirection': 20
-                  }
-                  }
+default_config = {
+    'smoothInTime': False,
+    'estimator': {
+        'method': 'mem2',
+        'numberOfDirections': 36,
+        'frequencySmoothing': False,
+        'smoothingLengthscale': 1
+    },
+    'partitionConfig': default_partition_config,
+    'fieldFiltersettings': {
+        'filter': True,
+        'maxDeltaPeriod': 2,
+        'maxDeltaDirection': 20
+    }
+}
 
-def _print(verbose,*narg,**kwargs):
-   if verbose:
-       print(*narg,**kwargs)
+
+def get_bulk_partitions_from_spectral_partitions(
+        spectral_partitions: Dict[str, List[List[WaveSpectrum2D]]]) -> Dict[
+    str, List[DataFrame]]:
+
+    output = {}
+    for key in spectral_partitions:
+        output[key] = bulk_parameters_partitions(spectral_partitions[key])
+
+    return output
+
+
+def get_bulk_partitions_from_observations(
+        spectra: Union[Dict[str, List[WaveSpectrum1D]], List[WaveSpectrum1D]],
+        minimum_duration: timedelta,
+        config=None,
+        verbose=False) -> Dict[str, List[DataFrame]]:
+    #
+    spectral_partitions = get_spectral_partitions_from_observations(
+        spectra, minimum_duration, config, verbose)
+
+    output = {}
+    for key in spectral_partitions:
+        output[key] = bulk_parameters_partitions(spectral_partitions[key])
+    return output
+
+
+def get_spectral_partitions_from_observations(
+        spectra: Union[Dict[str, List[WaveSpectrum1D]], List[WaveSpectrum1D]],
+        minimum_duration: timedelta,
+        config=None,
+        verbose=False) -> Dict[str, List[List[WaveSpectrum2D]]]:
+    #
+    if isinstance(spectra, list):
+        spectra = {'observation': spectra}
+
+    output = {}
+    for key, item in spectra.items():
+        output[key] = partition_observations_spectra(item, minimum_duration,
+                                                     config, verbose)
+
+    return output
+
+
+def _print(verbose, *narg, **kwargs):
+    if verbose:
+        print(*narg, **kwargs)
+
 
 def partition_observations_bulk(spectra: List[WaveSpectrum1D],
-                           minimum_duration: timedelta,
-                           config=None, verbose=False)->List[DataFrame]:
-    wave_fields = partition_observations_spectra(spectra, minimum_duration,config = config, verbose=verbose)
+                                minimum_duration: timedelta,
+                                config=None, verbose=False) -> List[DataFrame]:
+    wave_fields = partition_observations_spectra(spectra, minimum_duration,
+                                                 config=config,
+                                                 verbose=verbose)
     return bulk_parameters_partitions(wave_fields)
 
+
 def partition_observations_spectra(spectra: List[WaveSpectrum1D],
-                           minimum_duration: timedelta,
-                           config=None, verbose=False)->List[List[WaveSpectrum2D]]:
+                                   minimum_duration: timedelta,
+                                   config=None, verbose=False) -> List[
+    List[WaveSpectrum2D]]:
     if config:
         for key in config:
             assert key in default_config, f"{key} is not a valid conficuration entry"
@@ -50,9 +100,9 @@ def partition_observations_spectra(spectra: List[WaveSpectrum1D],
     # Prior to constructing spectra - smoothing the wave field can help create
     # more stable results.
 
-    _print(verbose,'*** Partitioning Data ***\n'+80*'-'+'\n')
+    _print(verbose, '*** Partitioning Data ***\n' + 80 * '-' + '\n')
     if config['smoothInTime']:
-        _print(verbose,' - Smoothing in time')
+        _print(verbose, ' - Smoothing in time')
         spectra = spectrum1D_time_filter(spectra)
 
     # Step 2: Create 2D wavefields from 1D spectra using a spectral estimator
@@ -62,11 +112,12 @@ def partition_observations_spectra(spectra: List[WaveSpectrum1D],
         _print(verbose, f'\t {index:05d} out of {len(spectra)}')
         spectra2D.append(
             spec2d_from_spec1d(
-            spectrum,
-            method=config['estimator']['method'],
-            number_of_directions=config['estimator']['numberOfDirections'],
-            frequency_smoothing=config['estimator']['frequencySmoothing'],
-            smoothing_lengthscale=config['estimator']['smoothingLengthscale']
+                spectrum,
+                method=config['estimator']['method'],
+                number_of_directions=config['estimator']['numberOfDirections'],
+                frequency_smoothing=config['estimator']['frequencySmoothing'],
+                smoothing_lengthscale=config['estimator'][
+                    'smoothingLengthscale']
             )
         )
 

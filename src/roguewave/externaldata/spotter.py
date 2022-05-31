@@ -1,6 +1,7 @@
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, \
     WaveSpectrum1DInput
 import typing
+from typing import Dict,List,Union, overload
 from pysofar.spotter import Spotter, SofarApi
 from datetime import datetime
 from roguewave.tools import datetime_to_iso_time_string, to_datetime
@@ -56,15 +57,34 @@ def _get_spectrum_from_sofar_spotter_api(
 
     return out
 
-
+@overload
 def get_spectrum_from_sofar_spotter_api(
-        spotter_ids: typing.Union[str,typing.List[str]],
-        start_date: typing.Union[datetime, str] = None,
-        end_date: typing.Union[datetime, str] = None,
+        spotter_ids: List[str],
+        start_date: Union[datetime, str] = None,
+        end_date: Union[datetime, str] = None,
         session: SofarApi=None,
         verbose = False,
         limit=None
-) -> typing.Dict[str, typing.List[WaveSpectrum1D]]:
+) -> Dict[str, List[WaveSpectrum1D]]: ...
+
+@overload
+def get_spectrum_from_sofar_spotter_api(
+        spotter_ids: str,
+        start_date: Union[datetime, str] = None,
+        end_date: Union[datetime, str] = None,
+        session: SofarApi=None,
+        verbose = False,
+        limit=None
+) -> List[WaveSpectrum1D]: ...
+
+def get_spectrum_from_sofar_spotter_api(
+        spotter_ids: Union[str,List[str]],
+        start_date: Union[datetime, str] = None,
+        end_date: Union[datetime, str] = None,
+        session: SofarApi=None,
+        verbose = False,
+        limit=None
+) -> Union[ Dict[str, List[WaveSpectrum1D]], List[WaveSpectrum1D]]:
     """
     Grabs the requested spectra for this spotter based on the given keyword arguments
 
@@ -110,7 +130,10 @@ def get_spectrum_from_sofar_spotter_api(
             else:
                 _start_date = to_datetime(next[-1].timestamp) + timedelta(seconds=900)
 
-    return data
+    if len(spotter_ids) == 1:
+        return data[spotter_ids[0]]
+    else:
+        return data
 
 
 def get_spectrum_from_parser_output(path: str)->typing.List[WaveSpectrum1D]:

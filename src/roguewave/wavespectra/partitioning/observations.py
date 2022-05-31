@@ -8,6 +8,7 @@ from typing import List, Dict, Union
 from datetime import timedelta
 from pandas import DataFrame
 from roguewave.wavespectra import WaveSpectrum2D
+from typing import overload
 
 default_config = {
     'smoothInTime': False,
@@ -26,13 +27,68 @@ default_config = {
 }
 
 
+# -----------------------------------------------------------------------------
+#                       Boilerplate Interfaces
+# -----------------------------------------------------------------------------
+@overload
 def get_bulk_partitions_from_spectral_partitions(
-        spectral_partitions: Dict[str, List[List[WaveSpectrum2D]]]) -> Dict[
-    str, List[DataFrame]]:
+        spectral_partitions: Dict[str, List[List[WaveSpectrum2D]]]
+) -> Dict[str, List[DataFrame]]: ...
 
-    output = {}
-    for key in spectral_partitions:
-        output[key] = bulk_parameters_partitions(spectral_partitions[key])
+@overload
+def get_bulk_partitions_from_spectral_partitions(
+        spectral_partitions: List[List[WaveSpectrum2D]]
+) -> List[DataFrame]: ...
+
+@overload
+def get_spectral_partitions_from_observations(
+        spectra: Dict[str, List[WaveSpectrum1D]],
+        minimum_duration: timedelta,
+        config=None,
+        verbose=False) -> Dict[str, List[List[WaveSpectrum2D]]]: ...
+
+
+@overload
+def get_spectral_partitions_from_observations(
+        spectra: List[WaveSpectrum1D],
+        minimum_duration: timedelta,
+        config=None,
+        verbose=False) -> List[List[WaveSpectrum2D]]: ...
+
+
+@overload
+def get_bulk_partitions_from_observations(
+        spectra: Dict[str, List[WaveSpectrum1D]],
+        minimum_duration: timedelta,
+        config=None,
+        verbose=False) -> Dict[str, List[DataFrame]]: ...
+
+
+@overload
+def get_bulk_partitions_from_observations(
+        spectra: List[WaveSpectrum1D],
+        minimum_duration: timedelta,
+        config=None,
+        verbose=False) -> List[DataFrame]: ...
+
+
+# -----------------------------------------------------------------------------
+#                       Implementationb
+# -----------------------------------------------------------------------------
+def get_bulk_partitions_from_spectral_partitions(
+        spectral_partitions: Union[Dict[str, List[List[WaveSpectrum2D]]], List[
+            List[WaveSpectrum2D]]]) -> Union[Dict[
+                                                 str, List[DataFrame]], List[
+                                                 DataFrame]]:
+    if isinstance(spectral_partitions, dict):
+        output = {}
+        for key in spectral_partitions:
+            output[key] = bulk_parameters_partitions(spectral_partitions[key])
+
+    elif isinstance(spectral_partitions, list):
+        output = bulk_parameters_partitions(spectral_partitions)
+    else:
+        raise Exception('Cannot process input')
 
     return output
 
@@ -41,14 +97,21 @@ def get_bulk_partitions_from_observations(
         spectra: Union[Dict[str, List[WaveSpectrum1D]], List[WaveSpectrum1D]],
         minimum_duration: timedelta,
         config=None,
-        verbose=False) -> Dict[str, List[DataFrame]]:
+        verbose=False) -> Union[Dict[str, List[DataFrame]], List[DataFrame]]:
     #
     spectral_partitions = get_spectral_partitions_from_observations(
         spectra, minimum_duration, config, verbose)
 
-    output = {}
-    for key in spectral_partitions:
-        output[key] = bulk_parameters_partitions(spectral_partitions[key])
+    if isinstance(spectra, dict):
+        output = {}
+        for key in spectral_partitions:
+            output[key] = bulk_parameters_partitions(spectral_partitions[key])
+
+    elif isinstance(spectra, list):
+        output = bulk_parameters_partitions(spectral_partitions)
+    else:
+        raise Exception('Cannot process input')
+
     return output
 
 
@@ -56,15 +119,22 @@ def get_spectral_partitions_from_observations(
         spectra: Union[Dict[str, List[WaveSpectrum1D]], List[WaveSpectrum1D]],
         minimum_duration: timedelta,
         config=None,
-        verbose=False) -> Dict[str, List[List[WaveSpectrum2D]]]:
+        verbose=False) -> Union[
+    Dict[str, List[List[WaveSpectrum2D]]], List[List[WaveSpectrum2D]]]:
     #
-    if isinstance(spectra, list):
-        spectra = {'observation': spectra}
 
-    output = {}
-    for key, item in spectra.items():
-        output[key] = partition_observations_spectra(item, minimum_duration,
-                                                     config, verbose)
+    if isinstance(spectra, dict):
+        output = {}
+        for key, item in spectra.items():
+            output[key] = partition_observations_spectra(item,
+                                                         minimum_duration,
+                                                         config, verbose)
+    elif isinstance(spectra, list):
+        output = partition_observations_spectra(spectra,
+                                                minimum_duration,
+                                                config, verbose)
+    else:
+        raise Exception('Cannot process input')
 
     return output
 

@@ -36,44 +36,97 @@ from .mem2 import mem2
 from .mem import mem
 from .loglikelyhood import log_likelyhood
 from scipy.ndimage import gaussian_filter
+from typing import overload, Dict, List
+from roguewave.wavespectra.spectrum2D import WaveSpectrum2D, \
+    WaveSpectrum2DInput
+from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, \
+    WaveSpectrum1DInput
 
-from roguewave.wavespectra.spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
-from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
+
+# -----------------------------------------------------------------------------
+#                       Boilerplate Interfaces
+# -----------------------------------------------------------------------------
+@overload
+def convert_to_2d_spectrum(data: Dict[str, list[WaveSpectrum1D]],
+                           number_of_directions: int = 36,
+                           method: str = 'mem2', frequency_smoothing=False,
+                           smoothing_lengthscale=1) -> Dict[
+    str, list[WaveSpectrum2D]]: ...
 
 
-def convert_to_2d(data):
-    if isinstance(data,dict):
+@overload
+def convert_to_2d_spectrum(data: list[WaveSpectrum1D],
+                           number_of_directions: int = 36,
+                           method: str = 'mem2', frequency_smoothing=False,
+                           smoothing_lengthscale=1) -> list[
+    WaveSpectrum2D]: ...
+
+
+@overload
+def convert_to_2d_spectrum(data: WaveSpectrum1D,
+                           number_of_directions: int = 36,
+                           method: str = 'mem2', frequency_smoothing=False,
+                           smoothing_lengthscale=1) -> WaveSpectrum2D: ...
+
+
+@overload
+def convert_to_1d_spectrum(data: Dict[str, list[WaveSpectrum2D]]) -> Dict[
+    str, list[WaveSpectrum1D]]: ...
+
+
+@overload
+def convert_to_1d_spectrum(data: list[WaveSpectrum2D]) -> list[
+    WaveSpectrum1D]: ...
+
+
+@overload
+def convert_to_1d_spectrum(data: WaveSpectrum2D) -> WaveSpectrum1D: ...
+
+
+# -----------------------------------------------------------------------------
+#                              Implementation
+# -----------------------------------------------------------------------------
+def convert_to_2d_spectrum(data, number_of_directions: int = 36,
+                           method: str = 'mem2', frequency_smoothing=False,
+                           smoothing_lengthscale=1):
+    if isinstance(data, dict):
         out = {}
         for key in data:
-            out[key] = convert_to_2d(data[key])
+            out[key] = convert_to_2d_spectrum(data[key], number_of_directions,
+                                              method, frequency_smoothing,
+                                              smoothing_lengthscale)
         return out
-    elif isinstance(data,list):
+    elif isinstance(data, list):
         out = []
         for item in data:
-            out.append(convert_to_2d(item))
+            out.append(convert_to_2d_spectrum(item, number_of_directions,
+                                              method, frequency_smoothing,
+                                              smoothing_lengthscale))
         return out
-    elif isinstance(data,WaveSpectrum1D):
-        return spec2d_from_spec1d(data)
-    elif isinstance(data,WaveSpectrum2D):
+    elif isinstance(data, WaveSpectrum1D):
+        return spec2d_from_spec1d(data,number_of_directions,
+                                              method, frequency_smoothing,
+                                              smoothing_lengthscale)
+    elif isinstance(data, WaveSpectrum2D):
         return data
     else:
         raise Exception('Cannot convert to 2D spectrum')
 
 
-def convert_to_1d(data):
-    if isinstance(data,dict):
+def convert_to_1d_spectrum(data):
+    if isinstance(data, dict):
         out = {}
         for key in data:
-            out[key] = convert_to_1d(data[key])
+            out[key] = convert_to_1d_spectrum(data[key])
         return out
-    elif isinstance(data,list):
+    elif isinstance(data, list):
         out = []
         for item in data:
-            out.append(convert_to_1d(item))
+            out.append(convert_to_1d_spectrum(item))
         return out
-    elif isinstance(data,WaveSpectrum1D):
+    elif isinstance(data, WaveSpectrum1D):
         return data
-    elif isinstance(data,WaveSpectrum2D):
+    elif isinstance(data, WaveSpectrum2D):
         return spec1d_from_spec2d(data)
     else:
         raise Exception('Cannot convert to 2D spectrum')
@@ -95,11 +148,10 @@ def spec2d_from_spec1d(spectrum1D: WaveSpectrum1D,
         Lygre, A., & Krogstad, H. E. (1986). Explicit expression and
         fast but tends to create narrow spectra anderroneous secondary peaks.
 
-        msem: use entrophy (in the Shannon sense) to maximize. Likely
-        best method see- Benoit, M. (1993). Is rather slow because we solve
-        a general nonlinear constrained optimization problem.
+        mem2: use entrophy (in the Shannon sense) to maximize. Likely
+        best method see- Benoit, M. (1993).
 
-        ridge: solve underdetermined constrained problem using ridge regression
+        log: solve underdetermined constrained problem using ridge regression
         as regulizer. Performant because efficient solutions to constrained
         quadratic programming problems exist. The spectra compare well to
         nlmen- though are somewhat broader in general. Does not suffer from
@@ -144,8 +196,8 @@ def spec2d_from_spec1d(spectrum1D: WaveSpectrum1D,
                                        b2) * Jacobian
     elif method.lower() in ['log_likelyhood', 'log']:
         directional_distribution = log_likelyhood(direction * numpy.pi / 180,
-                                                    a1, b1, a2,
-                                                    b2) * Jacobian
+                                                  a1, b1, a2,
+                                                  b2) * Jacobian
     elif method.lower() in ['maximum_entrophy_method2', 'mem2']:
         directional_distribution = mem2(
             direction * numpy.pi / 180, a1, b1, a2,
@@ -179,8 +231,3 @@ def spec1d_from_spec2d(spectrum: WaveSpectrum2D) -> WaveSpectrum1D:
         b2=spectrum.b2,
     )
     return WaveSpectrum1D(wave_spectrum1D_input)
-
-
-
-
-

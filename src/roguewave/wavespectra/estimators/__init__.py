@@ -17,11 +17,7 @@ Classes:
 Functions:
 
 - `mem`, maximum entrophy method
-- `get_direction_increment`, calculate wrapped direction intervals for arbitrary increasing vector
-- `get_constraint_matrix`, build the matrix that calculates moments from directions
-- `maximize_shannon_entrophy`, estimate spectrum by maximizing Shannon entrophy
-- `ridge_regression`, estimate spectrum by minimizing variance
-- `spec2d_from_spec1d`, estimate the 2D spectrum from a given 1.5D spectrum using the desired method (default maximize_shannon_entrophy)
+- `mem2`, ...
 
 How To Use This Module
 ======================

@@ -8,10 +8,14 @@ from roguewave.tools import datetime_to_iso_time_string, to_datetime
 from datetime import timedelta
 from .exceptions import ExceptionNoFrequencyData
 from pandas import read_csv, to_numeric
+from roguewave.tools import _print
 import numpy
 import os
+from multiprocessing.pool import ThreadPool
+from multiprocessing import cpu_count
 
 MAX_LOCAL_LIMIT = 20
+MAXIMUM_NUMBER_OF_WORKERS = 10
 
 def _get_spectrum_from_sofar_spotter_api(
         spotter: Spotter,
@@ -47,12 +51,8 @@ def _get_spectrum_from_sofar_spotter_api(
     out = []
     for spectrum in json_data['frequencyData']:
         # Load the data into the input object- this is a one-to-one
-        # mapping of keys between dictionaries (we would not _need_ to
-        # map onto a input object-> we could pass spectrum directly to
-        # the constructor. But it is clearer to fail here if something
-        # is amiss with the api JSON response format)
+        # mapping of keys between dictionaries.
         wave_spectrum_input = WaveSpectrum1DInput(**spectrum)
-
         out.append(WaveSpectrum1D(wave_spectrum_input))
 
     return out
@@ -83,7 +83,8 @@ def get_spectrum_from_sofar_spotter_api(
         end_date: Union[datetime, str] = None,
         session: SofarApi=None,
         verbose = False,
-        limit=None
+        limit=None,
+        parallel_download=True
 ) -> Union[ Dict[str, List[WaveSpectrum1D]], List[WaveSpectrum1D]]:
     """
     Grabs the requested spectra for this spotter based on the given keyword arguments
@@ -95,45 +96,97 @@ def get_spectrum_from_sofar_spotter_api(
     :return: Data as a FrequencyDataList Object
     """
 
+
     if not isinstance( spotter_ids, list ):
         spotter_ids = [spotter_ids]
+        return_list = False
+    else:
+        return_list = True
 
     if session is None:
         session = SofarApi()
 
 
     data = {}
-    for spotter_id in spotter_ids:
-        spotter = Spotter(spotter_id,spotter_id,session=session)
-        _start_date = start_date
-        data[spotter_id] = []
-        while True:
-            if limit:
-                if len(data) >= limit:
-                    break
+    def worker( spotter_id):
+        return _download_spectra(spotter_id,session,start_date,end_date,limit,verbose)
 
-                local_limit = min( limit-len(data), MAX_LOCAL_LIMIT)
-            else:
-                local_limit = MAX_LOCAL_LIMIT
+    if parallel_download:
+        with ThreadPool(processes=min(cpu_count(),MAXIMUM_NUMBER_OF_WORKERS)) as pool:
+            out = pool.map(worker, spotter_ids)
 
-            try:
-                next = _get_spectrum_from_sofar_spotter_api(spotter,_start_date,end_date,local_limit)
-            except ExceptionNoFrequencyData as e:
-                if not len(data[spotter_id]):
-                    raise e
-                else:
-                    break
+        for spotter_id, spectra in zip(spotter_ids,out):
+            data[spotter_id] = spectra
+    else:
+        for spotter_id in spotter_ids:
+            _print(verbose, f'Downloading data for spotter {spotter_id}')
+            data[spotter_id] = _download_spectra(spotter_id,session,start_date,end_date,limit)
 
-            data[spotter_id] += next
-            if len(next) < local_limit:
-                break
-            else:
-                _start_date = to_datetime(next[-1].timestamp) + timedelta(seconds=900)
-
-    if len(spotter_ids) == 1:
+    if not return_list:
         return data[spotter_ids[0]]
     else:
         return data
+
+def _download_spectra(spotter_id,session,start_date,end_date,limit,verbose):
+
+    spotter = Spotter(spotter_id, spotter_id, session=session)
+    _start_date = start_date
+    data = []
+    while True:
+        # We can only download a maximum of 20 spectra at a time; so we need
+        # to loop our request. We do not know how many spotters there are
+        # in the given timeframe.
+        #
+        # assumptions:
+        #   - spotter api returns a maximum of 20 items per requests
+        #   - requests returned start from the requested start data and
+        #     with the last entry either being the last entry that fits
+        #     in the requested window, or merely the last sample that fits
+        #     in the 20 items.
+        #   - requests returned are in order
+
+        if limit:
+            # If we hit the limit (if given) of spotters requested, break
+            if len(data) >= limit:
+                break
+
+            # otherwise, update our next request so we don't overrun
+            # the limit
+            local_limit = min(limit - len(data), MAX_LOCAL_LIMIT)
+        else:
+            # if no limit is given, just ask for the maximum allowed.
+            local_limit = MAX_LOCAL_LIMIT
+
+        try:
+            # Try to get the next batch of spectra
+            next = _get_spectrum_from_sofar_spotter_api(spotter, _start_date,
+                                                        end_date, local_limit)
+
+        except ExceptionNoFrequencyData as e:
+            # If no frequency data was returned, we either...
+            if not len(data):
+                # ...raise an error, if no data was returned previously (no
+                # data available at all)...
+                raise e
+            else:
+                # ...or return, assuming that we exhausted the data was
+                # available.
+                break
+
+        # Add the data to the list
+        data += next
+
+        # If we did not receive all data we requested...
+        if len(next) < local_limit:
+            # , we are done...
+            break
+        else:
+            # ... else we update the startdate to be the timestamp of the last
+            # known entry we received plus a second, and use this as the new
+            # start.
+            _start_date = to_datetime(next[-1].timestamp) + timedelta(
+                seconds=1)
+    return data
 
 
 def get_spectrum_from_parser_output(path: str)->typing.List[WaveSpectrum1D]:

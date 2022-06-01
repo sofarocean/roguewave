@@ -1,13 +1,26 @@
 import numpy
 from datetime import timedelta
-from typing import List, Union, Dict
+from typing import List, Union, Dict, overload
 from pandas import DataFrame
 from roguewave import WaveSpectrum2D
 from roguewave.wavespectra import logger
 from roguewave.wavespectra.spectrum2D import empty_spectrum2D_like
 from roguewave.wavespectra.wavespectrum import WaveSpectrum, \
     extract_bulk_parameter
-from .partitioning import is_neighbour
+from .partitioning import is_neighbour, default_partition_config, partition_spectrum
+from roguewave.tools import _print
+from .classifiers import is_sea_spectrum
+from multiprocessing import cpu_count, get_context
+
+DEFAULT_CONFIG_PARTITION_SPECTRA = {
+    'partitionConfig': default_partition_config,
+    'parallel': False, # DOES NOT WORK
+    'fieldFiltersettings': {
+        'filter': True,
+        'maxDeltaPeriod': 2,
+        'maxDeltaDirection': 20
+    }
+}
 
 
 class Node():
@@ -342,5 +355,114 @@ def bulk_parameters_partitions( partitions:List[List[WaveSpectrum2D]] )->List[Da
         df = DataFrame()
         for variable in WaveSpectrum.bulk_properties:
             df[variable] = extract_bulk_parameter(variable, partition)
+        df['sea'] = is_sea_spectrum(partition)
         bulk.append(df)
     return bulk
+
+def worker(spectrum):
+    return partition_spectrum(spectrum)
+
+def partition_spectra(spectra2D: List[WaveSpectrum2D],
+                      minimum_duration: timedelta,
+                      config=None, verbose=False) -> List[List[WaveSpectrum2D]]:
+    if config:
+        for key in config:
+            assert key in DEFAULT_CONFIG_PARTITION_SPECTRA, f"{key} is not a valid configuration entry"
+
+        config = DEFAULT_CONFIG_PARTITION_SPECTRA | config
+    else:
+        config = DEFAULT_CONFIG_PARTITION_SPECTRA
+
+
+    # Step 1: Partition the data
+    _print(verbose, ' - Partition Data')
+    raw_partitions = []
+
+    if config['parallel']:
+        with get_context("spawn").Pool(processes=cpu_count()) as pool:
+            output = pool.map(worker, spectra2D)
+        raw_partitions = [ partition for partition, _ in output ]
+    else:
+        for index, spectrum in enumerate(spectra2D):
+            _print(verbose, f'\t {index:05d} out of {len(spectra2D)}')
+            partitions, _ = partition_spectrum(spectrum, config['partitionConfig'])
+            raw_partitions.append(partitions)
+
+    # Step 2: create a graph
+    _print(verbose, ' - Create Graph')
+    graph = create_graph(raw_partitions, minimum_duration)
+
+    # Step 3: create wave field from the graph
+    _print(verbose, ' - Create Wave Fields From Graph')
+    wave_fields = wave_fields_from(graph)
+
+    # Step 4: Postprocessing
+
+    # Apply a filter on the bulk parameters
+    _print(verbose, ' - Apply Bulk Filter')
+    if config['fieldFiltersettings']['filter']:
+        wave_fields = filter_fields(
+            wave_fields,
+            min_duration=minimum_duration,
+            max_delta_period=config['fieldFiltersettings']['maxDeltaPeriod'],
+            max_delta_direction=config['fieldFiltersettings'][
+                'maxDeltaDirection']
+        )
+    _print(verbose, '*** Done ***\n' + 80 * '-' + '\n\n')
+    return wave_fields
+
+# -----------------------------------------------------------------------------
+#                       Boilerplate Interfaces
+# -----------------------------------------------------------------------------
+@overload
+def get_bulk_partitions_from_spectral_partitions(
+        spectral_partitions: Dict[str, List[List[WaveSpectrum2D]]]
+) -> Dict[str, List[DataFrame]]: ...
+
+@overload
+def get_bulk_partitions_from_spectral_partitions(
+        spectral_partitions: List[List[WaveSpectrum2D]]
+) -> List[DataFrame]: ...
+
+
+def get_bulk_partitions_from_spectral_partitions(
+        spectral_partitions: Union[Dict[str, List[List[WaveSpectrum2D]]], List[
+            List[WaveSpectrum2D]]]) -> Union[Dict[
+                                                 str, List[DataFrame]], List[
+                                                 DataFrame]]:
+    if isinstance(spectral_partitions, dict):
+        output = {}
+        for key in spectral_partitions:
+            output[key] = bulk_parameters_partitions(spectral_partitions[key])
+
+    elif isinstance(spectral_partitions, list):
+        output = bulk_parameters_partitions(spectral_partitions)
+    else:
+        raise Exception('Cannot process input')
+
+    return output
+
+
+def get_spectral_partitions_from_2dspectra(
+        spectra: Union[Dict[str, List[WaveSpectrum2D]], List[WaveSpectrum2D]],
+        minimum_duration: timedelta,
+        config=None,
+        verbose=False) -> Union[
+    Dict[str, List[List[WaveSpectrum2D]]], List[List[WaveSpectrum2D]]]:
+    #
+
+    if isinstance(spectra, dict):
+        output = {}
+        for key, item in spectra.items():
+            output[key] = partition_spectra(item,
+                                            minimum_duration,
+                                            config, verbose)
+    elif isinstance(spectra, list):
+        output = partition_spectra(spectra,
+                                   minimum_duration,
+                                   config,
+                                   verbose)
+    else:
+        raise Exception('Cannot process input')
+
+    return output

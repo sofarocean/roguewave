@@ -85,12 +85,14 @@ class WaveSpectrum():
         self._b2 = None
         self._e = None
         self.direction = None
-        self.frequency = numpy.array(wave_spectrum_input['frequency'])
+
+        # Type conversions are needed because the JSON serializer does not accept float32
+        self.frequency = numpy.array(wave_spectrum_input['frequency'],dtype='float64')
         self.variance_density = MaskedArray(
-            wave_spectrum_input['varianceDensity'])
+            wave_spectrum_input['varianceDensity'],dtype='float64')
         self.timestamp = to_datetime(wave_spectrum_input['timestamp'])
-        self.longitude = wave_spectrum_input['longitude']
-        self.latitude = wave_spectrum_input['latitude']
+        self.longitude = float(wave_spectrum_input['longitude'])
+        self.latitude = float(wave_spectrum_input['latitude'])
 
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
         pass

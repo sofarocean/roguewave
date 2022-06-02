@@ -256,6 +256,9 @@ def find_label_closest_partition(label,
     # find the labels of the neighbouring partitions.
     proximate_labels = proximity[label]
 
+    if not proximate_labels:
+        return None
+
     # find the wavenumbers associated with the peak
     kx = partitions[label].peak_wavenumber_east()
     ky = partitions[label].peak_wavenumber_north()
@@ -270,12 +273,18 @@ def find_label_closest_partition(label,
         distance[ii] = numpy.sqrt(delta_kx ** 2 + delta_ky ** 2)
         indices[ii] = local_label
 
+
     return indices[numpy.argmin(distance)]
 
 
 def filter_for_low_energy(partitions: typing.Dict[int, WaveSpectrum2D],
                           proximity: typing.Dict[int, typing.List[int]],
                           total_energy, config):
+
+    # If there is only one partition, return
+    if len(partitions) == 1:
+        return
+
     for label in list(partitions.keys()):
 
         if label not in partitions:
@@ -289,10 +298,12 @@ def filter_for_low_energy(partitions: typing.Dict[int, WaveSpectrum2D],
             closest_label = find_label_closest_partition(
                 label, proximity, partitions)
 
+
         if (partition.m0() < config['minimumEnergyFraction'] * total_energy):
             #
             # Merge with the closest partition
-            merge_partitions(label, closest_label, partitions,
+            if closest_label:
+                merge_partitions(label, closest_label, partitions,
                              proximity)
 
 

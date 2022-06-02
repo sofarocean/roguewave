@@ -202,6 +202,6 @@ def save_spectrum(_input: _UNION, filename: str):
     """
     output = _serialize(_input)
 
+    data = json.dumps(output)
     with gzip.open(filename, 'wb') as file:
-        data = json.dumps(output)
         file.write(data.encode('utf-8'))

@@ -63,8 +63,10 @@ plt.show()
 ```
 
 ### Retrieve Spectrum from model Spectral API
+
 ```python
-from roguewave.externaldata.sofarspectralapi import SofarSpectralAPI,load_spectral_file
+from roguewave.externaldata.sofarspectralapi import SofarSpectralAPI,
+   load_sofar_spectral_file
 import matplotlib.pyplot as plt
 
 # Create an api Object
@@ -76,14 +78,14 @@ points = api.points()
 
 # Lets get the first point. This will download the netcdf containing the spectral
 # forcast into the given directory.
-file = api.download_spectral_file(**points[0],directory='./')
+file = api.download_spectral_file(**points[0], directory='./')
 
 # Lets load the point. This will open the Netcdf file and return a Spectrum2D
 # object. This object supports all the methods of the Spectrum1D object (hm0, 
 # tm02, etc.)
-data = load_spectral_file(file)
+data = load_sofar_spectral_file(file)
 
 # Lets plot it
-plt.pcolormesh( data[0].frequency,data[0].direction,data[0].variance_density )
+plt.pcolormesh(data[0].frequency, data[0].direction, data[0].variance_density)
 plt.show()
 ```

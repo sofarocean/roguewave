@@ -2,6 +2,7 @@
 
 from .externaldata import sofarspectralapi
 from .externaldata.spotter import get_spectrum_from_sofar_spotter_api
+from .externaldata.sofarspectralapi import load_sofar_spectral_file
 
 # Wave spectrum
 

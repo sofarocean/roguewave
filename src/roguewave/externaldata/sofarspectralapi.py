@@ -17,6 +17,7 @@ from roguewave.wavespectra.spectrum2D import WaveSpectrum2D, \
 import typing
 import netCDF4
 import numpy
+from typing import List, overload, Union, Dict
 
 
 def get_token():
@@ -94,26 +95,54 @@ class SofarSpectralAPI(SofarConnection):
                                         directory) for point in points]
 
 
-def load_spectral_file(file) -> typing.List[WaveSpectrum2D]:
-    dataset = netCDF4.Dataset(file)
+@overload
+def load_sofar_spectral_file(filename: str)->List[WaveSpectrum2D]: ...
 
-    nt = dataset.dimensions['time'].size
-    frequencies = dataset.variables['frequencies'][:]
-    directions = dataset.variables['directions'][:]
+@overload
+def load_sofar_spectral_file(filename: List[str])->List[List[WaveSpectrum2D]]: ...
 
-    spectra = []
-    for ii in range(0, nt):
-        unixepochtime = dataset.variables['time'][ii]
-        latitude = dataset.variables['latitude'][0]
-        longitude = dataset.variables['longitude'][0]
-        variance_density = \
-            numpy.squeeze(
-                dataset.variables['frequency_direction_spectrum'][ii, :, :])
+@overload
+def load_sofar_spectral_file(filename: Dict[str,str])->Dict[str,List[WaveSpectrum2D]]: ...
 
-        spectrum2D_input = WaveSpectrum2DInput(
-            frequency=frequencies, varianceDensity=variance_density,
-            timestamp=unixepochtime, latitude=latitude, longitude=longitude,
-            directions=directions
-        )
-        spectra.append(WaveSpectrum2D(spectrum2D_input))
-    return spectra
+def load_sofar_spectral_file(
+        filename: Union[str, List[str], Dict[str, str]]):
+
+    if isinstance(filename,str):
+        if not os.path.exists(filename):
+            raise FileNotFoundError()
+
+        dataset = netCDF4.Dataset(filename)
+
+        nt = dataset.dimensions['time'].size
+        frequencies = dataset.variables['frequencies'][:]
+        directions = dataset.variables['directions'][:]
+
+        spectra = []
+        for ii in range(0, nt):
+            unixepochtime = dataset.variables['time'][ii]
+            latitude = dataset.variables['latitude'][0]
+            longitude = dataset.variables['longitude'][0]
+            variance_density = \
+                numpy.squeeze(
+                    dataset.variables['frequency_direction_spectrum'][ii, :, :])
+
+            if dataset.variables['frequency_direction_spectrum'].dimensions[1] == 'directions':
+                variance_density = variance_density.transpose()
+            spectrum2D_input = WaveSpectrum2DInput(
+                frequency=frequencies, varianceDensity=variance_density,
+                timestamp=unixepochtime, latitude=latitude, longitude=longitude,
+                directions=directions
+            )
+            spectra.append(WaveSpectrum2D(spectrum2D_input))
+        return spectra
+    elif isinstance(filename,dict):
+        out = {}
+        for key in filename:
+            out[key] = load_sofar_spectral_file(filename[key])
+        return out
+    elif isinstance(filename,List):
+        return [ load_sofar_spectral_file(name) for name in filename]
+    else:
+        raise Exception('Unsupported input type for filename')
+
+

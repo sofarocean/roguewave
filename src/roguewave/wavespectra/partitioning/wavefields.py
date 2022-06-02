@@ -377,10 +377,9 @@ def partition_spectra(spectra2D: List[WaveSpectrum2D],
     # Step 1: Partition the data
     _print(verbose, ' - Partition Data')
     raw_partitions = []
-
     if config['parallel']:
         with get_context("spawn").Pool(processes=cpu_count()) as pool:
-            output = pool.map(worker, spectra2D)
+            output = pool.map(worker, spectra2D, chunksize=len(spectra2D)//cpu_count() )
         raw_partitions = [ partition for partition, _ in output ]
     else:
         for index, spectrum in enumerate(spectra2D):

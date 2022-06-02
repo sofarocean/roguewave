@@ -355,7 +355,7 @@ def bulk_parameters_partitions( partitions:List[List[WaveSpectrum2D]] )->List[Da
         df = DataFrame()
         for variable in WaveSpectrum.bulk_properties:
             df[variable] = extract_bulk_parameter(variable, partition)
-        df['sea'] = is_sea_spectrum(partition)
+        df['sea'] = numpy.array(is_sea_spectrum(partition))
         bulk.append(df)
     return bulk
 

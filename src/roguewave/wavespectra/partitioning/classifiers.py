@@ -39,8 +39,7 @@ def is_sea_spectrum(spectrum: Union[WaveSpectrum, List[WaveSpectrum]],
         spectra = spectrum
         return_list = True
 
-    if isinstance(spectrum, WaveSpectrum2D):
-        spectra = convert_to_1d_spectrum(spectra)
+    spectra = convert_to_1d_spectrum(spectra)
 
     output = []
     for _spectrum in spectra:

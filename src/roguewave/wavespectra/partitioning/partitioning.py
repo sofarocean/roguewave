@@ -34,7 +34,7 @@ import numba
 from scipy.ndimage import maximum_filter, generate_binary_structure
 
 default_partition_config = {
-    'minimumEnergyFraction': 0.01,
+    'minimumEnergyFraction': 0.001,
     'minimumDensityRatio': 0.
 }
 

@@ -7,18 +7,23 @@ from roguewave.wavespectra import logger
 from roguewave.wavespectra.spectrum2D import empty_spectrum2D_like
 from roguewave.wavespectra.wavespectrum import WaveSpectrum, \
     extract_bulk_parameter
-from .partitioning import is_neighbour, default_partition_config, partition_spectrum
+from .partitioning import is_neighbour, default_partition_config, \
+    partition_spectrum
 from roguewave.tools import _print
 from .classifiers import is_sea_spectrum
 from multiprocessing import cpu_count, get_context
 
 DEFAULT_CONFIG_PARTITION_SPECTRA = {
     'partitionConfig': default_partition_config,
-    'parallel': False, # DOES NOT WORK
+    'parallel': False,  # DOES NOT WORK
     'fieldFiltersettings': {
         'filter': True,
         'maxDeltaPeriod': 2,
-        'maxDeltaDirection': 20
+        'maxDeltaDirection': 40,
+        'maxDeltaWaveHeight': 1.5,
+        'minDeltaPeriod': 1,
+        'minDeltaDirection': 15,
+        'minDeltaWaveHeight': 0.5
     }
 }
 
@@ -142,7 +147,7 @@ class Node():
             number_of_neighbourpoints = numpy.zeros(len(self.children),
                                                     dtype='float64')
             for ii, child in enumerate(self.children):
-                    number_of_neighbourpoints[ii] = is_neighbour(spectra[length],
+                number_of_neighbourpoints[ii] = is_neighbour(spectra[length],
                                                              child.spectra[0])
 
             index_of_child_to_merge_into = numpy.argmax(
@@ -314,44 +319,69 @@ def wave_fields_from(root: Node, primary_field=None) -> List[
     return fields
 
 
-def filter_field(field:List[WaveSpectrum2D], min_duration:timedelta, max_delta_period,max_delta_direction):
+def are_different_fields( spec1:WaveSpectrum2D,spec2:WaveSpectrum2D,config ):
+    def ramp( value, min, max ):
+        if value < min:
+            return 0
+        elif value > max:
+            return 1
+        else:
+            return (value - min) / (max - min)
 
-    new_fields = [ [] ] # type: List[List[WaveSpectrum2D]]
+    delta_waveheight = numpy.abs( spec1.hm0()- spec2.hm0())
+    delta_period = numpy.abs(spec1.tm01() - spec2.tm01())
+    delta_direction = numpy.abs(
+        (spec1.bulk_direction() - spec2.bulk_direction() + 180) % 360 - 180
+    )
+
+    return \
+        ramp(delta_waveheight,config['minDeltaWaveHeight'],config['maxDeltaWaveHeight']) \
+    +   ramp(delta_period,config['minDeltaPeriod'],config['maxDeltaPeriod']) \
+    +   ramp(delta_direction,config['minDeltaDirection'],config['maxDeltaDirection']) \
+    > 1
+
+
+def filter_field(field: List[WaveSpectrum2D], min_duration: timedelta,
+                 config):
+    new_fields = [[]]  # type: List[List[WaveSpectrum2D]]
     current_field = 0
     for index, spec in enumerate(field):
         if index == 0:
             new_fields[current_field].append(spec)
             continue
 
-        previous_field = field[index-1]
-        delta_period = numpy.abs(  spec.tm01() - previous_field.tm01()  )
-        delta_direction = numpy.abs( (spec.bulk_direction() - previous_field.bulk_direction() +180 )%360 - 180)
-
-        if delta_direction > max_delta_direction or delta_period > max_delta_period:
-            current_field+=1
+        previous_field = field[index - 1]
+        # delta_period = numpy.abs(spec.tm01() - previous_field.tm01())
+        # delta_direction = numpy.abs(
+        #     (spec.bulk_direction() - previous_field.bulk_direction() + 180) % 360 - 180
+        # )
+        if are_different_fields(spec,previous_field,config): #delta_direction > config['maxDeltaDirection'] or delta_period > config['maxDeltaPeriod']:
+            current_field += 1
             new_fields.append([])
         new_fields[current_field].append(spec)
 
     to_drop = []
-    for index,new_field in enumerate(new_fields):
+    for index, new_field in enumerate(new_fields):
         if new_field[-1].timestamp - new_field[0].timestamp < min_duration:
             to_drop.append(index)
 
-    for index in sorted(to_drop,reverse=True):
+    for index in sorted(to_drop, reverse=True):
         new_fields.pop(index)
     return new_fields
 
 
-def filter_fields(fields:List[List[WaveSpectrum2D]], min_duration:timedelta, max_delta_period=2,max_delta_direction=20):
+def filter_fields(fields: List[List[WaveSpectrum2D]], min_duration: timedelta,
+                  config):
     new_fields = []
     for field in fields:
-        new_fields += filter_field(field, min_duration,max_delta_period,max_delta_direction)
+        new_fields += filter_field(field, min_duration, config)
     return new_fields
 
 
-def bulk_parameters_partitions( partitions:List[List[WaveSpectrum2D]] )->List[DataFrame]:
+def bulk_parameters_partitions(partitions: List[List[WaveSpectrum2D]]) -> List[
+    DataFrame]:
     bulk = []
-    for label,partition in enumerate(partitions):
+    for label, partition in enumerate(partitions):
         df = DataFrame()
         for variable in WaveSpectrum.bulk_properties:
             df[variable] = extract_bulk_parameter(variable, partition)
@@ -359,12 +389,15 @@ def bulk_parameters_partitions( partitions:List[List[WaveSpectrum2D]] )->List[Da
         bulk.append(df)
     return bulk
 
+
 def worker(spectrum):
     return partition_spectrum(spectrum)
 
+
 def partition_spectra(spectra2D: List[WaveSpectrum2D],
                       minimum_duration: timedelta,
-                      config=None, verbose=False) -> List[List[WaveSpectrum2D]]:
+                      config=None, verbose=False) -> List[
+    List[WaveSpectrum2D]]:
     if config:
         for key in config:
             assert key in DEFAULT_CONFIG_PARTITION_SPECTRA, f"{key} is not a valid configuration entry"
@@ -373,18 +406,19 @@ def partition_spectra(spectra2D: List[WaveSpectrum2D],
     else:
         config = DEFAULT_CONFIG_PARTITION_SPECTRA
 
-
     # Step 1: Partition the data
     _print(verbose, ' - Partition Data')
     raw_partitions = []
     if config['parallel']:
         with get_context("spawn").Pool(processes=cpu_count()) as pool:
-            output = pool.map(worker, spectra2D, chunksize=len(spectra2D)//cpu_count() )
-        raw_partitions = [ partition for partition, _ in output ]
+            output = pool.map(worker, spectra2D,
+                              chunksize=len(spectra2D) // cpu_count())
+        raw_partitions = [partition for partition, _ in output]
     else:
         for index, spectrum in enumerate(spectra2D):
             _print(verbose, f'\t {index:05d} out of {len(spectra2D)}')
-            partitions, _ = partition_spectrum(spectrum, config['partitionConfig'])
+            partitions, _ = partition_spectrum(spectrum,
+                                               config['partitionConfig'])
             raw_partitions.append(partitions)
 
     # Step 2: create a graph
@@ -403,12 +437,11 @@ def partition_spectra(spectra2D: List[WaveSpectrum2D],
         wave_fields = filter_fields(
             wave_fields,
             min_duration=minimum_duration,
-            max_delta_period=config['fieldFiltersettings']['maxDeltaPeriod'],
-            max_delta_direction=config['fieldFiltersettings'][
-                'maxDeltaDirection']
+            config=config['fieldFiltersettings']
         )
     _print(verbose, '*** Done ***\n' + 80 * '-' + '\n\n')
     return wave_fields
+
 
 # -----------------------------------------------------------------------------
 #                       Boilerplate Interfaces
@@ -417,6 +450,7 @@ def partition_spectra(spectra2D: List[WaveSpectrum2D],
 def get_bulk_partitions_from_spectral_partitions(
         spectral_partitions: Dict[str, List[List[WaveSpectrum2D]]]
 ) -> Dict[str, List[DataFrame]]: ...
+
 
 @overload
 def get_bulk_partitions_from_spectral_partitions(

@@ -96,6 +96,8 @@ def get_spectral_partitions_from_observations(
     if isinstance(spectra, dict):
         output = {}
         for key, item in spectra.items():
+            if item is None:
+                continue
             output[key] = partition_observations_spectra(item,
                                                          minimum_duration,
                                                          config, verbose)

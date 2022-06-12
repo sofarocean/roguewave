@@ -15,7 +15,8 @@ setuptools.setup(
         'pandas',
         'qpsolvers',
         'scipy',
-        'numba'
+        'numba',
+        'msgpack'
     ],
     description='Python package to interact with Sofar wave data',
     long_description=readme_contents,

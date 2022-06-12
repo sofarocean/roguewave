@@ -5,3 +5,4 @@ wheel
 netCDF4
 pandas
 qpsolvers
+msgpack

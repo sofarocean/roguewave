@@ -12,10 +12,11 @@ from roguewave.tools import _print
 import numpy
 import os
 from multiprocessing.pool import ThreadPool
+from multiprocessing import get_context
 from multiprocessing import cpu_count
 
 MAX_LOCAL_LIMIT = 20
-MAXIMUM_NUMBER_OF_WORKERS = 10
+MAXIMUM_NUMBER_OF_WORKERS = 40
 
 def _get_spectrum_from_sofar_spotter_api(
         spotter: Spotter,
@@ -108,11 +109,19 @@ def get_spectrum_from_sofar_spotter_api(
 
 
     data = {}
+    n = 0
     def worker( spotter_id):
-        return _download_spectra(spotter_id,session,start_date,end_date,limit,verbose)
+        nonlocal n
+        try:
+            data = _download_spectra(spotter_id,session,start_date,end_date,limit,verbose)
+        except ExceptionNoFrequencyData as e:
+            data = None
+        n+=1
+        print( spotter_id , n/len(spotter_ids) * 100 )
+        return data
 
     if parallel_download:
-        with ThreadPool(processes=min(cpu_count(),MAXIMUM_NUMBER_OF_WORKERS)) as pool:
+        with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
             out = pool.map(worker, spotter_ids)
 
         for spotter_id, spectra in zip(spotter_ids,out):
@@ -120,7 +129,7 @@ def get_spectrum_from_sofar_spotter_api(
     else:
         for spotter_id in spotter_ids:
             _print(verbose, f'Downloading data for spotter {spotter_id}')
-            data[spotter_id] = _download_spectra(spotter_id,session,start_date,end_date,limit)
+            data[spotter_id] = worker(spotter_id)
 
     if not return_list:
         return data[spotter_ids[0]]

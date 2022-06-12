@@ -29,15 +29,26 @@ How To Use This Module
 from .spectrum1D import WaveSpectrum1D
 from .spectrum2D import WaveSpectrum2D
 from .wavespectrum import WaveSpectrum
+from pandas import DataFrame, read_json
 from . import spectrum1D, spectrum2D
 from typing import Union, Dict, List
+import pickle
 import gzip
 import json
+import msgpack
+import os
 
 _UNION = Union[
-    WaveSpectrum1D, WaveSpectrum2D, List[WaveSpectrum1D], List[WaveSpectrum2D],
-    Dict[str, List[WaveSpectrum1D]], Dict[str, List[WaveSpectrum2D]],
-    Dict[str, List[List[WaveSpectrum2D]]], List[List[WaveSpectrum2D]]]
+    WaveSpectrum1D,
+    WaveSpectrum2D,
+    List[WaveSpectrum1D],
+    List[WaveSpectrum2D],
+    Dict[str, List[WaveSpectrum1D]],
+    Dict[str, List[WaveSpectrum2D]],
+    Dict[str, List[List[WaveSpectrum2D]]],
+    List[List[WaveSpectrum2D]],
+    List[List[DataFrame]]
+]
 
 
 def load_spectrum(filename: str) -> _UNION:
@@ -77,10 +88,20 @@ def load_spectrum(filename: str) -> _UNION:
           of partitioned data - each partition in itself is a list of
           2D wavespectra ordered in time.
     """
-    with gzip.open(filename, 'rb') as file:
-        data = file.read().decode('utf-8')
+    try:
+        with gzip.open(filename, 'rb') as file:
+            data = file.read().decode('utf-8')
+        data = _deserialize(json.loads(data))
+    except:
+        try:
+            with open(filename, 'rb') as file:
+                data = msgpack.load(file)
+            data = _deserialize(data)
+        except:
+            with open(filename,'rb') as file:
+                data = pickle.load(file)
+            data = _deserialize(data)
 
-    data = _deserialize(json.loads(data))
     return data
 
 
@@ -103,6 +124,8 @@ def _deserialize(data):
             # if not directions but has frequency -> create a wavespectrum1d.
             # The keys directly map to the constructor arguments.
             return spectrum1D(**data)
+        elif 'dataframe' in data:
+            return DataFrame.from_dict(data['dataframe'])
         else:
             # Otherwise- this is a nested object where each key represents data
             # at a different Spotter/location. Loop over all keys and call the
@@ -119,6 +142,8 @@ def _deserialize(data):
         for item in data:
             output.append(_deserialize(item))
         return output
+    elif data is None:
+        return None
     else:
         raise Exception('Cannot convert to json compatible type')
 
@@ -156,12 +181,18 @@ def _serialize(_input):
         for item in _input:
             output.append(_serialize(item))
         return output
+    elif isinstance(_input, DataFrame):
+        return {'dataframe':_input.to_json(date_unit='s')}
+    elif _input is None:
+        # handle the "no data" case.
+        return None
     else:
         # Otherwise raise error
+        print(type(_input), _input)
         raise Exception('Cannot convert to json compatible type')
 
 
-def save_spectrum(_input: _UNION, filename: str):
+def save_spectrum(_input: _UNION, filename: str, format='json', seperate_spotters_into_files=True):
     """
     Save spectral data, possible in nested form as returned by the spectral
     partition/reconstruction/etc. functions. Data is saved in JSON form
@@ -200,8 +231,28 @@ def save_spectrum(_input: _UNION, filename: str):
     :param filename: path to save data.
     :return: None
     """
-    output = _serialize(_input)
 
-    data = json.dumps(output)
-    with gzip.open(filename, 'wb') as file:
-        file.write(data.encode('utf-8'))
+    def write(filename, _input, format):
+        output = _serialize(_input)
+        if format == 'json':
+            data = json.dumps(output)
+            with gzip.open(filename, 'wb') as file:
+                file.write(data.encode('utf-8'))
+        elif format == 'pickle':
+            with open(filename,'wb') as file:
+                pickle.dump(output,file)
+        elif format == 'msgpack':
+            with open(filename, 'wb') as file:
+                msgpack.pack(output,file)
+        else:
+            raise Exception('Unknown output format')
+
+
+    if seperate_spotters_into_files:
+        os.makedirs(filename, exist_ok=True)
+        for key in _input:
+            name = os.path.join(filename, key)
+            write( name,_input[key],format )
+
+    else:
+        write(filename,_input,format)

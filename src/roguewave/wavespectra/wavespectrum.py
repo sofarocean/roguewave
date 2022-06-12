@@ -91,8 +91,17 @@ class WaveSpectrum():
         self.variance_density = MaskedArray(
             wave_spectrum_input['varianceDensity'],dtype='float64')
         self.timestamp = to_datetime(wave_spectrum_input['timestamp'])
-        self.longitude = float(wave_spectrum_input['longitude'])
-        self.latitude = float(wave_spectrum_input['latitude'])
+
+        # There are cases that wavefleet returns None for latitude or longitude.
+        # This is a bug - but to avoid issues we catch it here.
+        if (wave_spectrum_input['longitude'] is None) or \
+            (wave_spectrum_input['latitude']) is None:
+            self.longitude = None
+            self.latitude = None
+        else:
+            self.longitude = float(wave_spectrum_input['longitude'])
+            self.latitude = float(wave_spectrum_input['latitude'])
+
 
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
         pass

@@ -392,8 +392,6 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
     # # merge low energy partitions
     filter_for_low_energy(partitions, proximate_partitions, spectrum.m0(),
                           config)
-    #  if there are multiple sea spectra merge them into a single sea-spectrum
-    # merge_sea_spectra(partitions, proximate_partitions, config)
 
     # Return the partitions and the label array.
     return partitions, proximate_partitions

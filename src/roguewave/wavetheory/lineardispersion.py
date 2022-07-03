@@ -1,8 +1,8 @@
 import numpy
-
+from numba import njit
 GRAV = 9.81
 
-
+@njit(cache=True)
 def inverse_intrinsic_dispersion_relation(
     angular_frequency,
     dep,
@@ -23,7 +23,9 @@ def inverse_intrinsic_dispersion_relation(
     :return:
     """
 
-    w = numpy.atleast_1d(angular_frequency)
+    # Numba does not recognize "atleast_1d" for scalars - hence the weird
+    # call to array first.
+    w = numpy.atleast_1d( numpy.array(angular_frequency))
 
     k_deep_water_estimate = w ** 2 / grav
     k_shallow_water_estimate = w / numpy.sqrt(grav * dep)
@@ -48,7 +50,6 @@ def inverse_intrinsic_dispersion_relation(
         cg[msk] = 0.5 * w[msk] / k0[msk]
         msk = kd <= 3
         cg[msk] = (1 / 2 + kd[msk] / numpy.sinh(2 * kd[msk])) * w[msk] / k0[msk]
-        # cg = (1 / 2 + kd / numpy.sinh(2 * kd)) * w / k0
         k0 = k0 - F / cg
 
         F = numpy.sqrt(k0 * grav * numpy.tanh(k0 * dep)) - w
@@ -58,7 +59,7 @@ def inverse_intrinsic_dispersion_relation(
 
     return k0
 
-
+@njit(cache=True)
 def intrinsic_dispersion_relation(k, dep, grav=GRAV):
     """
     :param k: Wavenumber (rad/m)
@@ -66,11 +67,11 @@ def intrinsic_dispersion_relation(k, dep, grav=GRAV):
     :param grav: Gravitational acceleration (m/s^2)
     :return:
     """
-    k = numpy.atleast_1d(k)
+    k = numpy.atleast_1d(numpy.array(k))
     w = numpy.sqrt(grav * k * numpy.tanh(k * dep))
     return w
 
-
+@njit(cache=True)
 def phase_velocity(k, depth, grav=GRAV):
     """
     :param k: Wavenumber (rad/m)
@@ -80,7 +81,7 @@ def phase_velocity(k, depth, grav=GRAV):
     """
     return intrinsic_dispersion_relation(k, depth, grav=GRAV) / k
 
-
+@njit(cache=True)
 def ratio_group_velocity_to_phase_velocity(k, depth, grav):
     """
     :param k: Wavenumber (rad/m)
@@ -99,7 +100,7 @@ def ratio_group_velocity_to_phase_velocity(k, depth, grav):
 
     return n
 
-
+@njit(cache=True)
 def intrinsic_group_velocity(k, depth, grav=GRAV):
     """
     :param k: Wavenumber (rad/m)
@@ -109,7 +110,7 @@ def intrinsic_group_velocity(k, depth, grav=GRAV):
     """
     return ratio_group_velocity_to_phase_velocity(k, depth, grav=GRAV) * phase_velocity(k, depth, grav)
 
-
+@njit(cache=True)
 def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV):
     """
     :param k: Wavenumber (rad/m)
@@ -120,7 +121,7 @@ def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV):
     # return numpy.ones( k.shape  )
     return 1 / intrinsic_group_velocity(k, depth, grav)
 
-
+@njit(cache=True)
 def jacobian_radial_frequency_to_wavenumber(k, depth, grav=GRAV):
     """
     :param k: Wavenumber (rad/m)

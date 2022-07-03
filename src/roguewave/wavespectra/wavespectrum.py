@@ -85,11 +85,17 @@ class WaveSpectrum():
         self._b2 = None
         self._e = None
         self.direction = None
+        self._peak_index = None
+        self._peak_wavenumber = None
 
         # Type conversions are needed because the JSON serializer does not accept float32
         self.frequency = numpy.array(wave_spectrum_input['frequency'],dtype='float64')
-        self.variance_density = MaskedArray(
-            wave_spectrum_input['varianceDensity'],dtype='float64')
+        density = numpy.array(wave_spectrum_input['varianceDensity'],dtype='float64')
+        mask = (density < 0) | numpy.isnan(density)
+        density[mask] = numpy.nan
+
+        self._variance_density = MaskedArray(
+            density,dtype='float64',mask=mask)
         self.timestamp = to_datetime(wave_spectrum_input['timestamp'])
 
         # There are cases that wavefleet returns None for latitude or longitude.
@@ -118,6 +124,10 @@ class WaveSpectrum():
     @property
     def variance_density(self) -> numpy.ndarray:
         return self._variance_density
+
+    def _update(self):
+        self._peak_index = None
+        self._peak_wavenumber = None
 
     @variance_density.setter
     def variance_density(self, val: numpy.ndarray):
@@ -189,6 +199,11 @@ class WaveSpectrum():
         return numpy.sqrt(self.m0(fmin, fmax) / self.m2(fmin, fmax))
 
     def peak_index(self, fmin=0, fmax=numpy.inf) -> float:
+        if fmin==0 and fmax==numpy.inf:
+            if self._peak_index is None:
+                self._peak_index = numpy.argmax(self.e)
+            return self._peak_index
+
         range = self._range(fmin, fmax)
         tmp = self.e[:]
         tmp[~range] = 0
@@ -270,6 +285,14 @@ class WaveSpectrum():
                                                      depth, **kwargs)
 
     def peak_wavenumber(self, depth=numpy.inf):
+
+        if depth == numpy.inf:
+            if self._peak_wavenumber is None:
+                index = self.peak_index()
+                self._peak_wavenumber = inverse_intrinsic_dispersion_relation(
+                    self.radian_frequency[index], depth)
+            return self._peak_wavenumber
+
         index = self.peak_index()
         return inverse_intrinsic_dispersion_relation(
             self.radian_frequency[index], depth)

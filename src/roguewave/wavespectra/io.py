@@ -192,7 +192,7 @@ def _serialize(_input):
         raise Exception('Cannot convert to json compatible type')
 
 
-def save_spectrum(_input: _UNION, filename: str, format='json', seperate_spotters_into_files=True):
+def save_spectrum(_input: _UNION, filename: str, format='json', seperate_spotters_into_files=False):
     """
     Save spectral data, possible in nested form as returned by the spectral
     partition/reconstruction/etc. functions. Data is saved in JSON form

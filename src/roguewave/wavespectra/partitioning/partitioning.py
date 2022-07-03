@@ -136,15 +136,12 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
 
     We start at a local peak indicated by [peak_frequency_index]
     and [peak_direction_index], label that peak with the given [label]
-
-
     """
 
     number_of_directions = spectral_density.shape[1]
     number_of_frequencies = spectral_density.shape[0]
 
     proximate_partitions = {}  # type: typing.Dict[int,typing.List[int]]
-    # proximate_partitions = []
 
     partition_label = numpy.zeros(
         (number_of_frequencies, number_of_directions),
@@ -161,34 +158,50 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
     if assigned:
         proximate_partitions[current_label] = numpy.array([0], dtype='int64')
 
+    #
+    # We loop over all cells in the spectrum...
     for start_frequency_index in range(0, number_of_frequencies):
         for start_direction_index in range(0, number_of_directions):
-            # if already assigned - continue
+
+            # if the cell is already assigned to a peak during a previous ascent
+            # from another staring point we can skip the current cell.
             if partition_label[
                 start_frequency_index, start_direction_index] > NOT_ASSIGNED:
                 continue
 
+            # Initialize the path. We keep track of the visited cells in an
+            # ascent by denoting their indices in a list.
             ii = [start_frequency_index]
             jj = [start_direction_index]
-            proximate_partitions_work = []
-            while True:
 
+            # In addition- as we climb the hill we denote any partitions we
+            # happen to neighbour
+            proximate_partitions_work = []
+
+            while True:
+                # get the last cell in the path
                 direction_index = jj[-1]
                 frequency_index = ii[-1]
 
+                # find indices of the neigbours of the cell
                 neighbour_frequency_indices, neighbour_direction_indices = neighbours(
                     direction_index, frequency_index,
                     number_of_directions, number_of_frequencies)
 
+                # Get the value of the energy density at the current cell
                 node_value = spectral_density[frequency_index, direction_index]
 
+                # Here we calculate the differences in energy density from the
+                # current cell to each of it neighbours.
                 delta = numpy.zeros_like(neighbour_frequency_indices,dtype='float64')
                 for index, ifreq, idir in zip(
                         range(0, len(neighbour_frequency_indices)),
                         neighbour_frequency_indices,
                         neighbour_direction_indices):
 
+                    # Calculate the delta for each neighbour
                     delta[index] = (spectral_density[ifreq, idir] - node_value)
+
 
                     if partition_label[ifreq, idir] > NOT_ASSIGNED:
                         proximate_partitions_work.append(
@@ -221,7 +234,6 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
                     ii.append(neighbour_frequency_indices[steepest_index])
                     jj.append(neighbour_direction_indices[steepest_index])
                     continue
-
         #
     for label in proximate_partitions:
         proximate_partitions[label] = numpy.unique(proximate_partitions[label])
@@ -363,6 +375,7 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
 
     # Update config if provided
     config = default_partition_config | (config if config else {})
+
     # Make sure there are no NaN (undifined) values
     density = spectrum.variance_density.copy()
     density[numpy.isnan(density)] = 0.0
@@ -386,8 +399,7 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
     # Create a dict of all draft partitions
     for label, proximity_list in proximate_partitions.items():
         mask = partition_label == label
-        partitions[label] = spectrum.extract(mask,
-                                             config['minimumDensityRatio'])
+        partitions[label] = spectrum.extract(mask)
     #
     # # merge low energy partitions
     filter_for_low_energy(partitions, proximate_partitions, spectrum.m0(),

@@ -88,11 +88,11 @@ class Node():
     @property
     def duration(self):
         delta = self.spectra[-1].timestamp - self.spectra[0].timestamp
-        # if self.parent is None:
-        #     return delta
-        #
-        # if self.parent.favored_child is self:
-        #     delta = delta + self.parent.duration
+        if self.parent is None:
+            return delta
+
+        if self.parent.favored_child is self:
+            delta = delta + self.parent.duration
         return delta
 
     def prune(self, min_duration: timedelta):

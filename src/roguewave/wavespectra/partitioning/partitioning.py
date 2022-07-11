@@ -311,9 +311,10 @@ def filter_for_low_energy(partitions: Dict[int, WaveSpectrum2D],
                     label, numba.typed.List(proximity[label]),
                     len(partition.direction), peak_indices)
 
+
             # There is an edge case where there are no neighbours to merge with
             # hence the check
-            if closest_label is None:
+            if closest_label is not None:
                 # if a closest partition is found- lets merge with that
                 # partition.
                 merge_partitions(label, closest_label, partitions,
@@ -426,7 +427,7 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
     #
     # # merge low energy partitions
     filter_for_low_energy(partitions, proximate_partitions, peak_indices,
-                          spectrum.m0(), config)
+                         spectrum.m0(), config)
 
     # Return the partitions and the label array.
     return partitions, proximate_partitions

@@ -125,7 +125,7 @@ def _deserialize(data):
             # The keys directly map to the constructor arguments.
             return spectrum1D(**data)
         elif 'dataframe' in data:
-            return DataFrame.from_dict(data['dataframe'])
+            return read_json(data['dataframe'])
         else:
             # Otherwise- this is a nested object where each key represents data
             # at a different Spotter/location. Loop over all keys and call the

@@ -29,7 +29,8 @@ How To Use This Module
 from roguewave.wavespectra.spectrum2D import WaveSpectrum2D, \
     empty_spectrum2D_like
 import numpy
-import typing
+import numba.typed
+from typing import Dict, List, Tuple, Union
 import numba
 from scipy.ndimage import maximum_filter, generate_binary_structure
 
@@ -38,100 +39,20 @@ default_partition_config = {
     'minimumDensityRatio': 0.
 }
 
-
-@numba.njit(cache=True)
-def neighbours(peak_direction_index: int, peak_frequency_index: int,
-               number_of_directions: int, number_of_frequencies: int,
-               diagonals=True) -> typing.Tuple[numpy.ndarray, numpy.ndarray]:
-    """
-    Find all indices that correspond to the 2D neighbours of a given point
-    with indices (i, j) in a rectangular raster spanned by frequencies and
-    directions. There are potentially 8 neighbours:
-
-            + (i+1,j-1)   + (i+1,   j)   +  (i+1,j+1)    ( + = neighbour, x is point )
-
-            + (i  ,j-1)   x (i  ,   j)   +  (i  ,j+1)
-
-            + (i-1,j-1)   + (i-1,   j)   +  (i-1,j+1)
-
-    resulting in output:
-
-            frequency_indices = [i  , i  , i-1, i-1, i-1, i+1, i+1, i+1]
-            direction_indices = [j-1, j+1, j-1, j  , j+1, j-1, j  , j+1]
-
-    Note that due to directional wrapping j-1 and j+1 always exist; but
-    i+1 and i-1 may not. The ordering of the output is due to  ease of
-    implementation
-
-    :param peak_direction_index: central direction index
-    :param peak_frequency_index: central frequency index
-    :param number_of_directions: number of direction in the grid
-    :param number_of_frequencies: number of frequencies in the grid
-    :param diagonals: (optional), whether or not to include the diagonal indices
-    as neighbours.
-    :return: ( frequency_indices, direction_indices  )
-    """
-
-    # First we need to calculate the next/prev angles in frequency ann
-    # direction space, noting that direction space is periodic.
-    next_direction_index = (peak_direction_index + 1) % number_of_directions
-    prev_direction_index = (peak_direction_index - 1) % number_of_directions
-    prev_frequency_index = peak_frequency_index - 1
-    next_frequency_index = peak_frequency_index + 1
-
-    # Add the
-    frequency_indices = [peak_frequency_index, peak_frequency_index]
-    direction_indices = [prev_direction_index, next_direction_index]
-
-    if diagonals:
-        # The diagonals are included
-        if peak_frequency_index > 0:
-            # add the neighbours at the previous frequency
-            frequency_indices += [prev_frequency_index, prev_frequency_index,
-                                  prev_frequency_index]
-            direction_indices += [prev_direction_index, peak_direction_index,
-                                  next_direction_index]
-
-        if peak_frequency_index < number_of_frequencies - 1:
-            # add the neighbours at the next frequency
-            frequency_indices += [next_frequency_index, next_frequency_index,
-                                  next_frequency_index]
-            direction_indices += [prev_direction_index, peak_direction_index,
-                                  next_direction_index]
-    else:
-        # The diagonals are not included
-
-        if peak_frequency_index > 0:
-            # add the neighbours at the previous frequency
-            frequency_indices += [prev_frequency_index]
-            direction_indices += [peak_direction_index]
-        if peak_frequency_index < number_of_frequencies - 1:
-            # add the neighbours at the next frequency
-            frequency_indices += [next_frequency_index]
-            direction_indices += [peak_direction_index]
-
-    return numpy.array(frequency_indices, dtype='int64'), numpy.array(
-        direction_indices, dtype='int64')
-
-
 NOT_ASSIGNED = -1
 
 
 @numba.njit(cache=True)
-def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
-              spectral_density: numpy.ndarray, min_val=0.0) -> typing.Tuple[
-    numpy.ndarray, typing.Dict[int, typing.List[int]]]:
+def floodfill(spectral_density: numpy.ndarray, min_val=0.0) -> Tuple[
+    numpy.ndarray, Dict[int, List[int]], Dict[int, Tuple[int, int]]]:
     """
-    Flood fill algorithm. We try to find the region that belongs to a peak according
-    to inverse watershed.
+    Flood fill algorithm. We try to find the region that belongs to a peak 
+    according to inverse watershed.The implementation has been optimized for 
+    use with numba.
 
     :param spectral_density: 2d-ndarray, first dimension frequency, second direction
-    :param partition_label: 2d-integer-ndarray, of same shape as [spectral_density].
-    for each entry contains label to which the current entry belongs. Negative
-    label is unasigned.
+    :param min_val: minimum value we consider in the algorithm.
 
-    :param peak_frequency_index: frequency index of local peak
-    :param peak_direction_index: direction index of local peak
     :return:
 
     We start at a local peak indicated by [peak_frequency_index]
@@ -141,7 +62,7 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
     number_of_directions = spectral_density.shape[1]
     number_of_frequencies = spectral_density.shape[0]
 
-    proximate_partitions = {}  # type: typing.Dict[int,typing.List[int]]
+    proximate_partitions = {}  # type: Dict[int,List[int]]
 
     partition_label = numpy.zeros(
         (number_of_frequencies, number_of_directions),
@@ -151,15 +72,29 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
     assigned = False
     for start_frequency_index in range(0, number_of_frequencies):
         for start_direction_index in range(0, number_of_directions):
-            if spectral_density[start_frequency_index,start_direction_index]==min_val:
+            if spectral_density[
+                start_frequency_index, start_direction_index] == min_val:
                 assigned = True
-                partition_label[start_frequency_index,start_direction_index] = current_label
+                partition_label[
+                    start_frequency_index, start_direction_index] = current_label
 
     if assigned:
         proximate_partitions[current_label] = numpy.array([0], dtype='int64')
 
     #
     # We loop over all cells in the spectrum...
+    peak_indices = {}
+    # delta = numpy.zeros( 8 )
+    ii = numpy.zeros(1000, dtype='int64')
+    jj = numpy.zeros(1000, dtype='int64')
+
+    neighbour_direction_offset = numpy.array(
+        (0, 0, - 1, - 1, - 1, + 1, + 1, + 1), dtype='int64')
+    neighbour_frequency_offset = numpy.array(
+        (- 1, + 1, - 1, 0, + 1, - 1, 0, + 1), dtype='int64')
+    neighbour_frequency_indices = numpy.zeros(8, dtype='int64')
+    neighbour_direction_indices = numpy.zeros(8, dtype='int64')
+
     for start_frequency_index in range(0, number_of_frequencies):
         for start_direction_index in range(0, number_of_directions):
 
@@ -171,8 +106,11 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
 
             # Initialize the path. We keep track of the visited cells in an
             # ascent by denoting their indices in a list.
-            ii = [start_frequency_index]
-            jj = [start_direction_index]
+            # ii = [start_frequency_index]
+            # jj = [start_direction_index]
+            ii[0] = start_frequency_index
+            jj[0] = start_direction_index
+            number_of_points_in_path = 1
 
             # In addition- as we climb the hill we denote any partitions we
             # happen to neighbour
@@ -180,61 +118,90 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
 
             while True:
                 # get the last cell in the path
-                direction_index = jj[-1]
-                frequency_index = ii[-1]
+                direction_index = jj[number_of_points_in_path - 1]  # jj[-1]
+                frequency_index = ii[number_of_points_in_path - 1]  # ii[-1]
 
-                # find indices of the neigbours of the cell
-                neighbour_frequency_indices, neighbour_direction_indices = neighbours(
-                    direction_index, frequency_index,
-                    number_of_directions, number_of_frequencies)
+                if (partition_label[
+                    frequency_index, direction_index] > NOT_ASSIGNED):
+                    label = partition_label[frequency_index, direction_index]
+                    proximate_partitions[label] = \
+                        numpy.append(proximate_partitions[label],
+                                     proximate_partitions_work)
+
+                    for index in range(0, number_of_points_in_path):
+                        partition_label[ii[index], jj[index]] = label
+                    break
+
+                neighbour_frequency_indices[
+                :] = neighbour_frequency_offset + frequency_index
+                neighbour_direction_indices[:] = (
+                                                         neighbour_direction_offset + direction_index) % number_of_directions
 
                 # Get the value of the energy density at the current cell
                 node_value = spectral_density[frequency_index, direction_index]
 
                 # Here we calculate the differences in energy density from the
                 # current cell to each of it neighbours.
-                delta = numpy.zeros_like(neighbour_frequency_indices,dtype='float64')
+                # delta[:] = -numpy.inf
+                all_smaller_than_zero = True
+                index_max_delta = -1
+                max_delta = -numpy.inf
                 for index, ifreq, idir in zip(
                         range(0, len(neighbour_frequency_indices)),
                         neighbour_frequency_indices,
                         neighbour_direction_indices):
 
+                    if ifreq < 0 or ifreq >= number_of_frequencies:
+                        continue
+
                     # Calculate the delta for each neighbour
-                    delta[index] = (spectral_density[ifreq, idir] - node_value)
+                    delta = (spectral_density[ifreq, idir] - node_value)
+                    if delta > max_delta:
+                        index_max_delta = index
+                        max_delta = delta
 
+                    if delta > 0:
+                        all_smaller_than_zero = False
 
-                    if partition_label[ifreq, idir] > NOT_ASSIGNED:
+                    if partition_label[ifreq, idir] > 0:
                         proximate_partitions_work.append(
                             partition_label[ifreq, idir])
 
-                if numpy.all(delta <= 0) or (partition_label[
-                                                 frequency_index, direction_index] > NOT_ASSIGNED):
+                if all_smaller_than_zero:
+                    # this is a peak
+                    current_label += 1
+                    label = current_label
+                    proximate_partitions[label] = numpy.array(
+                        proximate_partitions_work, dtype='int64')
+                    peak_indices[label] = (frequency_index, direction_index)
 
-                    # this is a peak, or already leads to a peak
-                    if partition_label[
-                        frequency_index, direction_index] == NOT_ASSIGNED:
-                        current_label += 1
-                        label = current_label
-                        proximate_partitions[label] = numpy.array(
-                            proximate_partitions_work, dtype='int64')
-                    else:
-                        label = partition_label[
-                            frequency_index, direction_index]
-                        proximate_partitions[
-                            label] = numpy.append(proximate_partitions[
-                                                      label],
-                                                  proximate_partitions_work)
-
-                    for i, j in zip(ii, jj):
-                        partition_label[i, j] = label
+                    for index in range(0, number_of_points_in_path):
+                        partition_label[ii[index], jj[index]] = label
 
                     break
                 else:
-                    steepest_index = numpy.argmax(delta)
-                    ii.append(neighbour_frequency_indices[steepest_index])
-                    jj.append(neighbour_direction_indices[steepest_index])
+                    # steepest_index = numpy.argmax(delta)
+                    ii[number_of_points_in_path] = neighbour_frequency_indices[
+                        index_max_delta]
+                    jj[number_of_points_in_path] = neighbour_direction_indices[
+                        index_max_delta]
+                    number_of_points_in_path += 1
+
+                    if number_of_points_in_path == len(ii):
+                        # because we preallocate the path arrays we have to
+                        # make sure they fit- and otherwise extend if need be
+                        _ii = numpy.zeros(2 * len(ii), dtype='int64')
+                        _jj = numpy.zeros(2 * len(ii), dtype='int64')
+                        _ii[0:number_of_points_in_path] = ii
+                        _jj[0:number_of_points_in_path] = jj
+                        ii = _ii
+                        jj = _jj
+
+                    # ii.append(neighbour_frequency_indices[steepest_index])
+                    # jj.append(neighbour_direction_indices[steepest_index])
                     continue
         #
+
     for label in proximate_partitions:
         proximate_partitions[label] = numpy.unique(proximate_partitions[label])
         mask = proximate_partitions[label] == label
@@ -249,81 +216,115 @@ def floodfill(frequency: numpy.ndarray, direction: numpy.ndarray,
                 proximate_partitions[label_target] = numpy.append(
                     proximate_partitions[label_target], label_source)
 
-    return partition_label, proximate_partitions
+    return partition_label, proximate_partitions, peak_indices
 
 
+@numba.njit(cache=True)
 def find_label_closest_partition(label,
-                                 proximity: typing.Dict[int, typing.List[int]],
-                                 partitions: typing.Dict[int, WaveSpectrum2D]):
+                                 proximate_labels: List[int],
+                                 number_of_directions: int,
+                                 peak_indices: Dict[int, Tuple[int, int]]):
     """
-    Find the partition whose peak is closest to the partition under considiration
+    Find the partition whose peak is "closest" to the partition under consideration
     Only proximate partitions are considered. Basically: find the partition whose
     maximum is closest to the peak of the current partition.
 
-    :param index:
-    :param partitions:
+    :param label:
+    :param proximate_labels:
+    :param number_of_directions:
+    :param peak_indices:
+
     :return:
     """
-
-    # find the labels of the neighbouring partitions.
-    proximate_labels = proximity[label]
 
     if not proximate_labels:
         return None
 
-    # find the wavenumbers associated with the peak
-    kx = partitions[label].peak_wavenumber_east()
-    ky = partitions[label].peak_wavenumber_north()
-
     # Initialize the numpy arrays for distance and indices.
     distance = numpy.zeros((len(proximate_labels),))
-    indices = numpy.zeros((len(proximate_labels),), dtype='int32')
+    indices = numpy.zeros((len(proximate_labels),), dtype='int64')
 
+    ifreq, idir = peak_indices[label]
     for ii, local_label in enumerate(proximate_labels):
-        delta_kx = partitions[local_label].peak_wavenumber_east() - kx
-        delta_ky = partitions[local_label].peak_wavenumber_north() - ky
-        distance[ii] = numpy.sqrt(delta_kx ** 2 + delta_ky ** 2)
+        delta_freq = peak_indices[local_label][0] - ifreq
+        delta_dir = (peak_indices[local_label][
+                         1] - idir - number_of_directions // 2) % number_of_directions + number_of_directions // 2
+        distance[ii] = numpy.sqrt(delta_freq ** 2 + delta_dir ** 2)
         indices[ii] = local_label
-
 
     return indices[numpy.argmin(distance)]
 
 
-def filter_for_low_energy(partitions: typing.Dict[int, WaveSpectrum2D],
-                          proximity: typing.Dict[int, typing.List[int]],
-                          total_energy, config):
+def filter_for_low_energy(partitions: Dict[int, WaveSpectrum2D],
+                          proximity: Dict[int, List[int]],
+                          peak_indices: Dict[int, Tuple[int, int]],
+                          total_energy,
+                          config):
+    """
+    Remove partitions that contain only a small fraction of the total energy
+    in the spectrum.
 
-    # If there is only one partition, return
+    :param partitions: Dictionary of spectra, keys are the labels identifying
+                       the partition under consideration
+
+    :param proximity: Dictionary that denotes for each partition identified by
+                      its label (dict key) a list of partitions that are direct
+                      neighbours
+
+    :param peak_indices: Dictionary that for each partition identified by its
+                         label (dict key) the frequency and direction index of
+                         the peak value
+
+    :param total_energy: Total energy (variance) in the wave spectrum
+
+    :param config: Configuration dictionary
+
+    :return: None (function has side effects)
+    """
+
+    # If there is only one partition, there is no need to filter, return
     if len(partitions) == 1:
         return
 
+    # loop over all the partition labels
     for label in list(partitions.keys()):
 
+        # This looks weird- but is needed. The dictionary is changed and a label
+        # may no longer exist.
         if label not in partitions:
             continue
 
+        # get the partition associated with the label
         partition = partitions[label]
 
-        if partition.hm0() == 0:
-            closest_label = proximity[label][0]
-        else:
-            closest_label = find_label_closest_partition(
-                label, proximity, partitions)
-
-
+        # Check if the partition contains sufficient energy
         if (partition.m0() < config['minimumEnergyFraction'] * total_energy):
             #
-            # Merge with the closest partition
-            if closest_label:
+            # If not, Merge with the closest partition. First find what is the
+            # closest neighbour.
+            if partition.hm0() == 0:
+                closest_label = proximity[label][0]
+            else:
+                # Note we have to pass a numba typed list to avoid the deprecation
+                # warning on general python lists.
+                closest_label = find_label_closest_partition(
+                    label, numba.typed.List(proximity[label]),
+                    len(partition.direction), peak_indices)
+
+            # There is an edge case where there are no neighbours to merge with
+            # hence the check
+            if closest_label is None:
+                # if a closest partition is found- lets merge with that
+                # partition.
                 merge_partitions(label, closest_label, partitions,
-                             proximity)
+                                 proximity)
 
 
 def merge_partitions(
         source_label,
         target_label,
-        partitions: typing.Dict[int, WaveSpectrum2D],
-        proximity: typing.Dict[int, typing.List[int]]) -> WaveSpectrum2D:
+        partitions: Dict[int, WaveSpectrum2D],
+        proximity: Dict[int, List[int]]) -> WaveSpectrum2D:
     """
     Merge one partition into another partition. (**Has side-effects**)
     :param source_index: source index of the partition to merge in the list
@@ -335,35 +336,55 @@ def merge_partitions(
     :return: None
     """
 
-    # Get source/target partitions
+    # Add the source to the target spectrum.
     partitions[target_label] = partitions[target_label] + partitions[
         source_label]
+
+    # Remove the source from the partition dict
     partitions.pop(source_label)
 
+    # The merge is now complete, but we need to update the adjacency list that
+    # denotes which partitions border one-another since anything that bordered
+    # the source partition will now border the target partition. Furter, we need
+    # to remove references to the source partition in the adjacency list.
+
+    # loop over all partitions bordering the source partition
     for proximate_labels_to_source_label in proximity[source_label]:
+
+        # for the neighbour, get its list of partitions that border it.
         proximate_to_update = proximity[proximate_labels_to_source_label]
+
+        # find the index in this list that refers to the source
         index = proximate_to_update.index(source_label)
 
+        # If this is the target partition, merely remove the reference to the
+        # source partition from the list
         if proximate_labels_to_source_label == target_label:
             proximity[target_label].pop(index)
             continue
 
         #
+        # Make sure the partition listed as bordering the target partition.
         if proximate_labels_to_source_label not in proximity[target_label]:
             proximity[target_label].append(proximate_labels_to_source_label)
 
+        # If the target already is listed as bordering, merely remove the
+        # reference of the source from the list
         if target_label in proximate_to_update:
             proximate_to_update.pop(index)
         else:
+            # if it does not border, update the reference to the source with
+            # a reference to the target.
             proximate_to_update[index] = target_label
 
+    # We can now safely remove the list from the proximity dict.
     proximity.pop(source_label)
-    return partitions[target_label]
+    return None
 
 
 def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
-        typing.Tuple[typing.Dict[int, WaveSpectrum2D], typing.Dict[
-            int, typing.List[int]]]:
+        Tuple[Dict[int, WaveSpectrum2D], Dict[
+            int, List[int]]]:
     """
     Create partitioned spectra from a given 2D wavespectrum
     :param spectrum: 2D wavespectrum
@@ -384,33 +405,35 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
     # labels for each cell in the spectrum to which partition it belongs, an
     # ordered list with the label as index containing which partitions are
     # adjacent to the current partition and the labels.
-    partition_label, proximate = floodfill(
-        spectrum.frequency, spectrum.direction * numpy.pi / 180, density)
+    partition_label, proximate, peak_indices = floodfill(density)
 
     # We need to convert back to a list, and we need to do it in a somewhat
     # roundabout way as numba does not support dicts of lists (note, proximate
-    # currently is a "numba" dictionarly of numpy arrays)
+    # currently is a "numba" dictionary of numpy arrays)
     proximate_partitions = {}
     for label in proximate:
         proximate_partitions[label] = list(proximate[label])
 
     # Create Partition objects given the label array from the floodfill.
     partitions = {}
+
     # Create a dict of all draft partitions
     for label, proximity_list in proximate_partitions.items():
+        if label == 0:
+            continue
         mask = partition_label == label
         partitions[label] = spectrum.extract(mask)
     #
     # # merge low energy partitions
-    filter_for_low_energy(partitions, proximate_partitions, spectrum.m0(),
-                          config)
+    filter_for_low_energy(partitions, proximate_partitions, peak_indices,
+                          spectrum.m0(), config)
 
     # Return the partitions and the label array.
     return partitions, proximate_partitions
 
 
 def partition_marker_array(
-        partitions: typing.Dict[int, WaveSpectrum2D]) -> numpy.ndarray:
+        partitions: Dict[int, WaveSpectrum2D]) -> numpy.ndarray:
     a_label = list(partitions.keys())[0]
     marker_array = numpy.zeros(
         partitions[a_label].variance_density.shape) + numpy.nan
@@ -421,7 +444,7 @@ def partition_marker_array(
 
 
 def sum_partitions(
-        partitions: typing.Dict[int, WaveSpectrum2D]) -> WaveSpectrum2D:
+        partitions: Dict[int, WaveSpectrum2D]) -> WaveSpectrum2D:
     key = list(partitions.keys())[0]
     sum_spec = empty_spectrum2D_like(partitions[key])
     for _, spec in partitions.items():

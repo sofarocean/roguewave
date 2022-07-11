@@ -9,7 +9,6 @@ from roguewave.wavespectra.wavespectrum import WaveSpectrum, \
     extract_bulk_parameter
 from .partitioning import is_neighbour, default_partition_config, \
     partition_spectrum
-from roguewave.tools import _print
 from .classifiers import is_sea_spectrum
 from multiprocessing import cpu_count, get_context
 
@@ -396,7 +395,7 @@ def worker(spectrum):
 
 def partition_spectra(spectra2D: List[WaveSpectrum2D],
                       minimum_duration: timedelta,
-                      config=None, verbose=False) -> List[
+                      config=None, indent='') -> List[
     List[WaveSpectrum2D]]:
     if config:
         for key in config:
@@ -407,7 +406,7 @@ def partition_spectra(spectra2D: List[WaveSpectrum2D],
         config = DEFAULT_CONFIG_PARTITION_SPECTRA
 
     # Step 1: Partition the data
-    _print(verbose, ' - Partition Data')
+    logger.info( indent + ' - Partition Data')
     raw_partitions = []
     if config['parallel']:
         with get_context("spawn").Pool(processes=cpu_count()) as pool:
@@ -416,30 +415,29 @@ def partition_spectra(spectra2D: List[WaveSpectrum2D],
         raw_partitions = [partition for partition, _ in output]
     else:
         for index, spectrum in enumerate(spectra2D):
-            _print(verbose, f'\t {index:05d} out of {len(spectra2D)}')
+            logger.debug(indent + f'\t {index:05d} out of {len(spectra2D)}')
             partitions, _ = partition_spectrum(spectrum,
                                                config['partitionConfig'])
             raw_partitions.append(partitions)
 
     # Step 2: create a graph
-    _print(verbose, ' - Create Graph')
+    logger.info( indent + ' - Create Graph')
     graph = create_graph(raw_partitions, minimum_duration)
 
     # Step 3: create wave field from the graph
-    _print(verbose, ' - Create Wave Fields From Graph')
+    logger.info( indent + ' - Create Wave Fields From Graph')
     wave_fields = wave_fields_from(graph)
 
     # Step 4: Postprocessing
 
     # Apply a filter on the bulk parameters
-    _print(verbose, ' - Apply Bulk Filter')
+    logger.info( indent + ' - Apply Bulk Filter')
     if config['fieldFiltersettings']['filter']:
         wave_fields = filter_fields(
             wave_fields,
             min_duration=minimum_duration,
             config=config['fieldFiltersettings']
         )
-    _print(verbose, '*** Done ***\n' + 80 * '-' + '\n\n')
     return wave_fields
 
 
@@ -489,12 +487,11 @@ def get_spectral_partitions_from_2dspectra(
         for key, item in spectra.items():
             output[key] = partition_spectra(item,
                                             minimum_duration,
-                                            config, verbose)
+                                            config)
     elif isinstance(spectra, list):
         output = partition_spectra(spectra,
                                    minimum_duration,
-                                   config,
-                                   verbose)
+                                   config)
     else:
         raise Exception('Cannot process input')
 

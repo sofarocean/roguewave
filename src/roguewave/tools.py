@@ -11,6 +11,7 @@ Authors: Pieter Bart Smit
 
 from datetime import datetime, timezone
 import typing
+from roguewave import logger
 
 def to_datetime(time: typing.Union[float, int, datetime, str]):
     if time is None:
@@ -35,8 +36,3 @@ def datetime_to_iso_time_string(time: typing.Union[float, int, datetime, str]):
 
     time = to_datetime(time)
     return time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
-
-def _print(verbose, *narg, **kwargs):
-    if verbose:
-        print(*narg, **kwargs)

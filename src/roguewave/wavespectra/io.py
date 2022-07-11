@@ -34,6 +34,8 @@ from . import spectrum1D, spectrum2D
 from typing import Union, Dict, List
 import pickle
 import gzip
+from gzip import BadGzipFile
+from pickle import UnpicklingError
 import json
 import msgpack
 import os
@@ -47,7 +49,8 @@ _UNION = Union[
     Dict[str, List[WaveSpectrum2D]],
     Dict[str, List[List[WaveSpectrum2D]]],
     List[List[WaveSpectrum2D]],
-    List[List[DataFrame]]
+    List[List[DataFrame]],
+    Dict[int,List[DataFrame]]
 ]
 
 
@@ -91,18 +94,24 @@ def load_spectrum(filename: str) -> _UNION:
     try:
         with gzip.open(filename, 'rb') as file:
             data = file.read().decode('utf-8')
-        data = _deserialize(json.loads(data))
-    except:
-        try:
-            with open(filename, 'rb') as file:
-                data = msgpack.load(file)
-            data = _deserialize(data)
-        except:
-            with open(filename,'rb') as file:
-                data = pickle.load(file)
-            data = _deserialize(data)
+        return _deserialize(json.loads(data))
+    except BadGzipFile as error:
+        pass
 
-    return data
+
+    try:
+        with open(filename,'rb') as file:
+            data = pickle.load(file)
+        return _deserialize(data)
+    except UnpicklingError:
+        pass
+
+    try:
+        with open(filename, 'rb') as file:
+            data = msgpack.load(file)
+        return _deserialize(data)
+    except Exception as e:
+        raise e
 
 
 def _deserialize(data):
@@ -125,7 +134,9 @@ def _deserialize(data):
             # The keys directly map to the constructor arguments.
             return spectrum1D(**data)
         elif 'dataframe' in data:
-            return read_json(data['dataframe'])
+            df = read_json(data['dataframe'])
+            df['timestamp'] = df['timestamp'].apply(lambda x: x.tz_localize('utc'))
+            return df #DataFrame.from_dict(data['dataframe'])
         else:
             # Otherwise- this is a nested object where each key represents data
             # at a different Spotter/location. Loop over all keys and call the
@@ -192,7 +203,7 @@ def _serialize(_input):
         raise Exception('Cannot convert to json compatible type')
 
 
-def save_spectrum(_input: _UNION, filename: str, format='json', seperate_spotters_into_files=False):
+def save_spectrum(_input: _UNION, filename: str, format='json', separate_spotters_into_files=False):
     """
     Save spectral data, possible in nested form as returned by the spectral
     partition/reconstruction/etc. functions. Data is saved in JSON form
@@ -248,7 +259,7 @@ def save_spectrum(_input: _UNION, filename: str, format='json', seperate_spotter
             raise Exception('Unknown output format')
 
 
-    if seperate_spotters_into_files:
+    if separate_spotters_into_files:
         os.makedirs(filename, exist_ok=True)
         for key in _input:
             name = os.path.join(filename, key)

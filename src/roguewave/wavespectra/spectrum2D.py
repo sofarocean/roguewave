@@ -69,6 +69,7 @@ class WaveSpectrum2D(WaveSpectrum):
 
     @WaveSpectrum.variance_density.setter
     def variance_density(self,val:numpy.ndarray):
+        val = val.copy()
         mask = val < 0
         self._variance_density = MaskedArray(val,mask=mask,dtype='float64')
         self._update()
@@ -167,7 +168,9 @@ class WaveSpectrum2D(WaveSpectrum):
 
     def extract(self,mask:numpy.ndarray)->"WaveSpectrum2D":
         spectrum = self.copy()
-        density = numpy.ma.masked_array( spectrum.variance_density, mask=~mask)
+        density = spectrum.variance_density
+        density[~mask] = 0
+        density = numpy.ma.masked_array( density, mask=~mask)
         spectrum.variance_density = density
         return spectrum
 

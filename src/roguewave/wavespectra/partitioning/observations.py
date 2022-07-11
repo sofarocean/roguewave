@@ -9,7 +9,8 @@ from datetime import timedelta
 from pandas import DataFrame
 from roguewave.wavespectra import WaveSpectrum2D
 from typing import overload
-from roguewave.tools import _print
+from roguewave import logger
+from roguewave.wavespectra import logger
 
 default_config = {
     'smoothInTime': False,
@@ -95,16 +96,20 @@ def get_spectral_partitions_from_observations(
 
     if isinstance(spectra, dict):
         output = {}
+        number = len(spectra)
+        index = 0
         for key, item in spectra.items():
+            index += 1
             if item is None:
                 continue
+            logger.info( f'{index:05d} out of {number:05d} spotter: {key}' )
             output[key] = partition_observations_spectra(item,
                                                          minimum_duration,
-                                                         config, verbose)
+                                                         config,indent='    ')
     elif isinstance(spectra, list):
         output = partition_observations_spectra(spectra,
                                                 minimum_duration,
-                                                config, verbose)
+                                                config)
     else:
         raise Exception('Cannot process input')
 
@@ -113,7 +118,7 @@ def get_spectral_partitions_from_observations(
 
 def partition_observations_spectra(spectra: List[WaveSpectrum1D],
                                    minimum_duration: timedelta,
-                                   config=None, verbose=False) -> List[
+                                   config=None, indent='') -> List[
     List[WaveSpectrum2D]]:
     if config:
         for key in config:
@@ -128,16 +133,15 @@ def partition_observations_spectra(spectra: List[WaveSpectrum1D],
     # Prior to constructing spectra - smoothing the wave field can help create
     # more stable results.
 
-    _print(verbose, '*** Partitioning Observational Data ***\n' + 80 * '-' + '\n')
     if config['smoothInTime']:
-        _print(verbose, ' - Smoothing in time')
+        logger.info( ' - Smoothing in time')
         spectra = spectrum1D_time_filter(spectra)
 
     # Step 2: Create 2D wavefields from 1D spectra using a spectral estimator
     spectra2D = []
-    _print(verbose, ' - Create 2D Spectra')
+    logger.info( indent + ' - Create 2D Spectra')
     for index, spectrum in enumerate(spectra):
-        _print(verbose, f'\t {index:05d} out of {len(spectra)}')
+        logger.debug( indent + f'\t {index:05d} out of {len(spectra)}')
         spectra2D.append(
             spec2d_from_spec1d(
                 spectrum,
@@ -148,6 +152,6 @@ def partition_observations_spectra(spectra: List[WaveSpectrum1D],
                     'smoothingLengthscale']
             )
         )
-    return partition_spectra(spectra2D, minimum_duration, config=config['partition_spectra'], verbose=verbose)
+    return partition_spectra(spectra2D, minimum_duration, config=config['partition_spectra'],indent=indent)
 
 

@@ -1,3 +1,10 @@
+import logging
+import sys
+logging.getLogger(__name__).addHandler(logging.NullHandler())
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+logger.addHandler(logging.NullHandler())
+
 # External API tools
 
 from .externaldata import sofarspectralapi
@@ -24,3 +31,11 @@ from .wavespectra.partitioning.wavefields import (
 from .wavespectra.partitioning.observations import \
     get_bulk_partitions_from_observations, \
     get_spectral_partitions_from_observations
+
+def set_log_to_console(level=logging.INFO):
+    logger.addHandler(logging.StreamHandler(stream=sys.stdout))
+    logger.setLevel(level)
+
+def set_log_to_file(filename, level=logging.INFO):
+    logger.addHandler(logging.FileHandler(filename))
+    logger.setLevel(level)

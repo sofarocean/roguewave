@@ -1,13 +1,10 @@
-import logging
-logging.getLogger(__name__).addHandler(logging.NullHandler())
+
 
 from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
 from .spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
 from .estimators import spec2d_from_spec1d, spec1d_from_spec2d
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
-logger.addHandler(logging.NullHandler())
+from roguewave import logger
 
 def spectrum1D( frequency , varianceDensity ,a1=None,b1=None,a2=None,b2=None, latitude=None, longitude=None, timestamp=None)->WaveSpectrum1D:
     input = WaveSpectrum1DInput(

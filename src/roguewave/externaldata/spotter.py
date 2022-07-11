@@ -8,7 +8,7 @@ from roguewave.tools import datetime_to_iso_time_string, to_datetime
 from datetime import timedelta
 from .exceptions import ExceptionNoFrequencyData
 from pandas import read_csv, to_numeric
-from roguewave.tools import _print
+from roguewave import logger
 import numpy
 import os
 from multiprocessing.pool import ThreadPool
@@ -112,12 +112,14 @@ def get_spectrum_from_sofar_spotter_api(
     n = 0
     def worker( spotter_id):
         nonlocal n
+        logger.info(f'Downloading data for spotter {spotter_id}')
         try:
             data = _download_spectra(spotter_id,session,start_date,end_date,limit,verbose)
         except ExceptionNoFrequencyData as e:
             data = None
         n+=1
-        print( spotter_id , n/len(spotter_ids) * 100 )
+        progress = n/len(spotter_ids) * 100
+        logger.info( f'spotter: {spotter_id} - progress: {progress:06.2f} %')
         return data
 
     if parallel_download:
@@ -128,7 +130,7 @@ def get_spectrum_from_sofar_spotter_api(
             data[spotter_id] = spectra
     else:
         for spotter_id in spotter_ids:
-            _print(verbose, f'Downloading data for spotter {spotter_id}')
+            logger.info( f'Downloading data for spotter {spotter_id}')
             data[spotter_id] = worker(spotter_id)
 
     if not return_list:

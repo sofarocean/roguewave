@@ -9,7 +9,7 @@ setuptools.setup(
     version='0.1.16',
     license='Apache 2 License',
     install_requires=[
-        'pysofar>=0.1.11',
+        'pysofar>=0.1.12',
         'numpy',
         'netCDF4',
         'pandas',

@@ -223,7 +223,7 @@ def _download_spectra(
         session:SofarApi,
         start_date:Union[datetime, str,int,float] = None,
         end_date:Union[datetime, str,int,float] = None,
-        limit:int=MAX_LOCAL_LIMIT)-> List[WaveSpectrum1D]:
+        limit:int=None)-> List[WaveSpectrum1D]:
     """
     Function that downloads the Spectra from the API for the requested Spotter
     It abstracts away the limitation that the API can only return a maximum

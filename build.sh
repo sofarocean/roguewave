@@ -5,5 +5,5 @@ python setup.py sdist bdist_wheel
 twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 # For production PyPi:
 #twine upload dist/*
-pip install --index-url https://test.pypi.org/legacy/ --no-deps pysofar
+#pip install --index-url https://test.pypi.org/legacy/ --no-deps pysofar
 

@@ -1,6 +1,6 @@
 from datetime import datetime,timezone
 from pysofar.spotter import Spotter
-from roguewave.externaldata.spotter import get_spectrum_from_sofar_spotter_api
+from roguewave.externaldata.spotterapi import get_spectrum_from_sofar_spotter_api
 
 # Spotter ID
 spotter_id = 'SPOT-0740'

@@ -8,7 +8,7 @@ logger.addHandler(logging.NullHandler())
 # External API tools
 
 from .externaldata import sofarspectralapi
-from .externaldata.spotter import get_spectrum_from_sofar_spotter_api
+from .externaldata.spotterapi import get_spectrum_from_sofar_spotter_api
 from .externaldata.sofarspectralapi import load_sofar_spectral_file
 
 # Wave spectrum

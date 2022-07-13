@@ -1,3 +1,4 @@
 from . import exceptions
 from . import sofarspectralapi
-from . import spotter
+from . import spotterapi
+from . import spottersdcard

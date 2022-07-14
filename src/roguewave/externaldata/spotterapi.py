@@ -296,7 +296,6 @@ def _download_spectra(
         data += next
 
         # If we did not receive all data we requested...
-        print(len(next))
         if len(next) < local_limit:
             # , we are done...
             break

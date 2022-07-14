@@ -15,6 +15,7 @@ from typing import List, Union
 from roguewave.tools import datetime_to_iso_time_string
 from numpy.ma import MaskedArray
 from numba import njit
+from functools import cached_property
 
 class WaveSpectrum2DInput(WaveSpectrumInput):
     directions: Union[List[float], numpy.ndarray]
@@ -23,8 +24,6 @@ class WaveSpectrum2D(WaveSpectrum):
     def __init__(self,
                  wave_spectrum2D_input:WaveSpectrum2DInput
                  ):
-
-
         super().__init__(wave_spectrum2D_input)
         self.direction = numpy.array(wave_spectrum2D_input['directions'],
                                      dtype='float64')
@@ -33,35 +32,56 @@ class WaveSpectrum2D(WaveSpectrum):
         self._frequency_peak_indices = None
         self._direction_peak_indices = None
 
-    @property
+    @cached_property
     def e(self) -> numpy.array:
-        if self._e is None:
-            self._e = self._directional_moment('zero', 0, normalized=False)
-        return self._e
+        return _directional_moment( self.variance_density.filled(0),
+                                     self.radian_direction,
+                                     self._directional_difference,
+                                     'zero',
+                                     0,
+                                     False
+                                    )
 
-    @property
+    @cached_property
     def a1(self) -> numpy.array:
-        if self._a1 is None:
-            self._a1 = self._directional_moment('a', 1, normalized=True)
-        return self._a1
+        return _directional_moment( self.variance_density.filled(0),
+                                    self.radian_direction,
+                                    self._directional_difference,
+                                    'a',
+                                    1,
+                                    True
+        )
 
-    @property
+    @cached_property
     def b1(self) -> numpy.array:
-        if self._b1 is None:
-            self._b1 = self._directional_moment('b', 1, normalized=True)
-        return self._b1
+        return _directional_moment(self.variance_density.filled(0),
+                                   self.radian_direction,
+                                   self._directional_difference,
+                                   'b',
+                                   1,
+                                   True
+        )
 
-    @property
+
+    @cached_property
     def a2(self) -> numpy.array:
-        if self._a2 is None:
-            self._a2 = self._directional_moment('a', 2, normalized=True)
-        return self._a2
+        return _directional_moment( self.variance_density.filled(0),
+                                    self.radian_direction,
+                                    self._directional_difference,
+                                    'a',
+                                    2,
+                                    True
+        )
 
-    @property
+    @cached_property
     def b2(self) -> numpy.array:
-        if self._b2 is None:
-            self._b2 = self._directional_moment('b', 2, normalized=True)
-        return self._b2
+        return _directional_moment(self.variance_density.filled(0),
+                                   self.radian_direction,
+                                   self._directional_difference,
+                                   'b',
+                                   2,
+                                   True
+                                   )
 
 
     @WaveSpectrum.variance_density.setter
@@ -73,11 +93,14 @@ class WaveSpectrum2D(WaveSpectrum):
 
     def _update(self):
         super(WaveSpectrum2D, self)._update()
-        self._a1 = None
-        self._b1 = None
-        self._a2 = None
-        self._b2 = None
-        self._e = None
+
+        if hasattr(self,'e'): delattr(self,'e')
+        if hasattr(self,'a1'):    delattr(self,'a1')
+        if hasattr(self,'b1'):    delattr(self,'b1')
+        if hasattr(self,'a2'):    delattr(self,'a2')
+        if hasattr(self,'b2'):    delattr(self,'b2')
+
+        #self._e = None
 
     def _delta(self):
         angles = self.direction
@@ -86,27 +109,6 @@ class WaveSpectrum2D(WaveSpectrum):
                                     prepend=angles[-1]) + 180) % 360 - 180
         return (forward_diff + backward_diff) / 2
 
-    def _directional_moment(self, kind='zero', order=0,
-                            normalized=True) -> numpy.array:
-        delta = self._directional_difference
-        if kind == 'a':
-            harmonic = numpy.cos(self.radian_direction * order) * delta
-        elif kind == 'b':
-            harmonic = numpy.sin(self.radian_direction * order) * delta
-        elif kind == 'zero':
-            harmonic = delta
-        else:
-            raise Exception('Unknown moment')
-        density = self.variance_density.filled(0)
-
-        values = numpy.sum(density * harmonic[None, :], axis=-1)
-
-        if normalized:
-            scale = numpy.sum(density * delta[None, :], axis=-1)
-            scale[scale == 0] = 1
-        else:
-            scale = 1
-        return values / scale
 
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
         range = self._range(fmin, fmax)
@@ -194,9 +196,26 @@ def empty_spectrum2D_like(spectrum:WaveSpectrum2D)->WaveSpectrum2D:
     return WaveSpectrum2D(input)
 
 
-@njit(cached=True)
-def _directional_moment(density, radian_direction,directional_difference,
-                        kind='zero', order=0,normalized=True) -> numpy.array:
+@njit(cache=True)
+def _directional_moment(
+        density:numpy.ndarray,
+        radian_direction:numpy.ndarray,
+        directional_difference:numpy.ndarray,
+        kind:str='zero',
+        order:int=0,
+        normalized:bool=True) -> numpy.array:
+
+    """
+    Calculate the directional moments of a directional Spectrum
+
+    :param density: 2D variance density
+    :param radian_direction: radian angles
+    :param directional_difference: centered difference between directions
+    :param kind: which Fourier moment to calculate: a=cosine, b=sine
+    :param order: which order of Fourier moment to calculate
+    :param normalized: whether to return normalized or non-normalized moments
+    :return:
+    """
 
     if kind == 'a':
         harmonic = numpy.cos(radian_direction * order) * directional_difference
@@ -207,11 +226,11 @@ def _directional_moment(density, radian_direction,directional_difference,
     else:
         raise Exception('Unknown moment')
 
-    values = numpy.sum(density * harmonic[None, :], axis=-1)
+    values = numpy.sum(density * harmonic, axis=-1)
 
     if normalized:
-        scale = numpy.sum(density * delta[None, :], axis=-1)
-        scale[scale == 0] = 1
+        scale = numpy.sum(density * directional_difference, axis=-1)
+        scale[scale == 0] = numpy.float64(1.0)
     else:
-        scale = 1
+        scale = numpy.ones( values.shape[0] )
     return values / scale

@@ -1,6 +1,5 @@
 from .wavefields import bulk_parameters_partitions, DEFAULT_CONFIG_PARTITION_SPECTRA
-from .partitioning import partition_spectrum, default_partition_config
-from roguewave.wavespectra import spec1d_from_spec2d, WaveSpectrum1D
+from roguewave.wavespectra import WaveSpectrum1D
 from roguewave.wavespectra.operators import spectrum1D_time_filter
 from roguewave.wavespectra.estimators import spec2d_from_spec1d
 from .wavefields import partition_spectra
@@ -31,16 +30,14 @@ default_config = {
 def get_spectral_partitions_from_observations(
         spectra: Dict[str, List[WaveSpectrum1D]],
         minimum_duration: timedelta,
-        config=None,
-        verbose=False) -> Dict[str, List[List[WaveSpectrum2D]]]: ...
+        config=None) -> Dict[str, List[List[WaveSpectrum2D]]]: ...
 
 
 @overload
 def get_spectral_partitions_from_observations(
         spectra: List[WaveSpectrum1D],
         minimum_duration: timedelta,
-        config=None,
-        verbose=False) -> List[List[WaveSpectrum2D]]: ...
+        config=None) -> List[List[WaveSpectrum2D]]: ...
 
 
 @overload
@@ -89,8 +86,7 @@ def get_bulk_partitions_from_observations(
 def get_spectral_partitions_from_observations(
         spectra: Union[Dict[str, List[WaveSpectrum1D]], List[WaveSpectrum1D]],
         minimum_duration: timedelta,
-        config=None,
-        verbose=False) -> Union[
+        config=None) -> Union[
     Dict[str, List[List[WaveSpectrum2D]]], List[List[WaveSpectrum2D]]]:
     #
 

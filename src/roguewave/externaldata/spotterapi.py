@@ -14,10 +14,10 @@ Functions:
 - `get_spectrum_from_sofar_spotter_api`, function to call externally do download
                                          spectral data. Parallel if multiple Spotters
                                          are given.
-- `_get_next_20_spectra`, Internal helper function. Grabs the next 20 spectra
+- `_get_next_100_spectra`, Internal helper function. Grabs the next 100 spectra
                           from the given start data. Needed because the Spotter_API
-                          will return a maximum of 20 spectra per call.
-- '_download_spectra', function that abstracts away the limitation of 20 spectra
+                          will return a maximum of 100 spectra per call.
+- '_download_spectra', function that abstracts away the limitation of 100 spectra
                        per call. Handles updating the start date etc.
 
 How To Use This Module
@@ -37,7 +37,7 @@ TOC
 4) Main function: implementation of the main function
     - get_spectrum_from_sofar_spotter_api
 5) Private Functions: module private functions that are used by the main function:
-    - _get_next_20_spectra
+    - _get_next_100_spectra
     - _download_spectra
 """
 
@@ -57,9 +57,9 @@ from typing import Dict,List,Union, overload
 #======================
 
 # Maximum number of spectra to retrieve from the Spotter API per API call. Note
-# that 2- os a hard limit of the API. If set higher than 20 it will just return
-# 20 (and the implementation will fail)
-MAX_LOCAL_LIMIT = 20
+# that 2- os a hard limit of the API. If set higher than 100 it will just return
+# 100 (and the implementation will fail)
+MAX_LOCAL_LIMIT = 100
 
 # Maximum number of workers in the Threadpool. Should be set to something reasonable
 # to not overload wavefleet
@@ -168,14 +168,14 @@ def get_spectrum_from_sofar_spotter_api(
 #======================
 
 
-def _get_next_20_spectra(
+def _get_next_100_spectra(
         spotter: Spotter,
         start_date: Union[datetime, str,int,float] = None,
         end_date: Union[datetime, str,int,float] = None,
         limit: int = MAX_LOCAL_LIMIT,
 ) -> List[WaveSpectrum1D]:
     """
-    Function that downloads the next 20 Spectra from the Spotter API that lie
+    Function that downloads the next 100 Spectra from the Spotter API that lie
     within the given interval, starting from Spectra closest to the startdate.
 
     :param spotter: Spotter object from pysofar
@@ -227,7 +227,7 @@ def _download_spectra(
     """
     Function that downloads the Spectra from the API for the requested Spotter
     It abstracts away the limitation that the API can only return a maximum
-    of 20 Spectra for a single Spotter per call.
+    of 100 Spectra for a single Spotter per call.
 
     :param spotter_id: ID for the Spotter we want to download
     :param session: Active session of the SofarAPI
@@ -246,22 +246,22 @@ def _download_spectra(
     # Create a Spotter object to Query
     spotter = Spotter(spotter_id, spotter_id, session=session)
 
-    # Set the initial start date. This will get advanced for every 20 spectra
+    # Set the initial start date. This will get advanced for every 100 spectra
     # we download
     _start_date = start_date
     data = []
 
     while True:
-        # We can only download a maximum of 20 spectra at a time; so we need
+        # We can only download a maximum of 100 spectra at a time; so we need
         # to loop our request. We do not know how many spotters there are
         # in the given timeframe.
         #
         # Assumptions:
-        #   - spotter api returns a maximum of 20 items per requests
+        #   - spotter api returns a maximum of 100 items per requests
         #   - requests returned start from the requested start data and
         #     with the last entry either being the last entry that fits
         #     in the requested window, or merely the last sample that fits
-        #     in the 20 items.
+        #     in the 100 items.
         #   - requests returned are in order
 
         if limit is not None:
@@ -278,7 +278,7 @@ def _download_spectra(
 
         try:
             # Try to get the next batch of spectra
-            next = _get_next_20_spectra(spotter, _start_date,
+            next = _get_next_100_spectra(spotter, _start_date,
                                         end_date, local_limit)
 
         except ExceptionNoFrequencyData as e:
@@ -296,6 +296,7 @@ def _download_spectra(
         data += next
 
         # If we did not receive all data we requested...
+        print(len(next))
         if len(next) < local_limit:
             # , we are done...
             break

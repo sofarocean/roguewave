@@ -11,13 +11,10 @@ Authors: Pieter Bart Smit
 import numpy
 import numpy.ma
 from .wavespectrum import WaveSpectrum, WaveSpectrumInput
-from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
 from typing import List, Union
 from roguewave.tools import datetime_to_iso_time_string
-import scipy.ndimage
 from numpy.ma import MaskedArray
-import typing
-
+from numba import njit
 
 class WaveSpectrum2DInput(WaveSpectrumInput):
     directions: Union[List[float], numpy.ndarray]
@@ -142,7 +139,7 @@ class WaveSpectrum2D(WaveSpectrum):
         spectrum = self.copy()
 
         self_dens = numpy.ma.MaskedArray(spectrum.variance_density)
-        other_dens = numpy.ma.array(other.variance_density)
+        other_dens = numpy.ma.MaskedArray(other.variance_density)
 
         mask = self_dens.mask & other_dens.mask
 
@@ -153,7 +150,7 @@ class WaveSpectrum2D(WaveSpectrum):
     def __sub__(self, other: "WaveSpectrum2D") -> "WaveSpectrum2D":
         spectrum = self.copy()
         self_dens = numpy.ma.MaskedArray(spectrum.variance_density)
-        other_dens = numpy.ma.array(other.variance_density)
+        other_dens = numpy.ma.MaskedArray(other.variance_density)
 
         mask = self_dens.mask & other_dens.mask
 
@@ -197,5 +194,24 @@ def empty_spectrum2D_like(spectrum:WaveSpectrum2D)->WaveSpectrum2D:
     return WaveSpectrum2D(input)
 
 
+@njit(cached=True)
+def _directional_moment(density, radian_direction,directional_difference,
+                        kind='zero', order=0,normalized=True) -> numpy.array:
 
+    if kind == 'a':
+        harmonic = numpy.cos(radian_direction * order) * directional_difference
+    elif kind == 'b':
+        harmonic = numpy.sin(radian_direction * order) * directional_difference
+    elif kind == 'zero':
+        harmonic = directional_difference
+    else:
+        raise Exception('Unknown moment')
 
+    values = numpy.sum(density * harmonic[None, :], axis=-1)
+
+    if normalized:
+        scale = numpy.sum(density * delta[None, :], axis=-1)
+        scale[scale == 0] = 1
+    else:
+        scale = 1
+    return values / scale

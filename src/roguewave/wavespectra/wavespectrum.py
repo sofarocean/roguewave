@@ -15,6 +15,7 @@ from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, phase_velocity
 from datetime import datetime
 from numpy.ma import MaskedArray
+from dataclasses import dataclass
 import typing
 
 
@@ -26,41 +27,22 @@ class WaveSpectrumInput(TypedDict):
     longitude: Union[float, None]
 
 
+@dataclass
 class BulkVariables():
-    def __init__(self, spectrum):
-        if spectrum:
-            self.m0 = spectrum.m0()
-            self.hm0 = spectrum.hm0()
-            self.tm01 = spectrum.tm01()
-            self.tm02 = spectrum.tm02()
-            self.peak_period = spectrum.peak_period()
-            self.peak_direction = spectrum.peak_direction()
-            self.peak_spread = spectrum.peak_spread()
-            self.bulk_direction = spectrum.bulk_direction()
-            self.bulk_spread = spectrum.bulk_spread()
-            self.peak_frequency = spectrum.peak_frequency()
-            self.peak_wavenumber = spectrum.peak_wavenumber()
-            self.timestamp = spectrum.timestamp
-            self.latitude = spectrum.latitude
-            self.longitude = spectrum.longitude
-        else:
-            self._nanify()
-            self.timestamp = numpy.nan
-            self.latitude = numpy.nan
-            self.longitude = numpy.nan
-
-    def _nanify(self):
-        self.m0 = numpy.nan
-        self.hm0 = numpy.nan
-        self.tm01 = numpy.nan
-        self.tm02 = numpy.nan
-        self.peak_period = numpy.nan
-        self.peak_direction = numpy.nan
-        self.peak_spread = numpy.nan
-        self.bulk_direction = numpy.nan
-        self.bulk_spread = numpy.nan
-        self.peak_frequency = numpy.nan
-        self.peak_wavenumber = numpy.nan
+    m0:float = numpy.nan
+    hm0:float = numpy.nan
+    tm01:float = numpy.nan
+    tm02:float = numpy.nan
+    peak_period:float = numpy.nan
+    peak_direction:float = numpy.nan
+    peak_spread:float = numpy.nan
+    bulk_direction:float = numpy.nan
+    bulk_spread:float = numpy.nan
+    peak_frequency:float = numpy.nan
+    peak_wavenumber:float = numpy.nan
+    timestamp:datetime = None
+    latitude:float = numpy.nan
+    longitude:float = numpy.nan
 
 
 class WaveSpectrum():
@@ -318,7 +300,22 @@ class WaveSpectrum():
         return phase_velocity(self.wavenumber(depth), depth) / ustar
 
     def bulk_variables(self) -> BulkVariables:
-        return BulkVariables(self)
+        return BulkVariables(
+            m0 = self.m0(),
+            hm0=self.hm0(),
+            tm01=self.tm01(),
+            tm02=self.tm02(),
+            peak_period=self.peak_period(),
+            peak_direction=self.peak_direction(),
+            peak_spread=self.peak_spread(),
+            bulk_direction=self.bulk_direction(),
+            bulk_spread=self.bulk_spread(),
+            peak_frequency=self.peak_frequency(),
+            peak_wavenumber=self.peak_wavenumber(),
+            timestamp=self.timestamp,
+            latitude=self.latitude,
+            longitude=self.longitude
+        )
 
     def copy(self):
         pass

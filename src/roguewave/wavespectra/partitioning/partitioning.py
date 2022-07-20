@@ -307,10 +307,13 @@ def filter_for_low_energy(partitions: Dict[int, WaveSpectrum2D],
             else:
                 # Note we have to pass a numba typed list to avoid the deprecation
                 # warning on general python lists.
-                closest_label = find_label_closest_partition(
-                    label, numba.typed.List(proximity[label]),
-                    len(partition.direction), peak_indices)
 
+                if not len(proximity[label]) == 0:
+                    closest_label = find_label_closest_partition(
+                        label, numba.typed.List(proximity[label]),
+                        len(partition.direction), peak_indices)
+                else:
+                    closest_label = None
 
             # There is an edge case where there are no neighbours to merge with
             # hence the check

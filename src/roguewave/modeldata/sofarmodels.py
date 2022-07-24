@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from .timebase import ModelTimeConfiguration, timebase_forecast, timebase_lead, \
     timebase_evaluation
@@ -9,10 +9,8 @@ import json
 with open( os.path.expanduser('~/model_configuration.json'),'rb') as file:
     MODELS = json.load(file)
 
-
-def print_available_models():
-    for key in MODELS:
-        print(key)
+def available_models():
+    return list(MODELS.keys())
 
 @dataclass()
 class Model():
@@ -22,9 +20,18 @@ class Model():
     bucket: str
     resolution: str
     region: str
-    prefix: str
-    suffix: str
-    model_time_configuration: dict
+    key_template: str
+    filetype:str
+    model_time_configuration: ModelTimeConfiguration
+    _model_time_configuration: ModelTimeConfiguration =  field(init=False, repr=False)
+
+    @property
+    def model_time_configuration(self) -> ModelTimeConfiguration:
+        return self._model_time_configuration
+
+    @model_time_configuration.setter
+    def model_time_configuration(self, values):
+        self._model_time_configuration = ModelTimeConfiguration(**values)
 
 
 def get_model(name):
@@ -37,10 +44,21 @@ def _replace(string: str, properties):
             string = string.replace("{" + key + "}", value)
     return string
 
-
+#ecmwf/{prefix}{date_string}{hour_string}00{valid_time_date}{valid_time_hour}011
 def generate_aws_key(variable, init_time: datetime, forecast_hour: timedelta,
                      model: Model):
     #
+    if forecast_hour == timedelta(hours=0):
+        ecmwf_lead_zero_indicator = '011'
+    else:
+        ecmwf_lead_zero_indicator = '001'
+
+    if (init_time.hour == 0) or (init_time.hour == 12):
+        ecmwf_subcycle_string = 'A2P'
+    else:
+        ecmwf_subcycle_string = 'A2Q'
+    valid_time = init_time+forecast_hour
+
     properties = {
         "name": model.name,
         "label": model.label,
@@ -52,21 +70,25 @@ def generate_aws_key(variable, init_time: datetime, forecast_hour: timedelta,
         "forecasthour": "{hours:03d}".format(
             hours=int(forecast_hour.total_seconds() // 3600)),
         "variable": variable,
-        "key":model.key
+        "key":model.key,
+        "init_time_month": init_time.strftime("%m"),
+        "init_time_day": init_time.strftime("%d"),
+        "valid_time_month": valid_time.strftime("%m"),
+        "valid_time_day": valid_time.strftime("%d"),
+        "valid_time_hour": valid_time.strftime("%H"),
+        "ecmwf_subcycle_string":ecmwf_subcycle_string,
+        "ecmwf_lead_zero_indicator":ecmwf_lead_zero_indicator
     }
-    prefix = _replace(model.prefix, properties)
-    suffix = _replace(model.suffix, properties)
+    key = _replace(model.key_template, properties)
 
-    return f"{model.bucket}/{prefix}/{suffix}"
+    return f"{model.bucket}/{key}"
 
 
-def generate_forecast_keys(variable, init_time: datetime, duration: timedelta,
+def generate_forecast_keys_and_valid_times(variable, init_time: datetime, duration: timedelta,
                            model: Model) -> Tuple[List[str],List[datetime]] :
-    model_time_configuration = ModelTimeConfiguration(
-        **model.model_time_configuration)
 
     time_vector = timebase_forecast(init_time, duration,
-                                    time_configuration=model_time_configuration)
+                                    time_configuration=model.model_time_configuration)
 
     aws_keys = []
     valid_time = []
@@ -79,19 +101,19 @@ def generate_forecast_keys(variable, init_time: datetime, duration: timedelta,
     return aws_keys, valid_time
 
 
-def generate_lead_keys(variable, start_time: datetime, lead_time: timedelta,
-                       model: Model, exact=True) -> List[str]:
-    model_time_configuration = ModelTimeConfiguration(
-        **model.model_time_configuration)
+def generate_lead_keys_and_valid_times(variable, start_time: datetime, end_time: datetime,
+                            lead_time: timedelta, model: Model, exact=False) -> Tuple[List[str],List[datetime]]:
 
-    time_vector = timebase_lead(start_time, lead_time,
-                                time_configuration=model_time_configuration,
+    time_vector = timebase_lead(start_time, end_time, lead_time,
+                                time_configuration=model.model_time_configuration,
                                 exact=exact)
 
     aws_keys = []
+    valid_time = []
     for time in time_vector:
         aws_keys.append(
             generate_aws_key(variable, init_time=time[0],
                              forecast_hour=time[1], model=model)
         )
-    return aws_keys
+        valid_time.append(time[0] + time[1])
+    return aws_keys, valid_time

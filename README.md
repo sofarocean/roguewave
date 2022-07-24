@@ -26,7 +26,7 @@ SPECTRAL_API_TOKEN=_spectral_api_token_
 # Examples
 ### Retrieve Spectrum from observational Spotter API
 ```python
-from roguewave import get_spectrum_from_sofar_spotter_api
+from roguewave import get_spectrum
 from datetime import datetime, timezone
 import matplotlib.pyplot as plt
 
@@ -44,7 +44,7 @@ end_date = datetime(2021,1,6,0,0,0,tzinfo=timezone.utc)
 
 
 # Get the spectra
-spectra = get_spectrum_from_sofar_spotter_api(spotter_id,start_date,end_date,limit=10)
+spectra = get_spectrum(spotter_id,start_date,end_date,limit=10)
 
 # We now have spectra from the spotter we can interact with
 for key in spectra:

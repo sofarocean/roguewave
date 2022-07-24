@@ -48,15 +48,15 @@ class WaveSpectrum1D(WaveSpectrum):
 
     def _create_wave_spectrum_input(self) -> WaveSpectrum1DInput:
         return WaveSpectrum1DInput(
-            frequency=list(self.frequency),
-            varianceDensity=list(self.variance_density),
+            frequency=self.frequency,
+            varianceDensity=self.variance_density,
             timestamp=datetime_to_iso_time_string(self.timestamp),
             latitude=self.latitude,
             longitude=self.longitude,
-            a1=list(self.a1),
-            b1=list(self.b1),
-            a2=list(self.a2),
-            b2=list(self.b2)
+            a1=self.a1,
+            b1=self.b1,
+            a2=self.a2,
+            b2=self.b2
         )
 
     def copy(self) -> "WaveSpectrum1D":
@@ -66,10 +66,10 @@ class WaveSpectrum1D(WaveSpectrum):
             timestamp=self.timestamp,
             latitude=self.latitude,
             longitude=self.longitude,
-            a1=list(self.a1),
-            b1=list(self.b1),
-            a2=list(self.a2),
-            b2=list(self.b2)
+            a1=self.a1,
+            b1=self.b1,
+            a2=self.a2,
+            b2=self.b2
         )
         return WaveSpectrum1D(input)
 

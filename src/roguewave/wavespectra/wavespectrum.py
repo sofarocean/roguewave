@@ -13,9 +13,9 @@ from typing import TypedDict, List, Tuple, Union
 from .windSpotter import U10
 from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, phase_velocity
-from datetime import datetime
+from datetime import datetime, timezone
 from numpy.ma import MaskedArray
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import typing
 
 
@@ -28,21 +28,52 @@ class WaveSpectrumInput(TypedDict):
 
 
 @dataclass
-class BulkVariables():
-    m0:float = numpy.nan
-    hm0:float = numpy.nan
-    tm01:float = numpy.nan
-    tm02:float = numpy.nan
-    peak_period:float = numpy.nan
-    peak_direction:float = numpy.nan
-    peak_spread:float = numpy.nan
-    bulk_direction:float = numpy.nan
-    bulk_spread:float = numpy.nan
-    peak_frequency:float = numpy.nan
-    peak_wavenumber:float = numpy.nan
-    timestamp:datetime = None
-    latitude:float = numpy.nan
-    longitude:float = numpy.nan
+class WaveBulkData():
+    latitude: float = numpy.nan
+    longitude: float = numpy.nan
+    timestamp: datetime = datetime(2022, 1, 1, tzinfo=timezone.utc)
+    significant_waveheight: float = numpy.nan
+    peak_period: float = numpy.nan
+    mean_period: float = numpy.nan
+    peak_direction: float = numpy.nan
+    peak_directional_spread: float = numpy.nan
+    mean_direction: float = numpy.nan
+    mean_directional_spread: float = numpy.nan
+    peak_frequency: float = numpy.nan
+
+    _timestamp: datetime = field(init=False, repr=False)
+
+    @property
+    def timestamp(self) -> datetime:
+        return self._timestamp
+
+    @timestamp.setter
+    def timestamp(self, time):
+        if isinstance(time, property):
+            # Honestly not sure what is going on- but if we initialze
+            # timestamp with the default value of None a "property" object
+            # gets passed instead of just "None". This catches that and
+            # makes sure it all works. Bit of an edge case, should not
+            # happen if initialized with value. This seems to be due to
+            # the wave the dataclass and getters and setters interact and
+            # the magic involved to make it work.
+            time = time.fdel
+        self._timestamp = to_datetime(time)
+
+    def as_dict(self):
+        return {
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "timestamp": self.timestamp,
+            "significant_waveheight": self.significant_waveheight,
+            "peak_period": self.peak_period,
+            "mean_period": self.mean_period,
+            "peak_direction": self.peak_direction,
+            "peak_directional_spread": self.peak_directional_spread,
+            "mean_direction": self.mean_direction,
+            "mean_directional_spread": self.mean_directional_spread,
+            "peak_frequency": self.peak_frequency
+        }
 
 
 class WaveSpectrum():
@@ -55,7 +86,8 @@ class WaveSpectrum():
     angular_convention = 'Wave travel direction (going-to), measured anti-clockwise from East'
     bulk_properties = (
         'm0', 'hm0', 'tm01', 'tm02', 'peak_period', 'peak_direction',
-        'peak_spread','bulk_direction', 'bulk_spread', 'peak_frequency',
+        'peak_directional_spread', 'mean_direction', 'mean_directional_spread',
+        'peak_frequency',
         'peak_wavenumber', 'latitude', 'longitude', 'timestamp')
 
     def __init__(self,
@@ -71,25 +103,26 @@ class WaveSpectrum():
         self._peak_wavenumber = None
 
         # Type conversions are needed because the JSON serializer does not accept float32
-        self.frequency = numpy.array(wave_spectrum_input['frequency'],dtype='float64')
-        density = numpy.array(wave_spectrum_input['varianceDensity'],dtype='float64')
+        self.frequency = numpy.array(wave_spectrum_input['frequency'],
+                                     dtype='float64')
+        density = numpy.array(wave_spectrum_input['varianceDensity'],
+                              dtype='float64')
         mask = (density < 0) | numpy.isnan(density)
         density[mask] = numpy.nan
 
         self._variance_density = MaskedArray(
-            density,dtype='float64',mask=mask)
+            density, dtype='float64', mask=mask)
         self.timestamp = to_datetime(wave_spectrum_input['timestamp'])
 
         # There are cases that wavefleet returns None for latitude or longitude.
         # This is a bug - but to avoid issues we catch it here.
         if (wave_spectrum_input['longitude'] is None) or \
-            (wave_spectrum_input['latitude']) is None:
+                (wave_spectrum_input['latitude']) is None:
             self.longitude = None
             self.latitude = None
         else:
             self.longitude = float(wave_spectrum_input['longitude'])
             self.latitude = float(wave_spectrum_input['latitude'])
-
 
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
         pass
@@ -181,7 +214,7 @@ class WaveSpectrum():
         return numpy.sqrt(self.m0(fmin, fmax) / self.m2(fmin, fmax))
 
     def peak_index(self, fmin=0, fmax=numpy.inf) -> float:
-        if fmin==0 and fmax==numpy.inf:
+        if fmin == 0 and fmax == numpy.inf:
             if self._peak_index is None:
                 self._peak_index = numpy.argmax(self.e)
             return self._peak_index
@@ -203,7 +236,7 @@ class WaveSpectrum():
         b1 = self.b1[index]
         return self._mean_direction(a1, b1)
 
-    def peak_spread(self, fmin=0, fmax=numpy.inf):
+    def peak_directional_spread(self, fmin=0, fmax=numpy.inf):
         index = self.peak_index(fmin, fmax)
         a1 = self.a1[index]
         b1 = self.b1[index]
@@ -219,11 +252,11 @@ class WaveSpectrum():
             2 - 2 * numpy.sqrt(a1 ** 2 + b1 ** 2)) * 180 / numpy.pi
 
     @property
-    def mean_direction(self):
+    def mean_direction_per_frequency(self):
         return self._mean_direction(self.a1, self.b1)
 
     @property
-    def mean_spread(self):
+    def mean_spread_per_frequency(self):
         return self._spread(self.a1, self.b1)
 
     def _spectral_weighted(self, property, fmin=0, fmax=numpy.inf):
@@ -233,23 +266,23 @@ class WaveSpectrum():
         return numpy.trapz(property[range] * self.e[range],
                            self.frequency[range]) / self.m0(fmin, fmax)
 
-    def bulk_direction(self, fmin=0, fmax=numpy.inf):
-        return self._mean_direction(self.bulk_a1(fmin, fmax),
-                                    self.bulk_b1(fmin, fmax))
+    def mean_direction(self, fmin=0, fmax=numpy.inf):
+        return self._mean_direction(self.mean_a1(fmin, fmax),
+                                    self.mean_b1(fmin, fmax))
 
-    def bulk_spread(self, fmin=0, fmax=numpy.inf):
-        return self._spread(self.bulk_a1(fmin, fmax), self.bulk_b1(fmin, fmax))
+    def mean_directional_spread(self, fmin=0, fmax=numpy.inf):
+        return self._spread(self.mean_a1(fmin, fmax), self.mean_b1(fmin, fmax))
 
-    def bulk_a1(self, fmin=0, fmax=numpy.inf):
+    def mean_a1(self, fmin=0, fmax=numpy.inf):
         return self._spectral_weighted(self.a1, fmin, fmax)
 
-    def bulk_b1(self, fmin=0, fmax=numpy.inf):
+    def mean_b1(self, fmin=0, fmax=numpy.inf):
         return self._spectral_weighted(self.b1, fmin, fmax)
 
-    def bulk_a2(self, fmin=0, fmax=numpy.inf):
+    def mean_a2(self, fmin=0, fmax=numpy.inf):
         return self._spectral_weighted(self.a2, fmin, fmax)
 
-    def bulk_b2(self, fmin=0, fmax=numpy.inf):
+    def mean_b2(self, fmin=0, fmax=numpy.inf):
         return self._spectral_weighted(self.b2, fmin, fmax)
 
     def U10(self, **kwargs) -> Tuple[float, float]:
@@ -299,19 +332,16 @@ class WaveSpectrum():
             ustar = self.Ustar()
         return phase_velocity(self.wavenumber(depth), depth) / ustar
 
-    def bulk_variables(self) -> BulkVariables:
-        return BulkVariables(
-            m0 = self.m0(),
-            hm0=self.hm0(),
-            tm01=self.tm01(),
-            tm02=self.tm02(),
+    def bulk_variables(self) -> WaveBulkData:
+        return WaveBulkData(
+            significant_waveheight=self.significant_waveheight,
+            mean_period=self.mean_period,
             peak_period=self.peak_period(),
             peak_direction=self.peak_direction(),
-            peak_spread=self.peak_spread(),
-            bulk_direction=self.bulk_direction(),
-            bulk_spread=self.bulk_spread(),
+            peak_directional_spread=self.peak_directional_spread(),
+            mean_direction=self.mean_direction(),
+            mean_directional_spread=self.mean_directional_spread(),
             peak_frequency=self.peak_frequency(),
-            peak_wavenumber=self.peak_wavenumber(),
             timestamp=self.timestamp,
             latitude=self.latitude,
             longitude=self.longitude
@@ -323,11 +353,18 @@ class WaveSpectrum():
     def __add__(self, other) -> "WaveSpectrum":
         pass
 
+    @property
+    def significant_waveheight(self):
+        return self.hm0()
+
+    @property
+    def mean_period(self):
+        return self.tm01()
+
 
 def extract_bulk_parameter(parameter, spectra: typing.List[WaveSpectrum]):
-
     if parameter == 'timestamp':
-        output = numpy.empty(len(spectra),dtype='object')
+        output = numpy.empty(len(spectra), dtype='object')
     else:
         output = numpy.empty(len(spectra))
 

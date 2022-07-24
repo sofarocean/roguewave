@@ -330,7 +330,7 @@ def are_different_fields( spec1:WaveSpectrum2D,spec2:WaveSpectrum2D,config ):
     delta_waveheight = numpy.abs( spec1.hm0()- spec2.hm0())
     delta_period = numpy.abs(spec1.tm01() - spec2.tm01())
     delta_direction = numpy.abs(
-        (spec1.bulk_direction() - spec2.bulk_direction() + 180) % 360 - 180
+        (spec1.mean_direction() - spec2.mean_direction() + 180) % 360 - 180
     )
 
     return \
@@ -352,7 +352,7 @@ def filter_field(field: List[WaveSpectrum2D], min_duration: timedelta,
         previous_field = field[index - 1]
         # delta_period = numpy.abs(spec.tm01() - previous_field.tm01())
         # delta_direction = numpy.abs(
-        #     (spec.bulk_direction() - previous_field.bulk_direction() + 180) % 360 - 180
+        #     (spec.mean_direction() - previous_field.mean_direction() + 180) % 360 - 180
         # )
         if are_different_fields(spec,previous_field,config): #delta_direction > config['maxDeltaDirection'] or delta_period > config['maxDeltaPeriod']:
             current_field += 1

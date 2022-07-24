@@ -118,9 +118,9 @@ class WaveSpectrum2D(WaveSpectrum):
     def _create_wave_spectrum_input(self)->WaveSpectrum2DInput:
         data = self.variance_density.filled(-1)
         return WaveSpectrum2DInput(
-            frequency=list(self.frequency),
-            directions=list(self.direction),
-            varianceDensity=data.tolist(),
+            frequency=self.frequency,
+            directions=self.direction,
+            varianceDensity=data,
             timestamp=datetime_to_iso_time_string(self.timestamp),
             latitude=self.latitude,
             longitude=self.longitude,

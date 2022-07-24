@@ -26,26 +26,7 @@ How To Use This Module
 3. load data: data = load_spectrum(filename)
 
 """
-from .spectrum1D import WaveSpectrum1D
-from .spectrum2D import WaveSpectrum2D
-from pandas import DataFrame, read_json
-from typing import Union, Dict, List
-from roguewave.io.io import save,load
-
-_UNION = Union[
-    WaveSpectrum1D,
-    WaveSpectrum2D,
-    List[WaveSpectrum1D],
-    List[WaveSpectrum2D],
-    Dict[str, List[WaveSpectrum1D]],
-    Dict[str, List[WaveSpectrum2D]],
-    Dict[str, List[List[WaveSpectrum2D]]],
-    List[List[WaveSpectrum2D]],
-    List[List[DataFrame]],
-    Dict[int,List[DataFrame]]
-]
-
-
+from roguewave.io.io import save,load, _UNION
 
 def load_spectrum(filename: str) -> _UNION:
     """

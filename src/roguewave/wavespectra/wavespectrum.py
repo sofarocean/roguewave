@@ -13,11 +13,11 @@ from typing import TypedDict, List, Tuple, Union
 from .windSpotter import U10
 from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, phase_velocity
-from datetime import datetime, timezone
+from datetime import datetime
 from numpy.ma import MaskedArray
-from dataclasses import dataclass, field
 import typing
 
+from roguewave.metoceandata import WaveBulkData
 
 class WaveSpectrumInput(TypedDict):
     frequency: List[float]
@@ -25,55 +25,6 @@ class WaveSpectrumInput(TypedDict):
     timestamp: Union[str, datetime, int, float]
     latitude: Union[float, None]
     longitude: Union[float, None]
-
-
-@dataclass
-class WaveBulkData():
-    latitude: float = numpy.nan
-    longitude: float = numpy.nan
-    timestamp: datetime = datetime(2022, 1, 1, tzinfo=timezone.utc)
-    significant_waveheight: float = numpy.nan
-    peak_period: float = numpy.nan
-    mean_period: float = numpy.nan
-    peak_direction: float = numpy.nan
-    peak_directional_spread: float = numpy.nan
-    mean_direction: float = numpy.nan
-    mean_directional_spread: float = numpy.nan
-    peak_frequency: float = numpy.nan
-
-    _timestamp: datetime = field(init=False, repr=False)
-
-    @property
-    def timestamp(self) -> datetime:
-        return self._timestamp
-
-    @timestamp.setter
-    def timestamp(self, time):
-        if isinstance(time, property):
-            # Honestly not sure what is going on- but if we initialze
-            # timestamp with the default value of None a "property" object
-            # gets passed instead of just "None". This catches that and
-            # makes sure it all works. Bit of an edge case, should not
-            # happen if initialized with value. This seems to be due to
-            # the wave the dataclass and getters and setters interact and
-            # the magic involved to make it work.
-            time = time.fdel
-        self._timestamp = to_datetime(time)
-
-    def as_dict(self):
-        return {
-            "latitude": self.latitude,
-            "longitude": self.longitude,
-            "timestamp": self.timestamp,
-            "significant_waveheight": self.significant_waveheight,
-            "peak_period": self.peak_period,
-            "mean_period": self.mean_period,
-            "peak_direction": self.peak_direction,
-            "peak_directional_spread": self.peak_directional_spread,
-            "mean_direction": self.mean_direction,
-            "mean_directional_spread": self.mean_directional_spread,
-            "peak_frequency": self.peak_frequency
-        }
 
 
 class WaveSpectrum():
@@ -375,3 +326,4 @@ def extract_bulk_parameter(parameter, spectra: typing.List[WaveSpectrum]):
         else:
             output[index] = temp
     return output
+

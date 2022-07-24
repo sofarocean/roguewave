@@ -28,7 +28,7 @@ How To Use This Module
 """
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
 from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
-from roguewave.wavespectra.wavespectrum import WaveBulkData
+from roguewave.metoceandata import WaveBulkData
 from roguewave import spectrum1D, spectrum2D
 from pandas import DataFrame, read_json
 from typing import Union, Dict, List
@@ -51,9 +51,10 @@ _UNION = Union[
     Dict[str, List[List[WaveSpectrum2D]]],
     List[List[WaveSpectrum2D]],
     List[List[DataFrame]],
-    Dict[int,List[DataFrame]]
+    Dict[int,List[DataFrame]],
+    Dict[str,List[WaveBulkData]],
+    Dict[str,DataFrame]
 ]
-
 
 
 def _b64_encode_numpy(val:numpy.ndarray)->dict:
@@ -104,9 +105,13 @@ def object_hook(dictionary:dict):
     if '__class__' in dictionary:
         if dictionary['__class__'] == 'DataFrame':
             #
-            df = read_json(dictionary['data']['dataframe'])
-            df['timestamp'] = df['timestamp'].apply(
-                lambda x: x.tz_localize('utc'))
+            #print(dictionary['data'])
+            df = read_json(dictionary['data'])
+            if 'timestamp' in df:
+                df['timestamp'] = df['timestamp'].apply(
+                    lambda x: x.tz_localize('utc'))
+            else:
+                df.index = [ x.tz_localize('utc') for x in df.index]
             return df
         elif dictionary['__class__'] == 'WaveSpectrum1D':
             return spectrum1D(**dictionary['data'])

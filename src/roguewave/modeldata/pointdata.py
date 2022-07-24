@@ -8,7 +8,7 @@ from itertools import repeat
 from datetime import datetime
 import tqdm
 from roguewave.wavespectra.wavespectrum import WaveSpectrum
-from roguewave.wavespectra.wavespectrum import WaveBulkData
+from ..metoceandata import WaveBulkData
 from typing import TypedDict
 
 BLOCKSIZE = 1024

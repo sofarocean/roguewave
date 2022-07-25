@@ -7,4 +7,5 @@ pandas
 qpsolvers
 msgpack
 s3fs
-import h5netcdf
+h5netcdf
+tqdm

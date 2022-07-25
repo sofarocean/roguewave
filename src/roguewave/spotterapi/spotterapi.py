@@ -52,7 +52,8 @@ from roguewave import logger
 from roguewave.tools import datetime_to_iso_time_string, to_datetime
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, \
     WaveSpectrum1DInput
-from roguewave.metoceandata import WaveBulkData, as_dataframe, WindData, SSTData, MetoceanData
+from roguewave.metoceandata import WaveBulkData, as_dataframe, WindData, \
+    SSTData, MetoceanData, BarometricPressure
 from typing import Dict, List, Union, overload, TypedDict, Tuple
 from tqdm import tqdm
 from pandas import DataFrame
@@ -88,12 +89,14 @@ class ApiWaveData(TypedDict):
     latitude: float
     longitude: float
 
+
 class ApiWindData(TypedDict):
     speed: float
     direction: float
     timestamp: str
     latitude: float
     longitude: float
+
 
 class ApiSSTData(TypedDict):
     degrees: float
@@ -107,6 +110,7 @@ class VariablesToInclude(TypedDict):
     waves: bool
     wind: bool
     surfaceTemp: bool
+    barometerData: bool
 
 
 # 3) Interfaces
@@ -272,6 +276,7 @@ def get_data(
         include_directional_moments=False,
         include_waves=True,
         include_wind=False,
+        include_barometer_data=False,
         include_surface_temp_data=False,
         session: SofarApi = None,
         parallel_download=True,
@@ -286,6 +291,7 @@ def get_data(
         wind=include_wind,
         surfaceTemp=include_surface_temp_data,
         frequencyData=include_frequency_data,
+        barometerData=include_barometer_data,
     )
 
     if not isinstance(spotter_ids, list):
@@ -329,7 +335,7 @@ def get_data(
 def _download_data(
         spotter_id: str,
         session: SofarApi,
-        variables_to_include:VariablesToInclude,
+        variables_to_include: VariablesToInclude,
         start_date: Union[datetime, str, int, float] = None,
         end_date: Union[datetime, str, int, float] = None,
         bulk_data_as_dataframe: bool = True,
@@ -437,11 +443,12 @@ def _download_data(
 
 def _get_next_page(
         spotter: Spotter,
-        variables_to_include:VariablesToInclude,
+        variables_to_include: VariablesToInclude,
         start_date: Union[datetime, str, int, float] = None,
         end_date: Union[datetime, str, int, float] = None,
         limit: int = MAX_LOCAL_LIMIT,
-) -> Tuple[Dict[str, Union[List[WaveSpectrum1D], List[WaveBulkData]]], int, datetime]:
+) -> Tuple[
+    Dict[str, Union[List[WaveSpectrum1D], List[WaveBulkData]]], int, datetime]:
     """
     Function that downloads the page of Data from the Spotter API that lie
     within the given interval, starting from the record closest to the startdate.
@@ -483,6 +490,7 @@ def _get_next_page(
                     'frequencyData'],
                 include_directional_moments=variables_to_include[
                     'frequencyData'],
+                include_barometer_data=variables_to_include['barometerData'],
                 include_waves=variables_to_include['waves'],
                 include_wind=variables_to_include['wind'],
                 include_surface_temp_data=variables_to_include[
@@ -498,17 +506,17 @@ def _get_next_page(
 
     out = {}
     max_num_items = 0
-    max_timestamp = datetime(1970,1,1,tzinfo=timezone.utc)
+    max_timestamp = datetime(1970, 1, 1, tzinfo=timezone.utc)
     #
     # Loop over all possible variables
-    for var_name,include_variable in variables_to_include.items():
+    for var_name, include_variable in variables_to_include.items():
         #
         # Did we want to include this variable?
         if include_variable:
             #
             # If so- was it returned? If not- raise error
             if var_name not in json_data:
-                raise ExceptionNoDataForVariable( var_name )
+                raise ExceptionNoDataForVariable(var_name)
 
             # If so- were any elements returned for this period? If not continue
             # We could error here, but there may be gaps in data for certain
@@ -527,19 +535,120 @@ def _get_next_page(
             # How many items were returned (counting doubles and none values,
             # this is used for the pagination logic which only knows if it is
             # done if less then the requested data was returned).
-            max_num_items = max( max_num_items, elements_returned )
+            max_num_items = max(max_num_items, elements_returned)
 
             # Filter for doubles.
             json_data[var_name] = _unique_filter(json_data[var_name])
 
             # Add to output
             out[var_name] = \
-                [  _get_class(var_name,data) for data in json_data[var_name] ]
+                [_get_class(var_name, data) for data in json_data[var_name]]
 
             if out[var_name][-1].timestamp > max_timestamp:
                 max_timestamp = out[var_name][-1].timestamp
 
     return out, max_num_items, max_timestamp
+
+
+def search_circle(
+        start_date: Union[datetime, str],
+        end_date: Union[datetime, str],
+        center_lat_lon: Tuple,
+        radius: float,
+        session: SofarApi=None,
+        variables_to_include: VariablesToInclude = None,
+        page_size=500,
+        bulk_data_as_dataframe: bool = True
+):
+    geometry = {'type': 'circle', 'points': center_lat_lon, 'radius': radius}
+
+    return search(start_date, end_date, geometry, session,
+                  variables_to_include, page_size, bulk_data_as_dataframe)
+
+
+def search_rectangle(
+        start_date: Union[datetime, str],
+        end_date: Union[datetime, str],
+        north_west_lat_lon,
+        south_east_lat_lon,
+        session: SofarApi=None,
+        variables_to_include: VariablesToInclude = None,
+        page_size=500,
+        bulk_data_as_dataframe: bool = True
+):
+    geometry = {'type': 'envelope',
+                'points': [north_west_lat_lon, south_east_lat_lon],
+                'radius': None}
+
+    return search(start_date, end_date, geometry, session,
+                  variables_to_include, page_size, bulk_data_as_dataframe)
+
+
+def search(start_date: Union[datetime, str],
+           end_date: Union[datetime, str],
+           geometry: dict,
+           session: SofarApi=None,
+           variables_to_include: VariablesToInclude = None,
+           page_size=500,
+           bulk_data_as_dataframe: bool = True
+           ):
+    if session is None:
+        session = SofarApi()
+
+    if variables_to_include is None:
+        variables_to_include = VariablesToInclude(
+            frequencyData=True, waves=True, wind=True, surfaceTemp=True,
+            barometerData=True
+        )
+
+    start_date_str = datetime_to_iso_time_string(start_date)
+    end_date_str = datetime_to_iso_time_string(end_date)
+
+    shape = geometry['type']
+    shape_params = geometry['points']
+    radius = geometry['radius']
+
+    generator = session.search(
+        shape=shape,
+        shape_params=shape_params,
+        start_date=start_date_str,
+        end_date=end_date_str,
+        radius=radius,
+        page_size=page_size,
+        return_generator=True
+    )
+
+    spotters = {}
+    # loop over all spotters returned
+    for spotter in generator:
+        spotter_id = spotter['spotterId']
+        # loop over keys we can parse
+        for key in variables_to_include:
+            if key in spotter:
+                item = spotter[key]
+                if not item:
+                    # no data
+                    continue
+
+                item['latitude'] = spotter['latitude']
+                item['longitude'] = spotter['longitude']
+                item['timestamp'] = spotter['timestamp']
+                data = _get_class(key, item)
+                if spotter_id not in spotters:
+                    spotters[spotter_id] = {}
+
+                if key not in spotters[spotter_id]:
+                    spotters[spotter_id][key] = []
+
+                spotters[spotter_id][key].append(data)
+
+
+    for spotter_id in spotters:
+        for key in spotters[spotter_id]:
+            if bulk_data_as_dataframe and (not key == 'frequencyData'):
+                spotters[spotter_id][key]= as_dataframe(spotters[spotter_id][key])
+    return spotters
+
 
 # 6) Helper Functions
 # ======================
@@ -560,7 +669,8 @@ def _unique_filter(data):
 
 
 def _none_filter(data: List[Union[WaveSpectrum1D, WaveBulkData]]):
-    F = lambda x: (x['latitude'] is not None) and (x['longitude'] is not None) and \
+    F = lambda x: (x['latitude'] is not None) and (
+            x['longitude'] is not None) and \
                   (x['timestamp'] is not None)
 
     return list(filter(F, data))
@@ -587,5 +697,7 @@ def _get_class(key, data) -> Union[MetoceanData, WaveSpectrum1D]:
         return WindData(**data)
     elif key == 'surfaceTemp':
         return SSTData(**data)
+    elif key == 'barometerData':
+        return BarometricPressure(**data)
     else:
         raise Exception('Unknown variable')

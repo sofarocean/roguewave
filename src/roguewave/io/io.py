@@ -28,18 +28,17 @@ How To Use This Module
 """
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
 from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
-from roguewave.metoceandata import WaveBulkData
+from roguewave.metoceandata import WaveBulkData, WindData, SSTData,BarometricPressure
 from roguewave import spectrum1D, spectrum2D
 from pandas import DataFrame, read_json
 from typing import Union, Dict, List
 from datetime import datetime
 import gzip
-from pickle import UnpicklingError
 import json
 import os
 import numpy
 import base64
-from roguewave.tools import datetime_to_iso_time_string
+
 
 _UNION = Union[
     WaveSpectrum1D,
@@ -98,6 +97,12 @@ class NumpyEncoder(json.JSONEncoder):
             return {'__class__': 'WaveSpectrum2D', 'data':obj._create_wave_spectrum_input()}
         elif isinstance(obj, WaveBulkData):
             return {'__class__': 'WaveBulkData', 'data':obj.as_dict()}
+        elif isinstance(obj, WindData):
+            return {'__class__': 'WindData', 'data':obj.as_dict()}
+        elif isinstance(obj, SSTData):
+            return {'__class__': 'SSTData', 'data':obj.as_dict()}
+        elif isinstance(obj, BarometricPressure):
+            return {'__class__': 'BarometricPressure', 'data':obj.as_dict()}
         else:
             return json.JSONEncoder.default(self, obj)
 
@@ -123,6 +128,14 @@ def object_hook(dictionary:dict):
             return datetime.fromisoformat( dictionary['data'] )
         elif dictionary['__class__'] == 'WaveBulkData':
             return WaveBulkData(**dictionary['data'])
+        elif dictionary['__class__'] == 'WaveBulkData':
+            return WaveBulkData(**dictionary['data'])
+        elif dictionary['__class__'] == 'WindData':
+            return WindData(**dictionary['data'])
+        elif dictionary['__class__'] == 'SSTData':
+            return SSTData(**dictionary['data'])
+        elif dictionary['__class__'] == 'BarometricPressure':
+            return BarometricPressure(**dictionary['data'])
     else:
         # legacy - should delete soonish.
         if 'directions' in dictionary:

@@ -7,6 +7,7 @@ from pandas import DataFrame
 
 from roguewave.tools import to_datetime
 
+
 @dataclass
 class MetoceanData():
     latitude: float = numpy.nan
@@ -93,6 +94,24 @@ class WindData(MetoceanData):
             "speed": self.speed,
             "direction": self.direction,
             "seasurfaceId": self.seasurfaceId
+        }
+
+@dataclass
+class BarometricPressure(MetoceanData):
+    units: str = ''
+    value:float = numpy.nan
+    unit_type: str = ''
+    data_type_name: str = ''
+
+    def as_dict(self):
+        return {
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "timestamp": self.timestamp,
+            "units": self.units,
+            "unit_type": self.unit_type,
+            "data_type_name": self.data_type_name,
+            "value": self.value
         }
 
 

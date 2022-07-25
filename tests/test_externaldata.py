@@ -1,6 +1,6 @@
 from datetime import datetime,timezone
 from pysofar.spotter import Spotter
-from roguewave.externaldata.spotterapi import get_spectrum_from_sofar_spotter_api
+from roguewave.externaldata.spotterapi import get_spectrum
 
 # Spotter ID
 spotter_id = 'SPOT-0740'
@@ -16,9 +16,9 @@ exact_first_date = datetime(2021,1,1,0,39,31,tzinfo=timezone.utc)
 
 limit = 21
 
-def test_get_spectrum_from_sofar_spotter_api():
+def test_get_spectrum():
     spotter = Spotter(spotter_id, spotter_id)
-    spectra = get_spectrum_from_sofar_spotter_api(spotter, start_date, end_date,limit=limit)
+    spectra = get_spectrum(spotter, start_date, end_date,limit=limit)
 
     assert len(spectra) == limit
     assert spotter.id == spotter_id

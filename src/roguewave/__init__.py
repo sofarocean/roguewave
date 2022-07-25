@@ -8,7 +8,6 @@ logger.addHandler(logging.NullHandler())
 # External API tools
 
 from .modeldata import sofarspectralapi
-from .observationaldata.spotterapi import get_spectrum_from_sofar_spotter_api
 from roguewave.modeldata.sofarspectralapi import load_sofar_spectral_file
 
 # Wave spectrum
@@ -22,7 +21,8 @@ from .wavespectra import spectrum1D, spectrum2D
 from .wavespectra.estimators import convert_to_1d_spectrum,convert_to_2d_spectrum
 
 ## save/load
-from .wavespectra.io import load_spectrum, save_spectrum
+from .wavespectra.io import load_spectrum, save_spectrum # Depricated
+from .io.io import save,load
 
 ## Partitioning
 from .wavespectra.partitioning.wavefields import (

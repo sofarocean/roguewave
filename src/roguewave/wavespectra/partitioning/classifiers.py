@@ -230,9 +230,9 @@ def match(model_fields: List[DataFrame],
             #
             lag = find_model_lag(
                 model['timestamp'],
-                [model['hm0'], model['tm01'], model['bulk_direction']],
+                [model['hm0'], model['tm01'], model['mean_direction']],
                 obs['timestamp'],
-                [obs['hm0'], obs['tm01'], obs['bulk_direction']],
+                [obs['hm0'], obs['tm01'], obs['mean_direction']],
                 time_buffer,
                 wrapping_angle=[None, None, 360]
             )
@@ -240,7 +240,7 @@ def match(model_fields: List[DataFrame],
                 # if the lag is None the sections do not overlap
                 continue
 
-            variables = ['hm0', 'tm01', 'bulk_direction']
+            variables = ['hm0', 'tm01', 'mean_direction']
             wrapping_angles = [None, None, 360]
             fit = {}
             # Calculate the fit value for waveheight, period and direction once
@@ -262,7 +262,7 @@ def match(model_fields: List[DataFrame],
             # If the fit value is good enough- we consider it a match
             if fit['hm0'] > waveheight_threshold and fit[
                 'tm01'] > period_threshold and fit[
-                'bulk_direction'] > direction_threshold:
+                'mean_direction'] > direction_threshold:
 
                 output.append(MatchOutput(
                     model_index=model_index,

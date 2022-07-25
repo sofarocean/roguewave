@@ -26,33 +26,7 @@ How To Use This Module
 3. load data: data = load_spectrum(filename)
 
 """
-from .spectrum1D import WaveSpectrum1D
-from .spectrum2D import WaveSpectrum2D
-from .wavespectrum import WaveSpectrum
-from pandas import DataFrame, read_json
-from . import spectrum1D, spectrum2D
-from typing import Union, Dict, List
-import pickle
-import gzip
-from gzip import BadGzipFile
-from pickle import UnpicklingError
-import json
-import msgpack
-import os
-
-_UNION = Union[
-    WaveSpectrum1D,
-    WaveSpectrum2D,
-    List[WaveSpectrum1D],
-    List[WaveSpectrum2D],
-    Dict[str, List[WaveSpectrum1D]],
-    Dict[str, List[WaveSpectrum2D]],
-    Dict[str, List[List[WaveSpectrum2D]]],
-    List[List[WaveSpectrum2D]],
-    List[List[DataFrame]],
-    Dict[int,List[DataFrame]]
-]
-
+from roguewave.io.io import save,load, _UNION
 
 def load_spectrum(filename: str) -> _UNION:
     """
@@ -91,116 +65,8 @@ def load_spectrum(filename: str) -> _UNION:
           of partitioned data - each partition in itself is a list of
           2D wavespectra ordered in time.
     """
-    try:
-        with gzip.open(filename, 'rb') as file:
-            data = file.read().decode('utf-8')
-        return _deserialize(json.loads(data))
-    except BadGzipFile as error:
-        pass
 
-
-    try:
-        with open(filename,'rb') as file:
-            data = pickle.load(file)
-        return _deserialize(data)
-    except UnpicklingError:
-        pass
-
-    try:
-        with open(filename, 'rb') as file:
-            data = msgpack.load(file)
-        return _deserialize(data)
-    except Exception as e:
-        raise e
-
-
-def _deserialize(data):
-    """
-    Convert the JSON representation of (nested) wavespectra back into native
-    python representation.
-    :param data: serialized data
-    :return: native python representation.
-    """
-
-    if isinstance(data, (dict)):
-        # if the dictionary contains "directions" or "frequency" as keys these
-        # are serialized spectral objects/
-        if 'directions' in data:
-            # if directions -> create a wavespectrum2d. The keys directly map
-            # to the constructor arguments.
-            return spectrum2D(**data)
-        elif 'frequency' in data:
-            # if not directions but has frequency -> create a wavespectrum1d.
-            # The keys directly map to the constructor arguments.
-            return spectrum1D(**data)
-        elif 'dataframe' in data:
-            df = read_json(data['dataframe'])
-            df['timestamp'] = df['timestamp'].apply(lambda x: x.tz_localize('utc'))
-            return df #DataFrame.from_dict(data['dataframe'])
-        else:
-            # Otherwise- this is a nested object where each key represents data
-            # at a different Spotter/location. Loop over all keys and call the
-            # function recursively.
-            output = {}
-            for key in data:
-                output[key] = _deserialize(data[key])
-            return output
-    elif isinstance(data, list):
-        # This is a nested object where each entry represents data
-        # at a different Spotter/location. Loop over all entries and call the
-        # function recursively.
-        output = []
-        for item in data:
-            output.append(_deserialize(item))
-        return output
-    elif data is None:
-        return None
-    else:
-        raise Exception('Cannot convert to json compatible type')
-
-
-def _serialize(_input):
-    """
-    Convert nested objects into a form that can be serialized as JSON. The lowest
-    level data structure is either  WaveSpectrum1D or WaveSpectrum2D.
-
-    :param _input: see load_spectrum
-    :return: object that can be json Serialized
-    """
-
-    if isinstance(_input, WaveSpectrum):
-        # If the input is of type spectrum convert the spectra into a JSON form
-        if isinstance(_input, WaveSpectrum1D):
-            return _input._create_wave_spectrum_input()
-        elif isinstance(_input, WaveSpectrum2D):
-            return _input._create_wave_spectrum_input()
-    elif isinstance(_input, (dict)):
-        # If the input is of type dict, loop over all the keys, and call
-        # function recursively on each of the elements. The output is stored
-        # in a dictionary with the same keys- but now with content that can
-        # be serialized.
-        output = {}
-        for key in _input:
-            output[key] = _serialize(_input[key])
-        return output
-    elif isinstance(_input, list):
-        # If the input is of type list, loop over all the entries, and call
-        # function recursively on each of the elements. The output is stored
-        # in a list of the same length and ordering- but now with content that can
-        # be serialized.
-        output = []
-        for item in _input:
-            output.append(_serialize(item))
-        return output
-    elif isinstance(_input, DataFrame):
-        return {'dataframe':_input.to_json(date_unit='s')}
-    elif _input is None:
-        # handle the "no data" case.
-        return None
-    else:
-        # Otherwise raise error
-        print(type(_input), _input)
-        raise Exception('Cannot convert to json compatible type')
+    return load(filename)
 
 
 def save_spectrum(_input: _UNION, filename: str, format='json', separate_spotters_into_files=False):
@@ -243,27 +109,4 @@ def save_spectrum(_input: _UNION, filename: str, format='json', separate_spotter
     :return: None
     """
 
-    def write(filename, _input, format):
-        output = _serialize(_input)
-        if format == 'json':
-            data = json.dumps(output)
-            with gzip.open(filename, 'wb') as file:
-                file.write(data.encode('utf-8'))
-        elif format == 'pickle':
-            with open(filename,'wb') as file:
-                pickle.dump(output,file)
-        elif format == 'msgpack':
-            with open(filename, 'wb') as file:
-                msgpack.pack(output,file)
-        else:
-            raise Exception('Unknown output format')
-
-
-    if separate_spotters_into_files:
-        os.makedirs(filename, exist_ok=True)
-        for key in _input:
-            name = os.path.join(filename, key)
-            write( name,_input[key],format )
-
-    else:
-        write(filename,_input,format)
+    return save(_input,filename,format,separate_spotters_into_files)

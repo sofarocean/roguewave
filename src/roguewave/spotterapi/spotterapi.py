@@ -645,6 +645,8 @@ def search(start_date: Union[datetime, str],
 
     for spotter_id in spotters:
         for key in spotters[spotter_id]:
+            # ensure results are unique
+            spotters[spotter_id][key] = _unique_filter(spotters[spotter_id][key] )
             if bulk_data_as_dataframe and (not key == 'frequencyData'):
                 spotters[spotter_id][key]= as_dataframe(spotters[spotter_id][key])
     return spotters
@@ -659,8 +661,12 @@ def _unique_filter(data):
     :param data:
     :return:
     """
-    timestamps = numpy.array(
-        [to_datetime(x['timestamp']).timestamp() for x in data])
+    try:
+        timestamps = numpy.array(
+            [to_datetime(x['timestamp']).timestamp() for x in data])
+    except:
+        timestamps = numpy.array(
+            [x.timestamp.timestamp() for x in data])
     _, unique_indices = numpy.unique(timestamps, return_index=True)
 
     data = [data[index] for index in unique_indices]

@@ -1,15 +1,3 @@
-class ExceptionNoFrequencyData(Exception):
-    """
-    Query raised when no frequency data is available for the spotter
-    """
-    pass
-
-class ExceptionNoWaveData(Exception):
-    """
-    Query raised when no frequency data is available for the spotter
-    """
-    pass
-
 class ExceptionCouldNotDownloadData(Exception):
     """
     Query raised when no frequency data is available for the spotter

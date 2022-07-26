@@ -7,45 +7,27 @@ Sofar Ocean Technologies
 Authors: Pieter Bart Smit
 ======================
 
-Routines to get spectral data from the spotter api
+Routines to get data from the spotter api
 
 Functions:
 
-- `get_spectrum`, function to call externally do download
-                                         spectral data. Parallel if multiple Spotters
-                                         are given.
-- `_get_next_100_spectra`, Internal helper function. Grabs the next 100 spectra
-                          from the given start data. Needed because the Spotter_API
-                          will return a maximum of 100 spectra per call.
-- '_download_spectra', function that abstracts away the limitation of 100 spectra
-                       per call. Handles updating the start date etc.
+- `get_spectrum`, function to call externally do download spectral data.
+   Parallel if multiple Spotters are given.
+
 
 How To Use This Module
 ======================
 (See the individual functions for details.)
 
-1. Import it: ``import roguewave.externaldata.spotterapi``
-2. call ``get_spectrum`` to get the desired data.
+1. Import it: ``import roguewave.spotterapi``
+2. call ``spotterapi.get_spectrum`` or other functions to get the desired data.
 
-TOC
-======================
-
-1) Imports: all external import data
-2) Constants: all constants used in the module
-3) Interfaces: overloaded interfaces for the main function (handles typing, no
-               actual logic)
-4) Main function: implementation of the main function
-    - get_spectrum
-5) Private Functions: module private functions that are used by the main function:
-    - _get_next_100_spectra
-    - _download_spectra
 """
 
 # 1) Imports
-# ======================
+# =============================================================================
 from datetime import datetime, timedelta, timezone
-from .exceptions import \
-    ExceptionNoDataForVariable
+from .exceptions import ExceptionNoDataForVariable
 from multiprocessing.pool import ThreadPool
 from pysofar.spotter import Spotter, SofarApi
 from roguewave import logger
@@ -59,11 +41,10 @@ from tqdm import tqdm
 from pandas import DataFrame
 import numpy
 
-API = None
 
-# 2) Constants
-# ======================
 
+# 2) Constants & Private Variables
+# =============================================================================
 # Maximum number of spectra to retrieve from the Spotter API per API call. Note
 # that 2- os a hard limit of the API. If set higher than 100 it will just return
 # 100 (and the implementation will fail)
@@ -73,39 +54,20 @@ MAX_LOCAL_LIMIT_BULK = 500
 # Maximum number of workers in the Threadpool. Should be set to something reasonable
 # to not overload wavefleet
 MAXIMUM_NUMBER_OF_WORKERS = 40
+
+# Number of retry attemps if a download fails.
 NUMBER_OF_RETRIES = 2
 
 
-# 2.5 API Return JSON format:
-class ApiWaveData(TypedDict):
-    significantWaveHeight: float
-    peakPeriod: float
-    meanPeriod: float
-    peakDirection: float
-    peakDirectionalSpread: float
-    meanDirection: float
-    meanDirectionalSpread: float
-    timestamp: str
-    latitude: float
-    longitude: float
-
-
-class ApiWindData(TypedDict):
-    speed: float
-    direction: float
-    timestamp: str
-    latitude: float
-    longitude: float
-
-
-class ApiSSTData(TypedDict):
-    degrees: float
-    timestamp: str
-    latitude: float
-    longitude: float
-
-
+# 3) Classes
+# =============================================================================
 class VariablesToInclude(TypedDict):
+    """
+    Dictionary that is used to indicate which data to download. The keys correspond
+    exactly to the categories returned by a wavefleet request. As a consequence
+    we also use the keys as an enumeration of which variables are potentially
+    available. This class is internal- should not be instantiated or returned.
+    """
     frequencyData: bool
     waves: bool
     wind: bool
@@ -113,102 +75,41 @@ class VariablesToInclude(TypedDict):
     barometerData: bool
 
 
-# 3) Interfaces
-# ======================
-# these overloads only exist so we can make use of typing and autocomplete in
-# e.g. Pycharm. Specifically, it handles the case that the return type depends
-# on the input.
-@overload
-def get_spectrum(
-        spotter_ids: List[str],
-        start_date: Union[datetime, int, float, str] = None,
-        end_date: Union[datetime, int, float, str] = None,
-        session: SofarApi = None,
-        parallel_download=True
-) -> Dict[str, List[WaveSpectrum1D]]: ...
-
-
-@overload
-def get_spectrum(
-        spotter_ids: str,
-        start_date: Union[datetime, int, float, str] = None,
-        end_date: Union[datetime, int, float, str] = None,
-        session: SofarApi = None,
-        parallel_download=True
-) -> List[WaveSpectrum1D]: ...
-
-
-@overload
-def get_bulk_wave_data(
-        spotter_ids: List[str],
-        start_date: Union[datetime, int, float, str] = None,
-        end_date: Union[datetime, int, float, str] = None,
-        session: SofarApi = None,
-        parallel_download=True
-) -> Dict[str, List[WaveBulkData]]: ...
-
-
-@overload
-def get_bulk_wave_data(
-        spotter_ids: str,
-        start_date: Union[datetime, int, float, str] = None,
-        end_date: Union[datetime, int, float, str] = None,
-        session: SofarApi = None,
-        parallel_download=True
-) -> List[WaveBulkData]: ...
-
-
-# 4) Main Function
-# ======================
-# Implements the interfaces above.
-def get_sofar_api():
-    if API is None:
-        return SofarApi()
-    else:
-        return API
-
-
-def get_spotter_ids(sofar_api: SofarApi = None) -> List[str]:
-    if sofar_api is None:
-        sofar_api = get_sofar_api()
-    return sofar_api.device_ids
-
-
+# 4) Main Functions
+# =============================================================================
 def get_spectrum(
         spotter_ids: Union[str, List[str]],
         start_date: Union[datetime, int, float, str] = None,
         end_date: Union[datetime, int, float, str] = None,
         session: SofarApi = None,
         parallel_download=True
-) -> Union[Dict[str, List[WaveSpectrum1D]], List[WaveSpectrum1D]]:
+) -> Dict[str, List[WaveSpectrum1D]]:
     """
-    Grabs the requested spectra for the spotter(s) in the given interval
+    Gets the requested frequency wave data for the spotter(s) in the given interval
 
-    :param spotter_ids:
-        Can be either 1) a List of spotter_ids or 2) a single Spotter_id.
-            If a List of Spotters, i.e.: List[str]:
-                the return type is a Dictionary, with the spotter_id as key and
-                the dictionary entry a list of spectra for that Spotter in the
-                requested time frame -> Dict[str,List[WaveSpectrum1D]]
-
-            If a single spotter, i.e.: str:
-                the return type is a Dictionary, with the spotter_id as key and
-                the dictionary entry a list of spectra for that Spotter in the
-                requested time frame. List[WaveSpectrum1D]
+    :param spotter_ids: Can be either 1) a List of spotter_ids or 2) a single
+    Spotter_id.
 
     :param start_date: ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to beginning of spotters history
-    :param end_date: ISO 8601 formatted date string, epoch or datetime.
-                     If not included defaults to end of spotter history
+    :param end_date:   ISO 8601 formatted date string, epoch or datetime.
+                       If not included defaults to end of spotter history
+    :param session:    Active SofarApi session. If none is provided one will be
+                       creatated automatically. This requires that an API key is
+                       set in the environment.
+    :param parallel_download: Use multiple requests to the Api to speed up retrieving
+                       data. Only useful for large requests.
 
-    :return: Data as a FrequencyDataList Object
+    :return: Data as a dictornary with spotter_id's as keys, and for each
+    corresponding value a List that for each returned timestamp contains a
+    WaveSpectrum1D object.
+
     """
     data = get_data(
         spotter_ids,
         start_date,
         end_date,
         include_frequency_data=True,
-        include_directional_moments=True,
         include_waves=False,
         include_wind=False,
         include_surface_temp_data=False,
@@ -219,6 +120,7 @@ def get_spectrum(
     for key in data:
         out[key] = data[key]['frequencyData']
     return out
+# -----------------------------------------------------------------------------
 
 
 def get_bulk_wave_data(
@@ -226,46 +128,48 @@ def get_bulk_wave_data(
         start_date: Union[datetime, int, float, str] = None,
         end_date: Union[datetime, int, float, str] = None,
         session: SofarApi = None,
-        parallel_download=True
-) -> Union[Dict[str, List[WaveBulkData]], List[WaveBulkData]]:
+        parallel_download:bool=True,
+        bulk_data_as_dataframe:bool=True
+) -> Dict[str, List[WaveBulkData]]:
     """
-    Grabs the requested spectra for the spotter(s) in the given interval
+    Gets the requested bulk wave data for the spotter(s) in the given interval
 
-    :param spotter_ids:
-        Can be either 1) a List of spotter_ids or 2) a single Spotter_id.
-            If a List of Spotters, i.e.: List[str]:
-                the return type is a Dictionary, with the spotter_id as key and
-                the dictionary entry a list of spectra for that Spotter in the
-                requested time frame -> Dict[str,List[WaveSpectrum1D]]
-
-            If a single spotter, i.e.: str:
-                the return type is a Dictionary, with the spotter_id as key and
-                the dictionary entry a list of spectra for that Spotter in the
-                requested time frame. List[WaveSpectrum1D]
+    :param spotter_ids: Can be either 1) a List of spotter_ids or 2) a single
+    Spotter_id.
 
     :param start_date: ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to beginning of spotters history
-    :param end_date: ISO 8601 formatted date string, epoch or datetime.
-                     If not included defaults to end of spotter history
+    :param end_date:   ISO 8601 formatted date string, epoch or datetime.
+                       If not included defaults to end of spotter history
+    :param session:    Active SofarApi session. If none is provided one will be
+                       creatated automatically. This requires that an API key is
+                       set in the environment.
+    :param parallel_download: Use multiple requests to the Api to speed up retrieving
+                       data. Only useful for large requests.
+    :param bulk_data_as_dataframe: return bulk data as a dataframe per Spotter
+                       instead of a list of BulkWaveVariable objects. Defaults to
+                       yes- only set to false for dev purposes.
 
-    :return: Data as a FrequencyDataList Object
+    :return: Data as a dictornary with spotter_id's as keys, and for each
+    corresponding value a dataframe containing the output.
     """
     data = get_data(
         spotter_ids,
         start_date,
         end_date,
         include_frequency_data=False,
-        include_directional_moments=False,
         include_waves=True,
         include_wind=False,
         include_surface_temp_data=False,
         session=session,
-        parallel_download=parallel_download
+        parallel_download=parallel_download,
+        bulk_data_as_dataframe=bulk_data_as_dataframe
     )
     out = {}
     for key in data:
         out[key] = data[key]['waves']
     return out
+# -----------------------------------------------------------------------------
 
 
 def get_data(
@@ -273,7 +177,6 @@ def get_data(
         start_date: Union[datetime, int, float, str] = None,
         end_date: Union[datetime, int, float, str] = None,
         include_frequency_data=False,
-        include_directional_moments=False,
         include_waves=True,
         include_wind=False,
         include_barometer_data=False,
@@ -283,6 +186,30 @@ def get_data(
         bulk_data_as_dataframe=True
 ) -> Dict[str, Dict[
     str, Union[list[WaveSpectrum1D], list[WaveBulkData], DataFrame]]]:
+    """
+    Gets the requested data for the spotter(s) in the given interval
+
+    :param spotter_ids: Can be either 1) a List of spotter_ids or 2) a single
+    Spotter_id.
+
+    :param start_date: ISO 8601 formatted date string, epoch or datetime.
+                       If not included defaults to beginning of spotters history
+    :param end_date:   ISO 8601 formatted date string, epoch or datetime.
+                       If not included defaults to end of spotter history
+    :param session:    Active SofarApi session. If none is provided one will be
+                       created automatically. This requires that an API key is
+                       set in the environment.
+    :param parallel_download: Use multiple requests to the Api to speed up retrieving
+                       data. Only useful for large requests.
+    :param bulk_data_as_dataframe: return bulk data as a dataframe per Spotter
+                       instead of a list of BulkWaveVariable objects. Defaults to
+                       yes- only set to false for dev purposes.
+
+    :return: Data as a dictornary with spotter_id's as keys, and for each
+    corresponding value a dataframe containing the output.
+    """
+
+
     if spotter_ids is None:
         spotter_ids = get_spotter_ids()
 
@@ -294,11 +221,9 @@ def get_data(
         barometerData=include_barometer_data,
     )
 
+    # Make sure we have a list object
     if not isinstance(spotter_ids, list):
         spotter_ids = [spotter_ids]
-        return_list = False
-    else:
-        return_list = True
 
     if session is None:
         session = SofarApi()
@@ -324,14 +249,69 @@ def get_data(
         if spotter_data is not None:
             data[spotter_id] = spotter_data
 
-    if not return_list:
-        return data[spotter_ids[0]]
-    else:
-        return data
+    return data
+# -----------------------------------------------------------------------------
+
+
+def search_circle(
+        start_date: Union[datetime, str],
+        end_date: Union[datetime, str],
+        center_lat_lon: Tuple,
+        radius: float,
+        session: SofarApi=None,
+):
+    """
+    Search for all Spotters that have data available within the give spatio-temporal
+    region defined by a circle with given center and radius and start- and end-
+    dates. This calls the "search" endpoint of wavefleet.
+
+    :param start_date: ISO 8601 formatted date string, epoch or datetime.
+    :param end_date:   ISO 8601 formatted date string, epoch or datetime.
+    :param center_lat_lon: (Latitude, Longitude) of the center of the circle.
+    :param radius: Radius in meter of the circle.
+    :param session: Active SofarApi session. If none is provided one will be
+                    created automatically. This requires that an API key is
+                    set in the environment.
+    :return:
+    """
+
+    geometry = {'type': 'circle', 'points': center_lat_lon, 'radius': radius}
+
+    return _search(start_date, end_date, geometry, session)
+# -----------------------------------------------------------------------------
+
+
+def search_rectangle(
+        start_date: Union[datetime, str],
+        end_date: Union[datetime, str],
+        bounding_box,
+        session: SofarApi=None,
+):
+    """
+    Search for all Spotters that have data available within the give spatio-temporal
+    region defined by a circle with given center and radius and start- and end-
+    dates. This calls the "search" endpoint of wavefleet.
+
+    :param start_date: ISO 8601 formatted date string, epoch or datetime.
+    :param end_date:   ISO 8601 formatted date string, epoch or datetime.
+    :param bounding box: coordinates of two points that define a rectangular
+    bounding box. Coordinates per point are given as (lat, lon) pairs, and the
+    input takes the form of a list/tuple of points: ( (p1_lat, p1_lon),(p2_lat, p2_lon) )
+    :param session: Active SofarApi session. If none is provided one will be
+                    created automatically. This requires that an API key is
+                    set in the environment.
+    :return:
+    """
+    geometry = {'type': 'envelope',
+                'points': bounding_box,
+                'radius': None}
+
+    return _search(start_date, end_date, geometry, session)
+# -----------------------------------------------------------------------------
 
 
 # 5) Private Functions
-# ======================
+# =============================================================================
 def _download_data(
         spotter_id: str,
         session: SofarApi,
@@ -431,14 +411,16 @@ def _download_data(
     if len(data) < 1:
         data = None
     else:
-        # Convert bulk data to a dataframe if desired
-        for key in data:
-            if key == 'frequencyData':
-                # We cannot convert the list of wavespectra to a dataframe.
-                continue
-            data[key] = as_dataframe(data[key])
+        if bulk_data_as_dataframe:
+            # Convert bulk data to a dataframe if desired
+            for key in data:
+                if key == 'frequencyData':
+                    # We cannot convert the list of wavespectra to a dataframe.
+                    continue
+                data[key] = as_dataframe(data[key])
 
     return data
+# -----------------------------------------------------------------------------
 
 
 def _get_next_page(
@@ -537,54 +519,21 @@ def _get_next_page(
             # done if less then the requested data was returned).
             max_num_items = max(max_num_items, elements_returned)
 
-            # Filter for doubles.
-            json_data[var_name] = _unique_filter(json_data[var_name])
-
             # Add to output
             out[var_name] = \
                 [_get_class(var_name, data) for data in json_data[var_name]]
+
+            # Filter for doubles.
+            out[var_name] = _unique_filter(out[var_name])
 
             if out[var_name][-1].timestamp > max_timestamp:
                 max_timestamp = out[var_name][-1].timestamp
 
     return out, max_num_items, max_timestamp
+# -----------------------------------------------------------------------------
 
 
-def search_circle(
-        start_date: Union[datetime, str],
-        end_date: Union[datetime, str],
-        center_lat_lon: Tuple,
-        radius: float,
-        session: SofarApi=None,
-        variables_to_include: VariablesToInclude = None,
-        page_size=500,
-        bulk_data_as_dataframe: bool = True
-):
-    geometry = {'type': 'circle', 'points': center_lat_lon, 'radius': radius}
-
-    return search(start_date, end_date, geometry, session,
-                  variables_to_include, page_size, bulk_data_as_dataframe)
-
-
-def search_rectangle(
-        start_date: Union[datetime, str],
-        end_date: Union[datetime, str],
-        north_west_lat_lon,
-        south_east_lat_lon,
-        session: SofarApi=None,
-        variables_to_include: VariablesToInclude = None,
-        page_size=500,
-        bulk_data_as_dataframe: bool = True
-):
-    geometry = {'type': 'envelope',
-                'points': [north_west_lat_lon, south_east_lat_lon],
-                'radius': None}
-
-    return search(start_date, end_date, geometry, session,
-                  variables_to_include, page_size, bulk_data_as_dataframe)
-
-
-def search(start_date: Union[datetime, str],
+def _search(start_date: Union[datetime, str],
            end_date: Union[datetime, str],
            geometry: dict,
            session: SofarApi=None,
@@ -623,7 +572,12 @@ def search(start_date: Union[datetime, str],
     for spotter in generator:
         spotter_id = spotter['spotterId']
         # loop over keys we can parse
-        for key in variables_to_include:
+        for key, value in variables_to_include.items():
+            #
+            if not value:
+                # Do we want to include this variable?
+                continue
+
             if key in spotter:
                 item = spotter[key]
                 if not item:
@@ -650,10 +604,11 @@ def search(start_date: Union[datetime, str],
             if bulk_data_as_dataframe and (not key == 'frequencyData'):
                 spotters[spotter_id][key]= as_dataframe(spotters[spotter_id][key])
     return spotters
+# -----------------------------------------------------------------------------
 
 
 # 6) Helper Functions
-# ======================
+# =============================================================================
 def _unique_filter(data):
     """
     Filter for dual time entries that occur due to bugs in wavefleet (same
@@ -661,25 +616,30 @@ def _unique_filter(data):
     :param data:
     :return:
     """
-    try:
-        timestamps = numpy.array(
-            [to_datetime(x['timestamp']).timestamp() for x in data])
-    except:
-        timestamps = numpy.array(
-            [x.timestamp.timestamp() for x in data])
+
+    # Get timestamps
+    timestamps = numpy.array([x.timestamp.timestamp() for x in data])
+
+    # Get indices of unique timestamps
     _, unique_indices = numpy.unique(timestamps, return_index=True)
 
-    data = [data[index] for index in unique_indices]
-
-    return data
+    # Return only unique indices
+    return [data[index] for index in unique_indices]
+# -----------------------------------------------------------------------------
 
 
 def _none_filter(data: List[Union[WaveSpectrum1D, WaveBulkData]]):
+    """
+    Filter for the occasional occurance of bad data returned from wavefleet.
+    :param data:
+    :return:
+    """
     F = lambda x: (x['latitude'] is not None) and (
             x['longitude'] is not None) and \
                   (x['timestamp'] is not None)
 
     return list(filter(F, data))
+# -----------------------------------------------------------------------------
 
 
 def _get_class(key, data) -> Union[MetoceanData, WaveSpectrum1D]:
@@ -707,3 +667,7 @@ def _get_class(key, data) -> Union[MetoceanData, WaveSpectrum1D]:
         return BarometricPressure(**data)
     else:
         raise Exception('Unknown variable')
+# -----------------------------------------------------------------------------
+
+
+

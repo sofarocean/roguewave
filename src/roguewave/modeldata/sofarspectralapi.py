@@ -70,7 +70,6 @@ class SofarSpectralAPI(SofarConnection):
 
     def points(self):
         data = self._query
-        print(data)
         return [{'latitude': x['latitude'], 'longitude': x['longitude']} for x
                 in data]
 

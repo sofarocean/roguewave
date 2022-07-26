@@ -38,6 +38,7 @@ from roguewave.metoceandata import WaveBulkData, as_dataframe, WindData, \
 from typing import Dict, List, Union, overload, TypedDict, Tuple
 from tqdm import tqdm
 from pandas import DataFrame
+from .helper_functions import _get_sofar_api,get_spotter_ids
 import numpy
 
 
@@ -225,7 +226,7 @@ def get_data(
         spotter_ids = [spotter_ids]
 
     if session is None:
-        session = SofarApi()
+        session = _get_sofar_api()
 
     def worker(spotter_id):
         data = _download_data(spotter_id, session, variables_to_include,
@@ -541,7 +542,7 @@ def _search(start_date: Union[datetime, str],
            bulk_data_as_dataframe: bool = True
            ):
     if session is None:
-        session = SofarApi()
+        session = _get_sofar_api()
 
     if variables_to_include is None:
         variables_to_include = VariablesToInclude(

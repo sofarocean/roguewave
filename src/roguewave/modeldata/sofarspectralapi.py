@@ -12,8 +12,7 @@ import json
 from pysofar import SofarConnection
 from pysofar.wavefleet_exceptions import QueryError
 from functools import cached_property
-from roguewave.wavespectra.spectrum2D import WaveSpectrum2D, \
-    WaveSpectrum2DInput
+from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
 import typing
 import netCDF4
 import numpy
@@ -127,12 +126,17 @@ def load_sofar_spectral_file(
 
             if dataset.variables['frequency_direction_spectrum'].dimensions[1] == 'directions':
                 variance_density = variance_density.transpose()
-            spectrum2D_input = WaveSpectrum2DInput(
-                frequency=frequencies, varianceDensity=variance_density,
-                timestamp=unixepochtime, latitude=latitude, longitude=longitude,
-                directions=directions
+
+            spectra.append(
+                WaveSpectrum2D(
+                    frequency=frequencies,
+                    varianceDensity=variance_density,
+                    timestamp=unixepochtime,
+                    latitude=latitude,
+                    longitude=longitude,
+                    directions=directions
+                )
             )
-            spectra.append(WaveSpectrum2D(spectrum2D_input))
         return spectra
     elif isinstance(filename,dict):
         out = {}

@@ -33,10 +33,8 @@ from .mem import mem
 from .loglikelyhood import log_likelyhood
 from scipy.ndimage import gaussian_filter
 from typing import overload, Dict, List
-from roguewave.wavespectra.spectrum2D import WaveSpectrum2D, \
-    WaveSpectrum2DInput
-from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, \
-    WaveSpectrum1DInput
+from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
+from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
 
 
 # -----------------------------------------------------------------------------
@@ -201,7 +199,8 @@ def spec2d_from_spec1d(spectrum1D: WaveSpectrum1D,
     else:
         raise Exception(f'unsupported spectral estimator method: {method}')
 
-    wave_spectrum2D_input = WaveSpectrum2DInput(
+    # We return a 2D wave spectrum object.
+    return WaveSpectrum2D(
         frequency=spectrum1D.frequency,
         directions=direction,
         varianceDensity=e[:, None] * directional_distribution,
@@ -210,12 +209,9 @@ def spec2d_from_spec1d(spectrum1D: WaveSpectrum1D,
         latitude=spectrum1D.latitude
     )
 
-    # We return a 2D wave spectrum object.
-    return WaveSpectrum2D(wave_spectrum2D_input)
-
 
 def spec1d_from_spec2d(spectrum: WaveSpectrum2D) -> WaveSpectrum1D:
-    wave_spectrum1D_input = WaveSpectrum1DInput(
+    return WaveSpectrum1D(
         frequency=spectrum.frequency,
         varianceDensity=spectrum.e,
         timestamp=spectrum.timestamp,
@@ -226,4 +222,3 @@ def spec1d_from_spec2d(spectrum: WaveSpectrum2D) -> WaveSpectrum1D:
         a2=spectrum.a2,
         b2=spectrum.b2,
     )
-    return WaveSpectrum1D(wave_spectrum1D_input)

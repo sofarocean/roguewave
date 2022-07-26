@@ -9,23 +9,14 @@ Authors: Pieter Bart Smit
 """
 import numpy
 from roguewave.tools import to_datetime, datetime_to_iso_time_string
-from typing import TypedDict, List, Tuple, Union
+from typing import List, Tuple, Union
 from .windSpotter import U10
 from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, phase_velocity
 from datetime import datetime
 from numpy.ma import MaskedArray
 import typing
-
 from roguewave.metoceandata import WaveBulkData
-
-class WaveSpectrumInput(TypedDict):
-    frequency: List[float]
-    varianceDensity: List
-    timestamp: Union[str, datetime, int, float]
-    latitude: Union[float, None]
-    longitude: Union[float, None]
-
 
 class WaveSpectrum():
     """
@@ -42,7 +33,11 @@ class WaveSpectrum():
         'peak_wavenumber', 'latitude', 'longitude', 'timestamp')
 
     def __init__(self,
-                 wave_spectrum_input: WaveSpectrumInput
+                 frequency: Union[List[float],numpy.ndarray],
+                 varianceDensity: Union[List[float],numpy.ndarray],
+                 timestamp: Union[str, datetime, int, float],
+                 latitude: Union[float, None],
+                 longitude: Union[float, None]
                  ):
         self._a1 = None
         self._b1 = None
@@ -52,40 +47,26 @@ class WaveSpectrum():
         self.direction = None
         self._peak_index = None
         self._peak_wavenumber = None
+        self.longitude = longitude
+        self.latitude = latitude
+        self.frequency = numpy.array(frequency)
+        varianceDensity = numpy.array(varianceDensity)
+        mask = (varianceDensity < 0) | (numpy.isnan(varianceDensity))
+        self._variance_density = MaskedArray(varianceDensity, dtype='float64', mask=mask,fill_value=numpy.nan )
+        self.timestamp = to_datetime(timestamp)
 
-        # Type conversions are needed because the JSON serializer does not accept float32
-        self.frequency = numpy.array(wave_spectrum_input['frequency'],
-                                     dtype='float64')
-        density = numpy.array(wave_spectrum_input['varianceDensity'],
-                              dtype='float64')
-        mask = (density < 0) | numpy.isnan(density)
-        density[mask] = numpy.nan
-
-        self._variance_density = MaskedArray(
-            density, dtype='float64', mask=mask)
-        self.timestamp = to_datetime(wave_spectrum_input['timestamp'])
-
-        # There are cases that wavefleet returns None for latitude or longitude.
-        # This is a bug - but to avoid issues we catch it here.
-        if (wave_spectrum_input['longitude'] is None) or \
-                (wave_spectrum_input['latitude']) is None:
-            self.longitude = None
-            self.latitude = None
-        else:
-            self.longitude = float(wave_spectrum_input['longitude'])
-            self.latitude = float(wave_spectrum_input['latitude'])
 
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:
         pass
 
-    def _create_wave_spectrum_input(self) -> WaveSpectrumInput:
-        return WaveSpectrumInput(
-            frequency=list(self.frequency),
-            varianceDensity=list(self.variance_density),
-            timestamp=datetime_to_iso_time_string(self.timestamp),
-            latitude=self.latitude,
-            longitude=self.longitude
-        )
+    def _create_wave_spectrum_input(self) -> dict:
+        return {
+            "frequency":self.frequency,
+            "varianceDensity":self.variance_density,
+            "timestamp":self.timestamp,
+            "latitude":self.latitude,
+            "longitude":self.longitude
+        }
 
     @property
     def variance_density(self) -> numpy.ndarray:

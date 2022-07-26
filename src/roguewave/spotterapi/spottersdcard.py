@@ -1,5 +1,4 @@
-from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, \
-    WaveSpectrum1DInput
+from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
 import typing
 from datetime import datetime
 from pandas import read_csv, to_numeric
@@ -43,12 +42,14 @@ def get_spectrum_from_parser_output(path: str)->typing.List[WaveSpectrum1D]:
     number_of_spectra = data['Szz']['values'].shape[0]
     spectra = []
     for index in range(0,number_of_spectra):
-        input = WaveSpectrum1DInput(frequency=data['Szz']['frequencies'],
-                                    varianceDensity=data['Szz']['values'][index,:],
-                                    timestamp=data['Szz']['time'][index], latitude=None,
-                                    longitude=None, a1=data['a1']['values'][index,:],
-                                    b1=data['b1']['values'][index,:],
-                                    a2=data['a2']['values'][index,:],
-                                    b2=data['b2']['values'][index,:])
-        spectra.append(WaveSpectrum1D(input))
+        spectra.append(
+            WaveSpectrum1D(frequency=data['Szz']['frequencies'],
+                           varianceDensity=data['Szz']['values'][index,:],
+                           timestamp=data['Szz']['time'][index], latitude=None,
+                           longitude=None, a1=data['a1']['values'][index,:],
+                           b1=data['b1']['values'][index,:],
+                           a2=data['a2']['values'][index,:],
+                           b2=data['b2']['values'][index,:]
+                           )
+        )
     return spectra

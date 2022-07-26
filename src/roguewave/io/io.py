@@ -23,7 +23,6 @@ How To Use This Module
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
 from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
 from roguewave.metoceandata import WaveBulkData, WindData, SSTData,BarometricPressure
-from roguewave import spectrum1D, spectrum2D
 from pandas import DataFrame, read_json
 from typing import Union, Dict, List
 from datetime import datetime
@@ -113,9 +112,9 @@ def object_hook(dictionary:dict):
                 df.index = [ x.tz_localize('utc') for x in df.index]
             return df
         elif dictionary['__class__'] == 'WaveSpectrum1D':
-            return spectrum1D(**dictionary['data'])
+            return WaveSpectrum1D(**dictionary['data'])
         elif dictionary['__class__'] == 'WaveSpectrum2D':
-            return spectrum2D(**dictionary['data'])
+            return WaveSpectrum2D(**dictionary['data'])
         elif dictionary['__class__'] == 'ndarray':
             return _b64_decode_numpy(dictionary['data'])
         elif dictionary['__class__'] == 'datetime':
@@ -137,13 +136,13 @@ def object_hook(dictionary:dict):
                 return dictionary
             # if directions -> create a wavespectrum2d. The keys directly map
             # to the constructor arguments.
-            return spectrum2D(**dictionary)
+            return WaveSpectrum2D(**dictionary)
         elif 'frequency' in dictionary:
             if isinstance(dictionary['frequency'],numpy.ndarray):
                 return dictionary
             # if not directions but has frequency -> create a wavespectrum1d.
             # The keys directly map to the constructor arguments.
-            return spectrum1D(**dictionary)
+            return WaveSpectrum1D(**dictionary)
         elif 'dataframe' in dictionary:
             df = read_json(dictionary['dataframe'])
             df['timestamp'] = df['timestamp'].apply(lambda x: x.tz_localize('utc'))

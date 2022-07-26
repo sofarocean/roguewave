@@ -10,23 +10,26 @@ Authors: Pieter Bart Smit
 """
 import numpy
 import numpy.ma
-from .wavespectrum import WaveSpectrum, WaveSpectrumInput
+from .wavespectrum import WaveSpectrum
 from typing import List, Union
-from roguewave.tools import datetime_to_iso_time_string
 from numpy.ma import MaskedArray
 from numba import njit
 from functools import cached_property
-
-class WaveSpectrum2DInput(WaveSpectrumInput):
-    directions: Union[List[float], numpy.ndarray]
+from datetime import datetime
 
 class WaveSpectrum2D(WaveSpectrum):
     def __init__(self,
-                 wave_spectrum2D_input:WaveSpectrum2DInput
+                 frequency: Union[List[float],numpy.ndarray],
+                 varianceDensity: Union[List[float],numpy.ndarray],
+                 directions: Union[List[float], numpy.ndarray],
+                 timestamp: Union[str, datetime, int, float],
+                 latitude: Union[float, None],
+                 longitude: Union[float, None],
+                 **kwargs
                  ):
-        super().__init__(wave_spectrum2D_input)
-        self.direction = numpy.array(wave_spectrum2D_input['directions'],
-                                     dtype='float64')
+        super().__init__(frequency=frequency, varianceDensity=varianceDensity,
+                         timestamp=timestamp,latitude=latitude,longitude=longitude)
+        self.direction = numpy.array(directions)
         self._directional_difference = self._delta()
 
         self._frequency_peak_indices = None
@@ -115,27 +118,24 @@ class WaveSpectrum2D(WaveSpectrum):
         return numpy.trapz(self.e[range] * self.frequency[range] ** power,
                            self.frequency[range])
 
-    def _create_wave_spectrum_input(self)->WaveSpectrum2DInput:
+    def _create_wave_spectrum_input(self)-> dict:
         data = self.variance_density.filled(-1)
-        return WaveSpectrum2DInput(
-            frequency=self.frequency,
-            directions=self.direction,
-            varianceDensity=data,
-            timestamp=datetime_to_iso_time_string(self.timestamp),
-            latitude=self.latitude,
-            longitude=self.longitude,
-        )
+        return {
+            "frequency":self.frequency,
+            "varianceDensity":self.variance_density,
+            "timestamp":self.timestamp,
+            "latitude":self.latitude,
+            "longitude":self.longitude
+        }
 
     def copy(self)->"WaveSpectrum2D":
-        input = WaveSpectrum2DInput(
+        return WaveSpectrum2D(
             frequency=self.frequency.copy(),
             directions=self.direction.copy(),
             varianceDensity=self.variance_density.copy(),
             timestamp=self.timestamp,
             latitude=self.latitude,
-            longitude=self.longitude
-        )
-        return WaveSpectrum2D(input)
+            longitude=self.longitude)
 
     def __add__(self, other:"WaveSpectrum2D")->"WaveSpectrum2D":
         spectrum = self.copy()
@@ -185,7 +185,7 @@ class WaveSpectrum2D(WaveSpectrum):
 
 
 def empty_spectrum2D_like(spectrum:WaveSpectrum2D)->WaveSpectrum2D:
-    input = WaveSpectrum2DInput(
+    return WaveSpectrum2D(
         frequency=spectrum.frequency.copy(),
         varianceDensity=numpy.zeros_like(spectrum.variance_density),
         timestamp=spectrum.timestamp,
@@ -193,7 +193,6 @@ def empty_spectrum2D_like(spectrum:WaveSpectrum2D)->WaveSpectrum2D:
         longitude=spectrum.longitude,
         directions=spectrum.direction.copy()
     )
-    return WaveSpectrum2D(input)
 
 
 @njit(cache=True)

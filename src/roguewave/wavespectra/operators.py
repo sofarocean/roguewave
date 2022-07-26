@@ -1,7 +1,7 @@
 import numpy
 from typing import List
-from .spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
-from .spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
+from .spectrum1D import WaveSpectrum1D
+from .spectrum2D import WaveSpectrum2D
 from datetime import timedelta
 
 def spectrum1D_time_filter(spectra: List[WaveSpectrum1D],
@@ -58,14 +58,14 @@ def spectrum1D_time_filter(spectra: List[WaveSpectrum1D],
         b2 = sum(w * spectrum.b2 * spectra[index].e for w, spectrum in
                  zip(window, spectra[istart: iend])) / e
 
-        output.append(WaveSpectrum1D(WaveSpectrum1DInput(
+        output.append(WaveSpectrum1D(
             frequency=raw_spectrum.frequency,
             varianceDensity=e,
             timestamp=raw_spectrum.timestamp,
             latitude=raw_spectrum.latitude,
             longitude=raw_spectrum.longitude,
             a1=a1, b1=b1,
-            a2=a2, b2=b2))
+            a2=a2, b2=b2)
         )
     return spectra
 
@@ -118,14 +118,12 @@ def spectrum2D_time_filter(spectra: List[WaveSpectrum2D],
 
         output.append(
             WaveSpectrum2D(
-                WaveSpectrum2DInput(
-                    frequency=raw_spectrum.frequency,
-                    varianceDensity=variance_density,
-                    timestamp=raw_spectrum.timestamp,
-                    latitude=raw_spectrum.latitude,
-                    longitude=raw_spectrum.longitude,
-                    directions=raw_spectrum.direction
-                )
+                frequency=raw_spectrum.frequency,
+                varianceDensity=variance_density,
+                timestamp=raw_spectrum.timestamp,
+                latitude=raw_spectrum.latitude,
+                longitude=raw_spectrum.longitude,
+                directions=raw_spectrum.direction
             )
         )
     return spectra

@@ -13,8 +13,8 @@ from roguewave.modeldata.sofarspectralapi import load_sofar_spectral_file
 # Wave spectrum
 
 ## object definition
-from .wavespectra.spectrum1D import WaveSpectrum1D, WaveSpectrum1DInput
-from .wavespectra.spectrum2D import WaveSpectrum2D, WaveSpectrum2DInput
+from .wavespectra.spectrum1D import WaveSpectrum1D
+from .wavespectra.spectrum2D import WaveSpectrum2D
 from .wavespectra import spectrum1D, spectrum2D
 
 ## estimators

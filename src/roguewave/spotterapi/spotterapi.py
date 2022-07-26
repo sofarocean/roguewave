@@ -32,8 +32,7 @@ from multiprocessing.pool import ThreadPool
 from pysofar.spotter import Spotter, SofarApi
 from roguewave import logger
 from roguewave.tools import datetime_to_iso_time_string, to_datetime
-from roguewave.wavespectra.spectrum1D import WaveSpectrum1D, \
-    WaveSpectrum1DInput
+from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
 from roguewave.metoceandata import WaveBulkData, as_dataframe, WindData, \
     SSTData, MetoceanData, BarometricPressure
 from typing import Dict, List, Union, overload, TypedDict, Tuple
@@ -130,7 +129,7 @@ def get_bulk_wave_data(
         session: SofarApi = None,
         parallel_download:bool=True,
         bulk_data_as_dataframe:bool=True
-) -> Dict[str, List[WaveBulkData]]:
+) -> Union[Dict[str, List[WaveBulkData]],Dict[str, DataFrame]]:
     """
     Gets the requested bulk wave data for the spotter(s) in the given interval
 
@@ -658,7 +657,7 @@ def _get_class(key, data) -> Union[MetoceanData, WaveSpectrum1D]:
             peak_frequency=1.0 / data['peakPeriod']
         )
     elif key == 'frequencyData':
-        return WaveSpectrum1D(WaveSpectrum1DInput(**data))
+        return WaveSpectrum1D(**data)
     elif key == 'wind':
         return WindData(**data)
     elif key == 'surfaceTemp':

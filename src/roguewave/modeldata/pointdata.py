@@ -9,6 +9,7 @@ from datetime import datetime
 import tqdm
 from roguewave.wavespectra.wavespectrum import WaveSpectrum
 from ..metoceandata import WaveBulkData
+from pandas import DataFrame
 from typing import TypedDict
 
 BLOCKSIZE = 1024
@@ -149,9 +150,14 @@ def extract_along_spotter_tracks(
 
     tracks = {}
     for spotter_id, spotter in spotter_tracks.items():
-        latitudes = numpy.array([x.latitude for x in spotter])
-        longitudes = numpy.array([x.longitude for x in spotter])
-        timestamps = [x.timestamp for x in spotter]
+        if isinstance(spotter,DataFrame):
+            latitudes = spotter['latitude'].values
+            longitudes = spotter['latitude'].values
+            timestamps = spotter.index.values
+        else:
+            latitudes = numpy.array([x.latitude for x in spotter])
+            longitudes = numpy.array([x.longitude for x in spotter])
+            timestamps = [x.timestamp for x in spotter]
         tracks[spotter_id] =Track(timestamps=timestamps, latitudes=latitudes,
                             longitudes=longitudes)
 

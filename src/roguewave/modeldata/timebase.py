@@ -54,7 +54,7 @@ class ModelTimeConfiguration():
                  cycle_time_hours: timedelta = timedelta(hours=6),
                  cycle_offset_hours: timedelta = timedelta(hours=0),
                  output_interval: INTERVALTYPE = (
-                         (240, timedelta(hours=1)),)):
+                         (239, timedelta(hours=1)),)):
 
         self.cycle_time_hours = cycle_time_hours
         self.cycle_offset_hours = cycle_offset_hours
@@ -129,6 +129,6 @@ def timebase_lead(start_time: datetime, end_time: datetime,lead_time: timedelta,
     return times
 
 
-def timebase_evaluation(start_time: datetime, end_time: datetime,
-                        time_configuration: ModelTimeConfiguration):
+def timebase_evaluation(evaluation_time: datetime, time_configuration: ModelTimeConfiguration):
     pass
+

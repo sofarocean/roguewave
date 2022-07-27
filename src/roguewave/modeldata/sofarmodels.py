@@ -12,42 +12,43 @@ with open( os.path.expanduser('~/model_configuration.json'),'rb') as file:
 def available_models():
     return list(MODELS.keys())
 
-@dataclass()
 class Model():
-    key:str
-    name: str
-    label: str
-    bucket: str
-    resolution: str
-    region: str
-    key_template: str
-    filetype:str
-    model_time_configuration: ModelTimeConfiguration
-    _model_time_configuration: ModelTimeConfiguration =  field(init=False, repr=False)
-
-    @property
-    def model_time_configuration(self) -> ModelTimeConfiguration:
-        return self._model_time_configuration
-
-    @model_time_configuration.setter
-    def model_time_configuration(self, values):
-        self._model_time_configuration = ModelTimeConfiguration(**values)
-
+    def __init__(self, name, bucket:str, key_template:str, filetype:str='netcdf',model_time_configuration:dict=None):
+        self.name = name
+        self.bucket = bucket
+        self.key_template = key_template
+        self.filetype = filetype
+        if model_time_configuration is None:
+            self.model_time_configuration = ModelTimeConfiguration()
+        else:
+            self.model_time_configuration = ModelTimeConfiguration(**model_time_configuration)
 
 def get_model(name):
-    return Model(key=name,**MODELS[name])
+    return Model(name=name,**MODELS[name])
 
-
-def _replace(string: str, properties):
-    for key, value in properties.items():
-        if key in string:
-            string = string.replace("{" + key + "}", value)
-    return string
-
-#ecmwf/{prefix}{date_string}{hour_string}00{valid_time_date}{valid_time_hour}011
 def generate_aws_key(variable, init_time: datetime, forecast_hour: timedelta,
                      model: Model):
-    #
+
+    def _find_between(s, first, last):
+        # lets avoid regex for now :-)
+        try:
+            start = s.index(first) + len(first)
+            end = s.index(last, start)
+            return s[start:end]
+        except ValueError:
+            return ""
+
+    def _replace(string,key,value):
+        return string.replace("{" + key + "}", value)
+
+    def _time(string,key,value:datetime):
+        while key in string:
+            format = _find_between(string,'{'+key+':','}')
+            to_replace = key+':'+format
+            replace_with= value.strftime(format)
+            string = _replace( string,to_replace, replace_with)
+        return string
+
     if forecast_hour == timedelta(hours=0):
         ecmwf_lead_zero_indicator = '011'
     else:
@@ -60,28 +61,21 @@ def generate_aws_key(variable, init_time: datetime, forecast_hour: timedelta,
     valid_time = init_time+forecast_hour
 
     properties = {
-        "name": model.name,
-        "label": model.label,
-        "bucket": model.bucket,
-        "resolution": model.resolution,
-        "region": model.region,
-        "date": init_time.strftime("%Y%m%d"),
-        "cyclehour": init_time.strftime("%H"),
-        "forecasthour": "{hours:03d}".format(
-            hours=int(forecast_hour.total_seconds() // 3600)),
-        "variable": variable,
-        "key":model.key,
-        "init_time_month": init_time.strftime("%m"),
-        "init_time_day": init_time.strftime("%d"),
-        "valid_time_month": valid_time.strftime("%m"),
-        "valid_time_day": valid_time.strftime("%d"),
-        "valid_time_hour": valid_time.strftime("%H"),
-        "ecmwf_subcycle_string":ecmwf_subcycle_string,
-        "ecmwf_lead_zero_indicator":ecmwf_lead_zero_indicator
+        "bucket": { 'method':_replace, 'args':(model.bucket,)},
+        "forecasthour": { 'method':_replace, 'args':("{hours:03d}".format(hours=int(forecast_hour.total_seconds() // 3600)),)},
+        "init_time": { 'method':_time, 'args':(init_time,)},
+        "valid_time": {'method': _time, 'args': (valid_time,)},
+        "variable": { 'method':_replace, 'args':(variable,)},
+        "ecmwf_subcycle_string":{'method':_replace, 'args':(ecmwf_subcycle_string,)},
+        "ecmwf_lead_zero_indicator":{'method':_replace, 'args':(ecmwf_lead_zero_indicator,)}
     }
-    key = _replace(model.key_template, properties)
 
-    return f"{model.bucket}/{key}"
+    string = model.key_template
+    for key, value in properties.items():
+        if key in string:
+            string = value['method'](string,key,*value['args'])
+
+    return f"{model.bucket}/{string}"
 
 
 def generate_forecast_keys_and_valid_times(variable, init_time: datetime, duration: timedelta,
@@ -117,3 +111,8 @@ def generate_lead_keys_and_valid_times(variable, start_time: datetime, end_time:
         )
         valid_time.append(time[0] + time[1])
     return aws_keys, valid_time
+
+def generate_evaluation_time_keys_and_valid_times(variable, start_time: datetime, end_time: datetime,
+                            lead_time: timedelta, model: Model, exact=False) -> Tuple[List[str],List[datetime]]:
+
+    pass

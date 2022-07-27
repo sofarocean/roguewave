@@ -141,19 +141,20 @@ def extract_at_points(
 
 
 def extract_along_spotter_tracks(
-        aws_keys,
-        valid_times,
-        spotter_tracks: Dict[str, List[Union[WaveSpectrum, WaveBulkData]]],
-        variable_name_in_netcdf,
+        aws_keys:List[str],
+        valid_times:List[datetime],
+        spotter_tracks: Dict[str, Union[List[Union[WaveSpectrum, WaveBulkData]],DataFrame]],
+        variable_name_in_netcdf:str,
         parallell=False,
         number_of_workers=10):
+    """"""
 
     tracks = {}
     for spotter_id, spotter in spotter_tracks.items():
         if isinstance(spotter,DataFrame):
             latitudes = spotter['latitude'].values
-            longitudes = spotter['latitude'].values
-            timestamps = spotter.index.values
+            longitudes = spotter['longitude'].values
+            timestamps = spotter.index
         else:
             latitudes = numpy.array([x.latitude for x in spotter])
             longitudes = numpy.array([x.longitude for x in spotter])
@@ -172,8 +173,7 @@ def extract_along_tracks(
         tracks: Dict[str, Track],
         variable_name_in_netcdf,
         parallell=False,
-        number_of_workers=10) -> Dict[
-    str, Dict[str, numpy.ndarray]]:
+        number_of_workers=10) -> Dict[str, DataFrame]:
     # The tracks are a dictionary, with as key the name of the track (e.g.
     # a Spotter id) and as contents another dictionary (see Track for description)
     # that lists for each track the times, latitudes and longitudes. Since
@@ -214,7 +214,7 @@ def extract_along_tracks(
 def extract_clusters(clusters: List[Cluster],
                      parallell=False,
                      number_of_workers=10) -> Dict[
-    str, Dict[str, numpy.ndarray]]:
+    str, DataFrame]:
     filesystem = s3fs.S3FileSystem()
 
     # Some properties are assumed homogeneous acrros the files. We can avoid
@@ -249,8 +249,6 @@ def extract_clusters(clusters: List[Cluster],
 
     _out = {}
     for key, value in out.items():
-        _out[key] = {}
-        _out[key]['valid_times'] = numpy.squeeze(
-            numpy.array(value['valid_times']))
-        _out[key]['data'] = numpy.squeeze(numpy.array(value['data']))
+        _out[key] = DataFrame(index=value['valid_times'])
+        _out[key][clusters[0]['variable']] = numpy.squeeze(numpy.array(value['data']))
     return _out

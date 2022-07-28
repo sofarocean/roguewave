@@ -4,6 +4,7 @@ from typing import List
 # SofarAPI instance.
 _API = None
 
+
 # Helper functions
 def get_spotter_ids(sofar_api: SofarApi = None) -> List[str]:
     """
@@ -18,11 +19,11 @@ def get_spotter_ids(sofar_api: SofarApi = None) -> List[str]:
 # -----------------------------------------------------------------------------
 
 
-def _get_sofar_api()->SofarApi:
+def _get_sofar_api() -> SofarApi:
     """
     Gets a new sofar API object if requested. Returned object is essentially a
-    Singleton class-> next calls will return the stored object instead of creating
-    a new class. For module internal use only.
+    Singleton class-> next calls will return the stored object instead of
+    creating a new class. For module internal use only.
 
     :return: instantiated SofarApi object
     """

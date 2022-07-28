@@ -4,6 +4,7 @@ class ExceptionCouldNotDownloadData(Exception):
     """
     pass
 
+
 class ExceptionNoDataForVariable(Exception):
     """
     Query raised when no frequency data is available for the spotter

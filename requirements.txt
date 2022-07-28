@@ -9,3 +9,4 @@ msgpack
 s3fs
 h5netcdf
 tqdm
+boto3

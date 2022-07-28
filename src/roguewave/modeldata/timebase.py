@@ -1,7 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from dataclasses import dataclass, field
 from typing import List, Union, Tuple
-import numpy
 
 INTERVALTYPE = Union[List[tuple[int, timedelta]], Tuple[tuple[int, timedelta]]]
 
@@ -22,34 +20,26 @@ def find_closet_init_time(evaluation_time: datetime,
     cycle_offset_seconds = cycle_offset_hours.total_seconds()
     lead_time_seconds = lead_time.total_seconds()
 
-    number_of_cycles = (evaluation_time_seconds - cycle_offset_seconds- lead_time_seconds) // \
-                       cycle_time_seconds
-
-
+    number_of_cycles = (
+            (evaluation_time_seconds - cycle_offset_seconds
+             - lead_time_seconds) // cycle_time_seconds
+    )
 
     init_time = datetime.fromtimestamp(
-        number_of_cycles * cycle_time_seconds
-            + cycle_offset_seconds,
+        number_of_cycles * cycle_time_seconds + cycle_offset_seconds,
         tz=timezone.utc
     )
     delta = evaluation_time_seconds - lead_time_seconds - init_time.timestamp()
 
-    if delta >= cycle_time_seconds/2:
+    if delta >= cycle_time_seconds / 2:
         new_lead_time = evaluation_time - init_time - cycle_time_hours
         if new_lead_time.total_seconds() >= 0:
             init_time = init_time + cycle_time_hours
 
-    #print( (lead_time_seconds - cycle_time_seconds * (lead_time_seconds//cycle_time_seconds))/3600 //2)
-    #
-    # actual_lead = evaluation_time - init_time
-    # lead_delta  = int(lead_time.total_seconds()-actual_lead.total_seconds()/3600)
-    #
-    # number_of_cycles = numpy.round(lead_delta/cycle_time_seconds,0)
-    # init_time = init_time-number_of_cycles*cycle_time_hours
     return init_time
 
 
-class ModelTimeConfiguration():
+class ModelTimeConfiguration:
     def __init__(self,
                  cycle_time_hours: timedelta = timedelta(hours=6),
                  cycle_offset_hours: timedelta = timedelta(hours=0),
@@ -107,28 +97,30 @@ def timebase_forecast(init_time: datetime, duration: timedelta,
     return timebase
 
 
-def timebase_lead(start_time: datetime, end_time: datetime,lead_time: timedelta,
+def timebase_lead(start_time: datetime, end_time: datetime,
+                  lead_time: timedelta,
                   time_configuration: ModelTimeConfiguration, exact=True):
-
-    n = int((end_time-start_time)/time_configuration.output_interval[0][1])
+    n = int((end_time - start_time) / time_configuration.output_interval[0][1])
     times = []
     for index in range(0, n):
         #
-        valid_time = start_time + index * time_configuration.output_interval[0][1]
-        init_time = find_closet_init_time(valid_time,
-                                      cycle_time_hours=time_configuration.cycle_time_hours,
-                                      cycle_offset_hours=time_configuration.cycle_offset_hours,
-                                      lead_time=lead_time)
-        forecast_hours = valid_time-init_time
+        valid_time = start_time + index * \
+                     time_configuration.output_interval[0][1]
+        init_time = find_closet_init_time(
+            valid_time,
+            cycle_time_hours=time_configuration.cycle_time_hours,
+            cycle_offset_hours=time_configuration.cycle_offset_hours,
+            lead_time=lead_time)
+        forecast_hours = valid_time - init_time
         if exact:
-            if not (forecast_hours==lead_time):
+            if not (forecast_hours == lead_time):
                 continue
 
-        times.append( (init_time,forecast_hours) )
+        times.append((init_time, forecast_hours))
 
     return times
 
 
-def timebase_evaluation(evaluation_time: datetime, time_configuration: ModelTimeConfiguration):
-    pass
-
+# def timebase_evaluation(evaluation_time: datetime,
+#                         time_configuration: ModelTimeConfiguration):
+#     pass

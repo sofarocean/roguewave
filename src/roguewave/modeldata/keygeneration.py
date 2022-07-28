@@ -2,7 +2,7 @@
 # =============================================================================
 from datetime import datetime, timedelta
 from .timebase import ModelTimeConfiguration, timebase_forecast, \
-    timebase_lead
+    timebase_lead, timebase_evaluation
 import os
 from typing import List, Tuple
 import json
@@ -87,7 +87,7 @@ def generate_forecast_keys_and_valid_times(
 def generate_analysis_keys_and_valid_times(
         variable, start_time: datetime, end_time: datetime,
         model_name: str,
-        ) -> Tuple[List[str], List[datetime]]:
+) -> Tuple[List[str], List[datetime]]:
     """
     Get the AWS keys and valid times associated with the analysis results for
     a given model.
@@ -147,11 +147,33 @@ def generate_lead_keys_and_valid_times(
 # -----------------------------------------------------------------------------
 
 
-# def generate_evaluation_time_keys_and_valid_times(
-#         variable, start_time: datetime, end_time: datetime,
-#         lead_time: timedelta, model: _ModelAwsKeyLayout,
-#         exact=False) -> Tuple[List[str], List[datetime]]:
-#     pass
+def generate_evaluation_time_keys_and_valid_times(
+        variable,
+        evaluation_time, model_name: str,
+        maximum_lead_time: timedelta = None
+) -> Tuple[List[str], List[datetime]]:
+    """
+
+    :param variable: name of the variable of interest
+    :param evaluation_time: evaluation time of interest
+    :param model_name: model name
+    :param maximum_lead_time: maximum lead time of interest
+    :return:
+    """
+    aws_key_layout = _get_model_aws_layout(model_name)
+    if maximum_lead_time is None:
+        maximum_lead_time = aws_key_layout.model_time_configuration.duration
+
+    time_vector = timebase_evaluation(
+        evaluation_time=evaluation_time,
+        maximum_lead_time=maximum_lead_time,
+        time_configuration=aws_key_layout.model_time_configuration
+    )
+
+    return _generate_keys(time_vector, variable, aws_key_layout)
+
+
+# ------------------------------------------------------------------------------
 
 
 # Internal module functions
@@ -338,4 +360,5 @@ def _get_model_aws_layout(name) -> _ModelAwsKeyLayout:
     :return: Model
     """
     return _ModelAwsKeyLayout(name=name, **MODELS[name])
+
 # -----------------------------------------------------------------------------

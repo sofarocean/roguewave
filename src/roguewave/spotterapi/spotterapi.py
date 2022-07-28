@@ -1,5 +1,5 @@
 """
-Contents: Routines to get spectral data from the spotter api
+Contents: Routines to get data from the spotter api
 
 Copyright (C) 2022
 Sofar Ocean Technologies
@@ -11,16 +11,12 @@ Routines to get data from the spotter api
 
 Functions:
 
-- `get_spectrum`, function to call externally do download spectral data.
-   Parallel if multiple Spotters are given.
-
-
-How To Use This Module
-======================
-(See the individual functions for details.)
-
-1. Import it: ``import roguewave.spotterapi``
-2. call ``spotterapi.get_spectrum`` or other functions to get the desired data.
+- `get_spectrum`, function to download spectral data.
+- `get_bulk_wave_data`, function to download bulk wave data.
+- `get_data`, general function to download different data types (spectral,
+    bulk wave, wind, SST, barometer).
+- `search_circle`, get all available data within a given circle.
+- `search_rectangle`, get all available data within a given rectangle.
 
 """
 

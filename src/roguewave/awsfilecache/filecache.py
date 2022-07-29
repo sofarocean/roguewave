@@ -14,7 +14,7 @@ from warnings import warn
 # =============================================================================
 
 
-TEMPORARY_DIRECTORY = '~/tmp/files/'
+TEMPORARY_DIRECTORY = '~/temporary_roguewave_files/filecache/'
 CACHE_SIZE_GiB = 1
 MAXIMUM_NUMBER_OF_WORKERS = 10
 KILOBYTE = 1024

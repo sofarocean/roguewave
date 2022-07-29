@@ -31,11 +31,31 @@ from .wavespectra.partitioning.wavefields import (
 from .wavespectra.partitioning.observations import \
     get_bulk_partitions_from_observations, \
     get_spectral_partitions_from_observations
-
-def set_log_to_console(level=logging.INFO):
-    logger.addHandler(logging.StreamHandler(stream=sys.stdout))
-    logger.setLevel(level)
+from .awsfilecache.filecache import create_aws_file_cache, \
+    cached_local_aws_files, delete_aws_file_cache
 
 def set_log_to_file(filename, level=logging.INFO):
     logger.addHandler(logging.FileHandler(filename))
     logger.setLevel(level)
+
+
+def set_level(level):
+    if isinstance(level,int):
+        logger.setLevel(level)
+
+    elif isinstance(level,str):
+        if level == 'debug':
+            logger.setLevel(logging.DEBUG)
+        elif level == 'info':
+            logger.setLevel(logging.INFO)
+        elif level == 'warning':
+            logger.setLevel(logging.WARNING)
+        else:
+            raise ValueError(f'unknown logging level {level}')
+    else:
+        raise ValueError(f'unknown logging level {level}')
+
+
+def set_log_to_console(level=logging.INFO):
+    logger.addHandler(logging.StreamHandler(stream=sys.stdout))
+    set_level(level)

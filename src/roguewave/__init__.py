@@ -34,6 +34,9 @@ from .wavespectra.partitioning.observations import \
 from .awsfilecache.filecache import create_aws_file_cache, \
     cached_local_aws_files, delete_aws_file_cache
 
+from .modeldata.griddata import open_aws_keys_as_dataset
+
+
 def set_log_to_file(filename, level=logging.INFO):
     logger.addHandler(logging.FileHandler(filename))
     logger.setLevel(level)

@@ -3,7 +3,7 @@
 import os
 import hashlib
 import boto3
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Union
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 from roguewave import logger
@@ -28,7 +28,7 @@ _ACTIVE_FILE_CACHES = {}
 # =============================================================================
 
 
-class AWSFileCache():
+class AWSFileCache:
     """
     Simple file caching class that when given an aws key locally stores the
     file in the cache directory and returns the path to the file. The file
@@ -44,8 +44,8 @@ class AWSFileCache():
         [path]/CACHE_PREFIX + md5_hash_of_AWS_KEY
 
     Methods
-      * __getitem__(keys) : accept a simgle aws_key or multiple keys and returns
-        filepaths to local copies thereof. You would typically use the
+      * __getitem__(keys) : accept a simgle aws_key or multiple keys and
+        returns filepaths to local copies thereof. You would typically use the
             cache[keys] notation instead of the dunder method.
       * purge() clear all contents of the cache (destructive, deletes all local
         files).
@@ -62,9 +62,9 @@ class AWSFileCache():
     CACHE_FILE_PREFIX = 'cachefile_'
 
     def __init__(self,
-                 path:str=TEMPORARY_DIRECTORY,
-                 size_GiB:Union[float,int]=CACHE_SIZE_GiB,
-                 do_cache_eviction_on_startup:bool=False,
+                 path: str = TEMPORARY_DIRECTORY,
+                 size_GiB: Union[float, int] = CACHE_SIZE_GiB,
+                 do_cache_eviction_on_startup: bool = False,
                  parallel=True):
         """
         Initialize Cache
@@ -85,7 +85,7 @@ class AWSFileCache():
         """
 
         self.path = os.path.expanduser(path)
-        self.max_size = int( size_GiB * GIGABYTE )
+        self.max_size = int(size_GiB * GIGABYTE)
         self.parallel = parallel
 
         # create the path if it does not exist
@@ -138,7 +138,7 @@ class AWSFileCache():
         else:
             return []
 
-    def _initialize_cache(self,do_cache_eviction_on_stratup:bool) -> None:
+    def _initialize_cache(self, do_cache_eviction_on_stratup: bool) -> None:
         """
         Initialize the file cache. Look on disk for files in the cache path
         that have the required prefix and load these into the cache. Once
@@ -157,17 +157,17 @@ class AWSFileCache():
             self._cache_eviction()
         else:
             if self._size() > self.max_size:
-                raise ValueError( 'The cache currently existing on disk '
-                                  'exceeds the maximum cache size of the '
-                                  'current cache.\n Either increase the cache '
-                                  'size of the object or allow eviction of '
-                                  'files on startup.' )
+                raise ValueError('The cache currently existing on disk '
+                                 'exceeds the maximum cache size of the '
+                                 'current cache.\n Either increase the cache '
+                                 'size of the object or allow eviction of '
+                                 'files on startup.')
 
     def _is_in_cache(self, _hash: str) -> bool:
         """
         Check if a _hash is in the cache
-        :param _hash:
-        :return:
+        :param _hash: hash to check
+        :return: True if in Cache, False if not.
         """
         cache_hit = _hash in self._entries
         if cache_hit:
@@ -177,10 +177,10 @@ class AWSFileCache():
         return cache_hit
 
     def _add_to_cache(self, _hash: str, filepath: str) -> None:
-        # add entry to the cache
+        # add entry to the cache.
         self._entries[_hash] = filepath
 
-    def _get_from_cache(self, _hash:str ) -> str:
+    def _get_from_cache(self, _hash: str) -> str:
         """
         Get entry from cache and touch the file to indicate it has been used
         recently (last to be evicted)
@@ -197,7 +197,6 @@ class AWSFileCache():
         :return: Number of entries in the cache.
         """
         return len(self._entries)
-
 
     def __getitem__(self, aws_keys: Union[List, str]) -> List[str]:
 
@@ -218,7 +217,7 @@ class AWSFileCache():
         if cache_misses:
             # download all the files
             succesfully_downloaded = _download_from_aws(cache_misses,
-                                            parallel_download=self.parallel)
+                                                        parallel_download=self.parallel)
 
             # For all downloaded files do
             for success, cache_miss in zip(
@@ -240,7 +239,7 @@ class AWSFileCache():
                       f'To avoid issues the cache is enlarged to ensure' \
                       f'the current set of files fits in the cache. \n' \
                       f'old size: {self.max_size} bytes; ' \
-                      f'new size {size_of_requested_data+MEGABYTE}'
+                      f'new size {size_of_requested_data + MEGABYTE}'
             warn(warning)
             logger.warning(warning)
             self.max_size = size_of_requested_data + MEGABYTE
@@ -250,7 +249,7 @@ class AWSFileCache():
         self._cache_eviction()
         return filepaths
 
-    def _cache_eviction(self)->bool:
+    def _cache_eviction(self) -> bool:
         """
         Simple cache eviction policy. If the cache exceeds the maximum size
         remove data from the cache based on whichever file was interacted with
@@ -263,7 +262,6 @@ class AWSFileCache():
         # check if we exceed the size, if not return
         if not self._size() > self.max_size:
             return False
-
 
         # Get access/modified times for all the files in cache
         modified = []
@@ -278,7 +276,8 @@ class AWSFileCache():
                 access_time = os.path.getatime(fp)
                 modified_time = os.path.getmtime(fp)
 
-                time_to_check = access_time if access_time > modified_time else modified_time
+                time_to_check = access_time if access_time > modified_time \
+                    else modified_time
                 modified.append((time_to_check, fp, _hash))
 
         # Sort files in reversed chronological order.
@@ -305,17 +304,17 @@ class AWSFileCache():
 
         return True
 
-    def _size(self)->int:
+    def _size(self) -> int:
         """
         Return size on disk of the cache in bytes.
         :return: cache size in bytes.
         """
         size = 0
         for path, dirs, files in os.walk(self.path):
-            size = _get_total_size_of_files_in_bytes(files,path)
+            size = _get_total_size_of_files_in_bytes(files, path)
         return size
 
-    def purge(self)->None:
+    def purge(self) -> None:
         """
         Delete all the files in the cache.
         :return: None
@@ -333,7 +332,7 @@ class AWSFileCache():
 # =============================================================================
 
 
-def cached_local_aws_files( aws_keys:List[str], cache_name:str)-> List[str]:
+def cached_local_aws_files(aws_keys: List[str], cache_name: str) -> List[str]:
     """
 
     :param aws_keys:
@@ -347,12 +346,22 @@ def cached_local_aws_files( aws_keys:List[str], cache_name:str)-> List[str]:
     return _ACTIVE_FILE_CACHES[cache_name][aws_keys]
 
 
-def create_aws_file_cache(cache_name:str,
-                      cache_path:str=TEMPORARY_DIRECTORY,
-                      cache_size_GiB:Union[int,float]=CACHE_SIZE_GiB,
-                      do_cache_eviction_on_startup:bool=False,
-                      download_in_parallel=True
-                      )  \
+def cache_exists( cache_name:str):
+    """
+    Check if the cache name already exists
+    :param cache_name: name for the cache to be created. This name is used
+            to retrieve files from the cache.
+    :return: True if exists, False otherwise
+    """
+    return cache_name in _ACTIVE_FILE_CACHES
+
+
+def create_aws_file_cache(cache_name: str,
+                          cache_path: str = TEMPORARY_DIRECTORY,
+                          cache_size_GiB: Union[int, float] = CACHE_SIZE_GiB,
+                          do_cache_eviction_on_startup: bool = False,
+                          download_in_parallel=True
+                          ) \
         -> None:
     """
     Create a file cache. Created caches *must* have unique names and
@@ -366,12 +375,13 @@ def create_aws_file_cache(cache_name:str,
             the size, then files with oldest access/modified dates get deleted
             until everthing fits in the cache again. Fractional values (floats)
             are allowed.
-    :param do_cache_eviction_on_startup: do_cache_eviction_on_startup: whether we ensure the cache size
-            conforms to the given size on startup. If set to true, a cache
-            directory that exceeds the maximum size will be reduced to max
-            size. Set to False by default in which case an error occurs. The
-            latter to prevent eroneously evicting files from a cache that was
-            previously created on purpose with a larger size that the limit.
+    :param do_cache_eviction_on_startup: do_cache_eviction_on_startup: whether
+            we ensure the cache size conforms to the given size on startup.
+            If set to true, a cache directory that exceeds the maximum size
+            will be reduced to max size. Set to False by default in which case
+            an error occurs. The latter to prevent eroneously evicting files
+            from a cache that was previously created on purpose with a larger
+            size that the limit.
     :param download_in_parallel: Download in paralel from aws. Per default 10
             worker threads are created.
 
@@ -380,9 +390,10 @@ def create_aws_file_cache(cache_name:str,
     cache_path = os.path.abspath(os.path.expanduser(cache_path))
 
     if cache_name in _ACTIVE_FILE_CACHES:
-        raise ValueError(f'Cache with name {cache_name} is already initialized')
+        raise ValueError(
+            f'Cache with name {cache_name} is already initialized')
 
-    for key,cache in _ACTIVE_FILE_CACHES.items():
+    for key, cache in _ACTIVE_FILE_CACHES.items():
         if cache.path == cache_path:
             raise ValueError(f'Error when creating cache with name: '
                              f'"{cache_name}". \n A cache named: "{key}" '
@@ -390,12 +401,11 @@ def create_aws_file_cache(cache_name:str,
                              f'for caching.\n '
                              f'Multiple caches cannot share the same path.')
 
-
     _ACTIVE_FILE_CACHES[cache_name] = AWSFileCache(
-            cache_path,
-            size_GiB=cache_size_GiB,
-            do_cache_eviction_on_startup=do_cache_eviction_on_startup,
-            parallel=download_in_parallel
+        cache_path,
+        size_GiB=cache_size_GiB,
+        do_cache_eviction_on_startup=do_cache_eviction_on_startup,
+        parallel=download_in_parallel
     )
     return
 
@@ -429,7 +439,7 @@ def _hashname(string: str) -> str:
 
 
 def _download_from_aws(key_and_filenames: List[Tuple],
-                       parallel_download=False)->List[bool]:
+                       parallel_download=False) -> List[bool]:
     """
     Wrapper function to download multiple aws_keys from aws.
 
@@ -438,7 +448,7 @@ def _download_from_aws(key_and_filenames: List[Tuple],
     :return: List of boolean indicating if the download was a success.
     """
     s3 = boto3.client('s3')
-    args = [ (s3,*key_and_filename) for key_and_filename in key_and_filenames ]
+    args = [(s3, *key_and_filename) for key_and_filename in key_and_filenames]
     if parallel_download:
         with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
             output = list(
@@ -466,7 +476,8 @@ def _download_file_from_aws(args):
     s3.download_file(bucket, key, filepath)
     return True
 
-def _get_total_size_of_files_in_bytes(filenames:List[str], path = None) -> int:
+
+def _get_total_size_of_files_in_bytes(filenames: List[str], path=None) -> int:
     """
     Simple function to calculate the size of a list of files on disk.
     :param filenames: list of filenames or filepaths
@@ -483,12 +494,3 @@ def _get_total_size_of_files_in_bytes(filenames:List[str], path = None) -> int:
             filepath = os.path.join(path, filename)
         size += os.path.getsize(filepath)
     return size
-
-
-def _get_cache( path, **kwargs )->AWSFileCache:
-    if path in _ACTIVE_FILE_CACHES:
-        return _ACTIVE_FILE_CACHES[path]
-    else:
-        _ACTIVE_FILE_CACHES[path] = AWSFileCache(
-            path, **kwargs
-        )

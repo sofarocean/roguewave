@@ -3,30 +3,88 @@
 import os
 import hashlib
 import boto3
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Dict, Iterable
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 from roguewave import logger
 from pathlib import Path
 from warnings import warn
 
+
+
 # Model private variables
 # =============================================================================
 
 
 TEMPORARY_DIRECTORY = '~/temporary_roguewave_files/filecache/'
-CACHE_SIZE_GiB = 1
+
+CACHE_SIZE_GiB = 5
+DEFAULT_CACHE_NAME = '__default__'
 MAXIMUM_NUMBER_OF_WORKERS = 10
 KILOBYTE = 1024
 MEGABYTE = 1024 * KILOBYTE
 GIGABYTE = 1024 * MEGABYTE
 
-_ACTIVE_FILE_CACHES = {}
+_ACTIVE_FILE_CACHES = {} # type: Dict[str,AWSFileCache]
 
 
 # Classes
 # =============================================================================
+class RemoteResource():
+    """
+    Abstract class defining the resource protocol used for remote retrieval. It
+    contains just two methods that need to be implemented:
+    - download return a function that can download from the resource given a
+      uri and filepath
+    - method to check if the uri is a valid uri for the given resource.
+    """
+    URI_PREFIX = 'uri://'
 
+    def download(self):
+        """
+        Download the given URI
+        :param uri: Uniform Resource Identifier.
+        :param filepath: Path to save the file to. It may be assumed the
+            directory exists.
+        :return: Succes or failure to download.
+        """
+        pass
+
+    def valid_uri(self, uri: str) -> bool:
+        """
+        Check if the uri is valid for the given resource
+        :param uri: Uniform Resource Identifier.
+        :return: True or False
+        """
+        if uri.startswith(self.URI_PREFIX):
+            return True
+        else:
+            return False
+
+    def _remove_uri_prefix(self,uri:str):
+        return uri.strip(self.URI_PREFIX)
+
+
+class RemoteResourceS3(RemoteResource):
+    URI_PREFIX = 's3://'
+
+    def __init__(self):
+        self.s3 = boto3.client('s3')
+
+    def download(self):
+        def _download_file_from_aws( uri:str, filepath:str ):
+            """
+            Worker function to download files from AWS
+            :param args: Tuple/List with as first entry the aws key to download and
+                as second entry the filepath to download to
+            :return:
+            """
+            s3 = self.s3
+            uri = self._remove_uri_prefix(uri)
+            bucket, key = uri.split('/', maxsplit=1)
+            s3.download_file(bucket, key, filepath)
+            return True
+        return _download_file_from_aws
 
 class AWSFileCache:
     """
@@ -41,7 +99,10 @@ class AWSFileCache:
     The files are stored locally in the directory specified on class
     initialization, as:
 
-        [path]/CACHE_PREFIX + md5_hash_of_AWS_KEY
+        [path]/CACHE_PREFIX + md5_hash_of_AWS_KEY + CACHE_POSTFIX
+
+    The pre- and post fix are added so we have an easy pattern to distinguish
+    cache files from other files.
 
     Methods
       * __getitem__(keys) : accept a simgle aws_key or multiple keys and
@@ -60,6 +121,7 @@ class AWSFileCache:
     """
 
     CACHE_FILE_PREFIX = 'cachefile_'
+    CACHE_FILE_POSTFIX = '_cachefile'
 
     def __init__(self,
                  path: str = TEMPORARY_DIRECTORY,
@@ -112,7 +174,7 @@ class AWSFileCache:
         :param aws_key: valis aws_key of form "bucket/key"
         :return: valid cache file
         """
-        return self.CACHE_FILE_PREFIX + _hashname(aws_key)
+        return self.CACHE_FILE_PREFIX + _hashname(aws_key) + self.CACHE_FILE_POSTFIX
 
     def _cache_file_path(self, aws_key: str) -> str:
         """
@@ -121,12 +183,11 @@ class AWSFileCache:
         :param aws_key: valis aws_key of form "bucket/key"
         :return: valid cache file
         """
-        return os.path.join(self.path,
-                            self.CACHE_FILE_PREFIX + _hashname(aws_key))
+        return os.path.join(self.path, self._cache_file_name(aws_key))
 
     def _get_cache_files(self) -> List[str]:
         """
-        Find all files that are currently a member of the cache
+        Find all files that are currently a member of the cache.
         :return:
         """
         _cache_files = []
@@ -134,17 +195,19 @@ class AWSFileCache:
             # Return all files that are "cache" objects. This is a safety if
             # other user files are present, so that these don't accidentally
             # evicted from the cache (aka deleted).
-            return [file for file in files if self.CACHE_FILE_PREFIX if file]
+            return [file for file in files if
+                    file.startswith(self.CACHE_FILE_PREFIX) and
+                    file.endswith(self.CACHE_FILE_POSTFIX) ]
         else:
             return []
 
-    def _initialize_cache(self, do_cache_eviction_on_stratup: bool) -> None:
+    def _initialize_cache(self, do_cache_eviction_on_startup: bool) -> None:
         """
         Initialize the file cache. Look on disk for files in the cache path
         that have the required prefix and load these into the cache. Once
         loaded, we do a check whether or not the cache is full and if we need
         to remove files.
-        :param do_cache_eviction_on_stratup: see description under __init__
+        :param do_cache_eviction_on_startup: see description under __init__
         :return:
         """
         self._entries = {}
@@ -153,7 +216,7 @@ class AWSFileCache:
             self._entries[file] = filepath
 
         # See if cache is still < size
-        if do_cache_eviction_on_stratup:
+        if do_cache_eviction_on_startup:
             self._cache_eviction()
         else:
             if self._size() > self.max_size:
@@ -163,6 +226,15 @@ class AWSFileCache:
                                  'size of the object or allow eviction of '
                                  'files on startup.')
 
+    def in_cache(self, aws_keys) -> List[bool]:
+        # make sure input is a list
+        if isinstance(aws_keys, str):
+            aws_keys = [aws_keys]
+
+        # Create the hashes from the aws keys
+        hashes = [self._cache_file_name(aws_key) for aws_key in aws_keys]
+        return [ self._is_in_cache(_hash) for _hash in hashes ]
+
     def _is_in_cache(self, _hash: str) -> bool:
         """
         Check if a _hash is in the cache
@@ -170,15 +242,50 @@ class AWSFileCache:
         :return: True if in Cache, False if not.
         """
         cache_hit = _hash in self._entries
-        if cache_hit:
-            self._cache_hits += 1
-        else:
-            self._cache_misses += 1
         return cache_hit
 
     def _add_to_cache(self, _hash: str, filepath: str) -> None:
         # add entry to the cache.
         self._entries[_hash] = filepath
+
+    def remove(self, aws_key:str) -> None:
+        """
+        Remove an entry from the cache
+        :param aws_key: aws key
+        :return: None
+        """
+        if not self.in_cache(aws_key):
+            raise ValueError(f'Key {aws_key} not in Cache')
+
+        _hash = self._cache_file_name(aws_key)
+        return self._remove_item_from_cache(_hash)
+
+
+    def _remove_item_from_cache(self, _hash: str) -> None:
+        """
+        Remove a hash key from the cache. Here it is assumed that the _hash is
+        a valid entry. We do allow for non existance of corresponding files as
+        the cache can get out of sync if something external deleted the file.
+        Since the endstate is valid (no entry in cache, no entry on disk) this
+        is considered OK.
+
+        :param _hash: hash key
+        :return: None
+        """
+
+        assert _hash in self._entries
+
+        file_to_delete = self._entries.pop(_hash)
+
+        if os.path.exists(file_to_delete):
+            logger.debug(f' - removing {_hash}')
+
+            # And delete file.
+            os.remove(file_to_delete)
+        else:
+            logger.debug(f' - file {_hash} did not exist on disk')
+
+        return None
 
     def _get_from_cache(self, _hash: str) -> str:
         """
@@ -188,8 +295,14 @@ class AWSFileCache:
         :return: file path
         """
         filepath = self._entries[_hash]
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError('The filepath in the cache log does not'
+                                    'exist on disk.')
+
         # Touch the file to indicate we recently used it.
         Path(filepath).touch()
+
         return filepath
 
     def __len__(self) -> int:
@@ -212,6 +325,9 @@ class AWSFileCache:
         cache_misses = [(key, self._cache_file_path(key), _hash) for
                         _hash, key in zip(hashes, aws_keys) if
                         not self._is_in_cache(_hash)]
+
+        self._cache_misses += len(cache_misses)
+        self._cache_hits += len(hashes) - len(cache_misses)
 
         # for all aws_keys not in cache
         if cache_misses:
@@ -265,23 +381,21 @@ class AWSFileCache:
 
         # Get access/modified times for all the files in cache
         modified = []
-        for path, dirs, files in os.walk(self.path):
-            for _hash in files:
-                fp = os.path.join(path, _hash)
+        for _hash, fp in self._entries.items():
+            # From my brief reading, access time is not always reliable,
+            # hence I use whatever the latest time set is for modified or
+            # access time as an indicator of when we last interacted with
+            # the file.
+            access_time = os.path.getatime(fp)
+            modified_time = os.path.getmtime(fp)
 
-                # From my brief reading, access time is not always reliable,
-                # hence I use whatever the latest time set is for modified or
-                # access time as an indicator of when we last interacted with
-                # the file.
-                access_time = os.path.getatime(fp)
-                modified_time = os.path.getmtime(fp)
-
-                time_to_check = access_time if access_time > modified_time \
-                    else modified_time
-                modified.append((time_to_check, fp, _hash))
+            # pick whichever is most recent.
+            time_to_check = access_time if access_time > modified_time \
+                else modified_time
+            modified.append((time_to_check, _hash))
 
         # Sort files in reversed chronological order.
-        files_in_cache = [(x[1], x[2]) for x in
+        files_in_cache = [ x[1] for x in
                           sorted(modified, key=lambda x: x[0], reverse=True)]
 
         # Delete files one by one as long as the cache_size exceeds the max
@@ -292,15 +406,8 @@ class AWSFileCache:
                 f'Cache exceeds limits: {_size} bytes, max size: '
                 f'{self.max_size} bytes')
 
-            # Get the hash and path of the oldest file
-            file_to_delete, _hash = files_in_cache.pop()
-
-            # remove from cache entries.
-            self._entries.pop(_hash)
-            logger.debug(f' - removing {_hash}')
-
-            # And delete file.
-            os.remove(file_to_delete)
+            # Get the hash and path of the oldest file and remove
+            self._remove_item_from_cache( files_in_cache.pop() )
 
         return True
 
@@ -309,10 +416,8 @@ class AWSFileCache:
         Return size on disk of the cache in bytes.
         :return: cache size in bytes.
         """
-        size = 0
-        for path, dirs, files in os.walk(self.path):
-            size = _get_total_size_of_files_in_bytes(files, path)
-        return size
+        return _get_total_size_of_files_in_bytes(
+            list(self._entries.values()), self.path)
 
     def purge(self) -> None:
         """
@@ -332,7 +437,11 @@ class AWSFileCache:
 # =============================================================================
 
 
-def cached_local_aws_files(aws_keys: List[str], cache_name: str) -> List[str]:
+def cached_local_aws_files(
+        aws_keys: List[str],
+        cache_name: str = None,
+        return_cache_hits=False,
+                           ) -> Union[List[str],Tuple[List[str],List[bool]]]:
     """
 
     :param aws_keys:
@@ -340,10 +449,22 @@ def cached_local_aws_files(aws_keys: List[str], cache_name: str) -> List[str]:
     :return:
     """
 
-    if cache_name not in _ACTIVE_FILE_CACHES:
-        raise ValueError(f'Cache with name {cache_name} does not exist.')
+    if cache_name is None:
+        cache_name = DEFAULT_CACHE_NAME
 
-    return _ACTIVE_FILE_CACHES[cache_name][aws_keys]
+    if cache_name not in _ACTIVE_FILE_CACHES:
+        if cache_name == DEFAULT_CACHE_NAME:
+            create_aws_file_cache( cache_name )
+
+        else:
+            raise ValueError(f'Cache with name {cache_name} does not exist.')
+
+    if return_cache_hits:
+        cache_hits = _ACTIVE_FILE_CACHES[cache_name].in_cache(aws_keys)
+        return _ACTIVE_FILE_CACHES[cache_name][aws_keys], cache_hits
+
+    else:
+        return _ACTIVE_FILE_CACHES[cache_name][aws_keys]
 
 
 def cache_exists( cache_name:str):
@@ -355,6 +476,18 @@ def cache_exists( cache_name:str):
     """
     return cache_name in _ACTIVE_FILE_CACHES
 
+
+def get_cache( cache_name:str ) -> AWSFileCache:
+    """
+    Get a valid cache object, error if the name does not exist.
+    :param cache_name: Name of the cache
+    :return: Cache object
+    """
+
+    if cache_exists(cache_name):
+        return _ACTIVE_FILE_CACHES[cache_name]
+    else:
+        raise KeyError(f'Cache with {cache_name} does not exist')
 
 def create_aws_file_cache(cache_name: str,
                           cache_path: str = TEMPORARY_DIRECTORY,
@@ -418,11 +551,37 @@ def delete_aws_file_cache(cache_name):
     :param cache_name: Name of the cache to be deleted
     :return:
     """
-    if cache_name not in _ACTIVE_FILE_CACHES:
+    if not cache_exists(cache_name):
         raise ValueError(f'Cache with name {cache_name} does not exist')
 
     cache = _ACTIVE_FILE_CACHES.pop(cache_name)
     cache.purge()
+
+
+def delete_default_cache():
+    """
+    Clean up the default cache.
+
+    :return:
+    """
+    if cache_exists(DEFAULT_CACHE_NAME):
+        delete_aws_file_cache(DEFAULT_CACHE_NAME)
+
+
+def remove_cached_keys(aws_keys: Union[str,Iterable[str]],
+                           cache_name:str) -> None:
+    """
+    Remove given key(s) from the cache
+    :param aws_keys: list of keys to remove
+    :param cache_name: name of initialized cache.
+    :return:
+    """
+    if not isinstance(aws_keys,Iterable):
+        aws_keys = [aws_keys]
+
+    cache = get_cache(cache_name)
+    for key in aws_keys:
+        cache.remove(key)
 
 
 # Private module helper functions
@@ -472,7 +631,6 @@ def _download_file_from_aws(args):
     aws_key = args[1]
     filepath = args[2]
     bucket, key = aws_key.split('/', maxsplit=1)
-
     s3.download_file(bucket, key, filepath)
     return True
 

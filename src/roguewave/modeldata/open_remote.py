@@ -234,7 +234,7 @@ def _open_variables(variables,
     :return: Dataset
     """
 
-    if not isinstance(variables, Iterable):
+    if not isinstance(variables, Iterable) or isinstance(variables,str):
         variables = [variables]
 
     # Get the model description.

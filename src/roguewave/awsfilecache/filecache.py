@@ -633,7 +633,7 @@ def remove_cached_keys(uris: Union[str, Iterable[str]],
     :param cache_name: name of initialized cache.
     :return:
     """
-    if not isinstance(uris, Iterable):
+    if not isinstance(uris, Iterable) or isinstance(uris,str):
         uris = [uris]
 
     cache = get_cache(cache_name)

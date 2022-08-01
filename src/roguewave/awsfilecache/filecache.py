@@ -11,6 +11,7 @@ from pathlib import Path
 from warnings import warn
 from requests import get
 from requests.exceptions import HTTPError
+from botocore.exceptions import ClientError
 
 # Model private variables
 # =============================================================================
@@ -84,9 +85,15 @@ class RemoteResourceS3(RemoteResource):
             :return:
             """
             s3 = self.s3
-            uri = self._remove_uri_prefix(uri)
-            bucket, key = uri.split('/', maxsplit=1)
-            s3.download_file(bucket, key, filepath)
+            bucket, key = uri.replace(self.URI_PREFIX,'').split('/', maxsplit=1)
+            try:
+                s3.download_file(bucket, key, filepath)
+            except ClientError as e:
+                raise _RemoteResourceError(
+                    f'Error downloading from {uri}. \n'
+                    f'Error code: {e.response["Error"]["Code"]} '
+                    f'Error message: {e.response["Error"]["Message"]}'
+                )
             return True
 
         return _download_file_from_aws
@@ -163,7 +170,8 @@ class FileCache:
                  size_GiB: Union[float, int] = CACHE_SIZE_GiB,
                  do_cache_eviction_on_startup: bool = False,
                  resources=None,
-                 parallel=True):
+                 parallel=True,
+                 allow_for_missing_files=False):
         """
         Initialize Cache
         :param path: path to store cache. If path does not exist it will be
@@ -185,6 +193,7 @@ class FileCache:
         self.path = os.path.expanduser(path)
         self.max_size = int(size_GiB * GIGABYTE)
         self.parallel = parallel
+        self.allow_for_missing_files = allow_for_missing_files
 
         # create the path if it does not exist
         if not os.path.exists(path):
@@ -377,7 +386,8 @@ class FileCache:
             succesfully_downloaded = _download_from_resources(
                 cache_misses,
                 self.resources,
-                parallel_download=self.parallel)
+                parallel_download=self.parallel,
+                allow_for_missing_files=self.allow_for_missing_files)
 
             # For all downloaded files do
             for success, cache_miss in zip(
@@ -644,7 +654,8 @@ def _hashname(string: str) -> str:
 
 def _download_from_resources(key_and_filenames: List[Tuple],
                              resources: List[RemoteResource],
-                             parallel_download=False) -> List[bool]:
+                             parallel_download=False,
+                             allow_for_missing_files=False) -> List[bool]:
     """
     Wrapper function to download multiple uris from the resource(s).
 
@@ -657,7 +668,8 @@ def _download_from_resources(key_and_filenames: List[Tuple],
         for resource in resources:
             if resource.valid_uri(key_and_filename[0]):
                 args.append(
-                    (resource.download(), *key_and_filename)
+                    (resource.download(), *key_and_filename[0:2],
+                     allow_for_missing_files)
                 )
                 break
         else:
@@ -676,11 +688,22 @@ def _download_from_resources(key_and_filenames: List[Tuple],
     return output
 
 
-def _worker(args):
+def _worker(args)->bool:
     download_func = args[0]
     uri = args[1]
     filepath = args[2]
-    return download_func(uri, filepath)
+    allow_for_missing_files = args[3]
+    try:
+        download_func(uri, filepath)
+        return True
+    except _RemoteResourceError as e:
+        if allow_for_missing_files:
+            warning = f'Uri not retrieved: {str(e)}'
+            warn( warning )
+            logger.warning(warning)
+        else:
+            raise e
+        return False
 
 
 def _get_total_size_of_files_in_bytes(filenames: List[str], path=None) -> int:

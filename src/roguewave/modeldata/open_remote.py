@@ -18,7 +18,7 @@
         the cache remains of requested size.
 """
 
-from roguewave.filecache.filecache import cached_local_files
+from roguewave.filecache.filecache import filepaths
 import xarray
 from typing import List, Union, Iterable
 from datetime import datetime, timedelta, timezone
@@ -196,7 +196,7 @@ def _open_aws_keys_as_dataset(
     # downloaded file so we can use a unified netcdf interface and because
     # Grib == Slow.
     files, files_were_in_cache = \
-        cached_local_files(aws_keys, cache_name, return_cache_hits=True)
+        filepaths(aws_keys, cache_name, return_cache_hits=True)
 
     datasets = []
     for file, file_was_in_cache in zip(files, files_were_in_cache):

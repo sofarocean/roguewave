@@ -8,13 +8,13 @@ Authors: Pieter Bart Smit
 ======================
 
 Functions:
-- `cached_local_files`, given URI's return a filepath to the locally stored
+- `filepaths`, given URI's return a filepath to the locally stored
    version
-- `cache_exists`, does a cache with a given name exists
-- `create_file_cache`, create a cache with a given name and custom properties.
-- `delete_file_cache`, delete files associated with the cache.
-- `delete_default_cache`, delete files associated with the default cache.
-- `remove_cached_keys`, remove entries from a given cache.
+- `exists`, does a cache with a given name exists
+- `create_cache`, create a cache with a given name and custom properties.
+- `delete_cache`, delete files associated with the cache.
+- `delete_default`, delete files associated with the default cache.
+- `delete_files`, remove entries from a given cache.
 - `_get_cache`, get Cache object corresponding to the name (for internal use
    only)
 """
@@ -47,16 +47,25 @@ _ACTIVE_FILE_CACHES = {}  # type: Dict[str,FileCache]
 # =============================================================================
 
 
-def cached_local_files(
-        uris: List[str],
+
+def filepaths(
+        uris: Union[List[str],str],
         cache_name: str = None,
-        return_cache_hits=False,
+        return_cache_hits:bool=False,
 ) -> Union[List[str], Tuple[List[str], List[bool]]]:
     """
+    Return the full file path to locally stored objects corresponding to the
+    given URI
 
-    :param uris:
-    :param cache_name:
-    :return:
+    :param uris: List of uris, or a single uri
+    :param cache_name: name of the cache to use. If None, a default cache will
+    be initialized automatically (if not initialized) and used.
+    :param return_cache_hits: return whether or not the files were already in
+        cache or downloaded from the remote source (cache hit or miss).
+
+    :return: List Absolute paths to the locally stored versions corresponding
+        to the list of URI's. IF return_cache_hits=True, additionally return
+        a list of cache hits as the second entry of the return tuple.
     """
 
     if cache_name is None:
@@ -64,16 +73,18 @@ def cached_local_files(
 
     if not exists(cache_name):
         if cache_name == DEFAULT_CACHE_NAME:
-            create(cache_name)
+            create_cache(cache_name)
         else:
             raise ValueError(f'Cache with name {cache_name} does not exist.')
 
     cache = _get_cache(cache_name)
     if return_cache_hits:
+
         cache_hits = cache.in_cache(uris)
         return cache[uris], cache_hits
 
     else:
+        # Use the uris as hashes to get data from the cache.
         return cache[uris]
 
 
@@ -87,12 +98,12 @@ def exists(cache_name: str):
     return cache_name in _ACTIVE_FILE_CACHES
 
 
-def create(cache_name: str,
-                      cache_path: str = TEMPORARY_DIRECTORY,
-                      cache_size_GiB: Union[int, float] = CACHE_SIZE_GiB,
-                      do_cache_eviction_on_startup: bool = False,
-                      download_in_parallel=True
-                      ) \
+def create_cache(cache_name: str,
+                 cache_path: str = TEMPORARY_DIRECTORY,
+                 cache_size_GiB: Union[int, float] = CACHE_SIZE_GiB,
+                 do_cache_eviction_on_startup: bool = False,
+                 download_in_parallel=True
+                 ) \
         -> None:
     """
     Create a file cache. Created caches *must* have unique names and
@@ -141,7 +152,7 @@ def create(cache_name: str,
     return
 
 
-def delete(cache_name):
+def delete_cache(cache_name):
     """
     Delete all files associated with a cache and remove cache from available
     caches. To note: all files are deleted, but the folder itself is not.
@@ -163,11 +174,11 @@ def delete_default():
     :return:
     """
     if exists(DEFAULT_CACHE_NAME):
-        delete(DEFAULT_CACHE_NAME)
+        delete_cache(DEFAULT_CACHE_NAME)
 
 
-def remove_cached_uris(uris: Union[str, Iterable[str]],
-                       cache_name: str) -> None:
+def delete_files(uris: Union[str, Iterable[str]],
+                 cache_name: str) -> None:
     """
     Remove given key(s) from the cache
     :param uris: list of keys to remove

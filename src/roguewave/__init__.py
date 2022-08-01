@@ -7,8 +7,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 logger.addHandler(logging.NullHandler())
 
-# External API tools
+# Caching
+import roguewave.filecache as filecache
 
+# External API tools
 from .modeldata import sofarspectralapi
 from roguewave.modeldata.sofarspectralapi import load_sofar_spectral_file
 
@@ -31,9 +33,7 @@ from .wavespectra.partitioning.observations import \
     get_bulk_partitions_from_observations, \
     get_spectral_partitions_from_observations
 
-# Caching
-from .filecache.filecache import create, \
-    cached_local_files, delete
+
 
 # Model data
 from .modeldata.open_remote import _open_aws_keys_as_dataset, \
@@ -41,8 +41,6 @@ from .modeldata.open_remote import _open_aws_keys_as_dataset, \
     open_remote_forecast, open_remote_evaluation
 from .modeldata.modelinformation import model_timebase_lead, \
     model_timebase_forecast, model_timebase_evaluation
-
-
 
 
 def set_log_to_file(filename, level=logging.INFO):

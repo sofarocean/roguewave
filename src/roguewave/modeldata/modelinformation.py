@@ -26,7 +26,7 @@ except FileNotFoundError as e:
 class _RemoteResourceSpecification:
     """
     Class containing the key template and other necessary information to
-    reconstruct keys on AWS.
+    reconstruct uri's on the remote resource
     """
 
     def __init__(self,

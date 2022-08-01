@@ -11,3 +11,4 @@ h5netcdf
 tqdm
 boto3
 xarray
+requests

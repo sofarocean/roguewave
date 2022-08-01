@@ -1,133 +1,39 @@
-# Import
-# =============================================================================
-import os
+"""
+Contents: Simple file caching routines that automatically cache remote files
+          locally for use.
+
+Copyright (C) 2022
+Sofar Ocean Technologies
+
+Authors: Pieter Bart Smit
+======================
+
+Classes:
+- `FileCache`, main class implementing the Caching structure. Should not
+   directly be invoked. Instead, fetching/cache creation is controlled by a
+   set of function defined below
+
+Functions:
+
+"""
 import hashlib
-import boto3
-from typing import List, Tuple, Union, Dict, Iterable, Callable
+import os
+from _warnings import warn
 from multiprocessing.pool import ThreadPool
+from pathlib import Path
+from typing import Union, List, Tuple
 from tqdm import tqdm
 from roguewave import logger
-from pathlib import Path
-from warnings import warn
-from requests import get
-from requests.exceptions import HTTPError
-from botocore.exceptions import ClientError
-
-# Model private variables
-# =============================================================================
-
+from .remote_resources import RemoteResourceS3, \
+    RemoteResourceHTTPS, RemoteResource
+from .exceptions import _RemoteResourceUriNotFound
 
 TEMPORARY_DIRECTORY = '~/temporary_roguewave_files/filecache/'
-
 CACHE_SIZE_GiB = 5
-DEFAULT_CACHE_NAME = '__default__'
 MAXIMUM_NUMBER_OF_WORKERS = 10
 KILOBYTE = 1024
 MEGABYTE = 1024 * KILOBYTE
 GIGABYTE = 1024 * MEGABYTE
-
-_ACTIVE_FILE_CACHES = {}  # type: Dict[str,FileCache]
-
-
-# Classes
-# =============================================================================
-class _RemoteResourceUriNotFound(Exception):
-    pass
-
-
-class RemoteResource():
-    """
-    Abstract class defining the resource protocol used for remote retrieval. It
-    contains just two methods that need to be implemented:
-    - download return a function that can download from the resource given a
-      uri and filepath
-    - method to check if the uri is a valid uri for the given resource.
-    """
-    URI_PREFIX = 'uri://'
-
-    def download(self)-> Callable[[str, str], bool]:
-        """
-        Return a function that takes uri (first argument) and filepath (second
-        argument), and downloads the given uri to the given filepath. Return
-        True on Success. Raise _RemoteResourceUriNotFound if URI does not
-        exist on the resource.
-        """
-        pass
-
-    def valid_uri(self, uri: str) -> bool:
-        """
-        Check if the uri is valid for the given resource
-        :param uri: Uniform Resource Identifier.
-        :return: True or False
-        """
-        if uri.startswith(self.URI_PREFIX):
-            return True
-        else:
-            return False
-
-    def _remove_uri_prefix(self, uri: str):
-        return uri.strip(self.URI_PREFIX)
-
-
-class RemoteResourceS3(RemoteResource):
-    URI_PREFIX = 's3://'
-
-    def __init__(self):
-        self.s3 = boto3.client('s3')
-
-    def download(self):
-        def _download_file_from_aws(uri: str, filepath: str)->bool:
-            """
-            Worker function to download files from s3. Raise error if the
-            object does not exist on s3.
-            :param uri: valid uri for resource
-            :param filepath: valid filepath to download remote object to.
-            :return: True on success
-            """
-            s3 = self.s3
-            bucket, key = uri.replace(self.URI_PREFIX,'').split('/', maxsplit=1)
-            try:
-                s3.download_file(bucket, key, filepath)
-            except ClientError as e:
-                raise _RemoteResourceUriNotFound(
-                    f'Error downloading from {uri}. \n'
-                    f'Error code: {e.response["Error"]["Code"]} '
-                    f'Error message: {e.response["Error"]["Message"]}'
-                )
-            return True
-
-        return _download_file_from_aws
-
-
-class RemoteResourceHTTPS(RemoteResource):
-    URI_PREFIX = 'https://'
-
-    def download(self):
-        def _download_file_from_https(uri: str, filepath: str)->bool:
-            """
-            Worker function to download files from https url. Raise error if
-            the object does not exist on s3.
-            :param uri: valid uri for resource
-            :param filepath: valid filepath to download remote object to.
-            :return: True on success
-            """
-            try:
-                response = get(uri, allow_redirects=True)
-                status_code = response.status_code
-                response.raise_for_status()
-            except HTTPError as error:
-                raise _RemoteResourceUriNotFound(
-                    f"Error downloading from: {uri}, "
-                    f"http status code: {status_code},"
-                    f" message: {response.text}"
-                )
-
-            with open(filepath, 'wb') as file:
-                file.write(response.content)
-
-            return True
-
-        return _download_file_from_https
 
 
 class FileCache:
@@ -489,171 +395,6 @@ class FileCache:
         logger.debug(f'Purging cache done')
 
 
-# Main public function.
-# =============================================================================
-
-
-def cached_local_files(
-        uris: List[str],
-        cache_name: str = None,
-        return_cache_hits=False,
-) -> Union[List[str], Tuple[List[str], List[bool]]]:
-    """
-
-    :param uris:
-    :param cache_name:
-    :return:
-    """
-
-    if cache_name is None:
-        cache_name = DEFAULT_CACHE_NAME
-
-    if cache_name not in _ACTIVE_FILE_CACHES:
-        if cache_name == DEFAULT_CACHE_NAME:
-            create_file_cache(cache_name)
-
-        else:
-            raise ValueError(f'Cache with name {cache_name} does not exist.')
-
-    if return_cache_hits:
-        cache_hits = _ACTIVE_FILE_CACHES[cache_name].in_cache(uris)
-        return _ACTIVE_FILE_CACHES[cache_name][uris], cache_hits
-
-    else:
-        return _ACTIVE_FILE_CACHES[cache_name][uris]
-
-
-def cache_exists(cache_name: str):
-    """
-    Check if the cache name already exists
-    :param cache_name: name for the cache to be created. This name is used
-            to retrieve files from the cache.
-    :return: True if exists, False otherwise
-    """
-    return cache_name in _ACTIVE_FILE_CACHES
-
-
-def get_cache(cache_name: str) -> FileCache:
-    """
-    Get a valid cache object, error if the name does not exist.
-    :param cache_name: Name of the cache
-    :return: Cache object
-    """
-
-    if cache_exists(cache_name):
-        return _ACTIVE_FILE_CACHES[cache_name]
-    else:
-        raise KeyError(f'Cache with {cache_name} does not exist')
-
-
-def create_file_cache(cache_name: str,
-                      cache_path: str = TEMPORARY_DIRECTORY,
-                      cache_size_GiB: Union[int, float] = CACHE_SIZE_GiB,
-                      do_cache_eviction_on_startup: bool = False,
-                      download_in_parallel=True
-                      ) \
-        -> None:
-    """
-    Create a file cache. Created caches *must* have unique names and
-    cache_paths.
-
-    :param cache_name: name for the cache to be created. This name is used
-            to retrieve files from the cache.
-    :param cache_path: path to store cache. If path does not exist it will be
-            created.
-    :param cache_size_GiB:  Maximum size of the cache in GiB. If cache exceeds
-            the size, then files with oldest access/modified dates get deleted
-            until everthing fits in the cache again. Fractional values (floats)
-            are allowed.
-    :param do_cache_eviction_on_startup: do_cache_eviction_on_startup: whether
-            we ensure the cache size conforms to the given size on startup.
-            If set to true, a cache directory that exceeds the maximum size
-            will be reduced to max size. Set to False by default in which case
-            an error occurs. The latter to prevent eroneously evicting files
-            from a cache that was previously created on purpose with a larger
-            size that the limit.
-    :param download_in_parallel: Download in paralel from resource. Per default 10
-            worker threads are created.
-
-    :return:
-    """
-    cache_path = os.path.abspath(os.path.expanduser(cache_path))
-
-    if cache_name in _ACTIVE_FILE_CACHES:
-        raise ValueError(
-            f'Cache with name {cache_name} is already initialized')
-
-    for key, cache in _ACTIVE_FILE_CACHES.items():
-        if cache.path == cache_path:
-            raise ValueError(f'Error when creating cache with name: '
-                             f'"{cache_name}". \n A cache named: "{key}" '
-                             f'already uses the path {cache_path} '
-                             f'for caching.\n '
-                             f'Multiple caches cannot share the same path.')
-
-    _ACTIVE_FILE_CACHES[cache_name] = FileCache(
-        cache_path,
-        size_GiB=cache_size_GiB,
-        do_cache_eviction_on_startup=do_cache_eviction_on_startup,
-        parallel=download_in_parallel
-    )
-    return
-
-
-def delete_file_cache(cache_name):
-    """
-    Delete all files associated with a cache and remove cache from available
-    caches. To note: all files are deleted, but the folder itself is not.
-
-    :param cache_name: Name of the cache to be deleted
-    :return:
-    """
-    if not cache_exists(cache_name):
-        raise ValueError(f'Cache with name {cache_name} does not exist')
-
-    cache = _ACTIVE_FILE_CACHES.pop(cache_name)
-    cache.purge()
-
-
-def delete_default_cache():
-    """
-    Clean up the default cache.
-
-    :return:
-    """
-    if cache_exists(DEFAULT_CACHE_NAME):
-        delete_file_cache(DEFAULT_CACHE_NAME)
-
-
-def remove_cached_keys(uris: Union[str, Iterable[str]],
-                       cache_name: str) -> None:
-    """
-    Remove given key(s) from the cache
-    :param uris: list of keys to remove
-    :param cache_name: name of initialized cache.
-    :return:
-    """
-    if not isinstance(uris, Iterable) or isinstance(uris,str):
-        uris = [uris]
-
-    cache = get_cache(cache_name)
-    for key in uris:
-        cache.remove(key)
-
-
-# Private module helper functions
-# =============================================================================
-
-
-def _hashname(string: str) -> str:
-    """
-    Returns a md5 hash of a given string.
-    :param string: input string
-    :return: hexdigest of md5 hash.
-    """
-    return hashlib.md5(string.encode(), usedforsecurity=False).hexdigest()
-
-
 def _download_from_resources(key_and_filenames: List[Tuple],
                              resources: List[RemoteResource],
                              parallel_download=False,
@@ -665,47 +406,39 @@ def _download_from_resources(key_and_filenames: List[Tuple],
     :param parallel_download: If true, downloading is performed in parallel.
     :return: List of boolean indicating if the download was a success.
     """
+
+    # construct the arguments to be used for parallel downloading of files.
+    # Specifically, we need to match the right resource for downloading to the
+    # right URI.
     args = []
     for key_and_filename in key_and_filenames:
+        # Loop over all resources until we find one that can interpret the URI
+        # (this is pretty naive approach and should probably be refactored to
+        #  some direct mapping if the number of resources ever gets very long)
         for resource in resources:
+            # For each resource check if the resource can interpret the URI
             if resource.valid_uri(key_and_filename[0]):
+                # If so, get the download function, and other arguments and
+                # break
                 args.append(
                     (resource.download(), *key_and_filename[0:2],
                      allow_for_missing_files)
                 )
                 break
         else:
+            # If we didn't break the loop no valid resource was found, raise
+            # error
             raise ValueError(f'No resource available for URI: '
                              f'{key_and_filename[0]}')
 
+    # Download the requested objects.
     if parallel_download:
         with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
-            output = list(
-                tqdm(pool.imap(_worker, args),
-                     total=len(args)))
+            output = list(tqdm(pool.imap(_worker, args), total=len(args)))
     else:
-        output = list(
-            tqdm(map(_worker, args),
-                 total=len(args)))
+        output = list(tqdm(map(_worker, args),total=len(args)))
+
     return output
-
-
-def _worker(args)->bool:
-    download_func = args[0]
-    uri = args[1]
-    filepath = args[2]
-    allow_for_missing_files = args[3]
-    try:
-        download_func(uri, filepath)
-        return True
-    except _RemoteResourceUriNotFound as e:
-        if allow_for_missing_files:
-            warning = f'Uri not retrieved: {str(e)}'
-            warn( warning )
-            logger.warning(warning)
-        else:
-            raise e
-        return False
 
 
 def _get_total_size_of_files_in_bytes(filenames: List[str], path=None) -> int:
@@ -725,3 +458,30 @@ def _get_total_size_of_files_in_bytes(filenames: List[str], path=None) -> int:
             filepath = os.path.join(path, filename)
         size += os.path.getsize(filepath)
     return size
+
+
+def _hashname(string: str) -> str:
+    """
+    Returns a md5 hash of a given string.
+    :param string: input string
+    :return: hexdigest of md5 hash.
+    """
+    return hashlib.md5(string.encode(), usedforsecurity=False).hexdigest()
+
+
+def _worker(args) -> bool:
+    download_func = args[0]
+    uri = args[1]
+    filepath = args[2]
+    allow_for_missing_files = args[3]
+    try:
+        download_func(uri, filepath)
+        return True
+    except _RemoteResourceUriNotFound as e:
+        if allow_for_missing_files:
+            warning = f'Uri not retrieved: {str(e)}'
+            warn(warning)
+            logger.warning(warning)
+        else:
+            raise e
+        return False

@@ -18,7 +18,7 @@
         the cache remains of requested size.
 """
 
-from roguewave.awsfilecache.filecache import cached_local_files
+from roguewave.filecache.filecache import cached_local_files
 import xarray
 from typing import List, Union, Iterable
 from datetime import datetime, timedelta, timezone

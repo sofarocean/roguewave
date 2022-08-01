@@ -32,8 +32,8 @@ from .wavespectra.partitioning.observations import \
     get_spectral_partitions_from_observations
 
 # Caching
-from .awsfilecache.filecache import create_aws_file_cache, \
-    cached_local_aws_files, delete_aws_file_cache
+from .awsfilecache.filecache import create_file_cache, \
+    cached_local_files, delete_file_cache
 
 # Model data
 from .modeldata.open_remote import _open_aws_keys_as_dataset, \

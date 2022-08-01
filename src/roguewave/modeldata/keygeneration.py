@@ -2,7 +2,7 @@
 # =============================================================================
 from datetime import datetime, timedelta
 
-from .modelinformation import _get_model_aws_layout, \
+from .modelinformation import _get_resource_specification, \
     _generate_aws_key
 from .timebase import timebase_forecast, \
     timebase_lead, timebase_evaluation
@@ -26,7 +26,7 @@ def generate_forecast_keys(
     :param model_name: model name
     :return: List of valid aws_keys.
     """
-    aws_key_layout = _get_model_aws_layout(model_name)
+    aws_key_layout = _get_resource_specification(model_name)
     time_vector = timebase_forecast(
         init_time=init_time,
         duration=duration,
@@ -55,7 +55,7 @@ def generate_analysis_keys(
     :param model_name: model name
     :return: List of the aws_keys
     """
-    aws_key_layout = _get_model_aws_layout(model_name)
+    aws_key_layout = _get_resource_specification(model_name)
     time_vector = timebase_lead(
         start_time,
         end_time,
@@ -88,7 +88,7 @@ def generate_lead_keys(
     generate keys as close as possible.
     :return: List of the aws_keys.
     """
-    aws_key_layout = _get_model_aws_layout(model_name)
+    aws_key_layout = _get_resource_specification(model_name)
     time_vector = timebase_lead(
         start_time=start_time,
         end_time=end_time,
@@ -119,7 +119,7 @@ def generate_evaluation_time_keys(
     :param maximum_lead_time: maximum lead time of interest
     :return: list of aws keys
     """
-    aws_key_layout = _get_model_aws_layout(model_name)
+    aws_key_layout = _get_resource_specification(model_name)
     if maximum_lead_time is None:
         maximum_lead_time = aws_key_layout.model_time_configuration.duration
 

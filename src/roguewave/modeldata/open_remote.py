@@ -18,11 +18,11 @@
         the cache remains of requested size.
 """
 
-from roguewave.awsfilecache.filecache import cached_local_aws_files
+from roguewave.awsfilecache.filecache import cached_local_files
 import xarray
 from typing import List, Union, Iterable
 from datetime import datetime, timedelta, timezone
-from .modelinformation import _get_model_aws_layout
+from .modelinformation import _get_resource_specification
 from os import remove, rename
 from glob import glob
 from .keygeneration import generate_lead_keys, \
@@ -196,7 +196,7 @@ def _open_aws_keys_as_dataset(
     # downloaded file so we can use a unified netcdf interface and because
     # Grib == Slow.
     files, files_were_in_cache = \
-        cached_local_aws_files(aws_keys, cache_name, return_cache_hits=True)
+        cached_local_files(aws_keys, cache_name, return_cache_hits=True)
 
     datasets = []
     for file, file_was_in_cache in zip(files, files_were_in_cache):
@@ -238,7 +238,7 @@ def _open_variables(variables,
         variables = [variables]
 
     # Get the model description.
-    aws_layout = _get_model_aws_layout(model_name)
+    aws_layout = _get_resource_specification(model_name)
 
     # We can specify variable names by Sofar name or equivalent model specific
     # name. Here we remap the variable names to make sure they are all

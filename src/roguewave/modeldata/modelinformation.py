@@ -23,7 +23,7 @@ except FileNotFoundError as e:
 # =============================================================================
 
 
-class _ModelAwsKeyLayout:
+class _RemoteResourceSpecification:
     """
     Class containing the key template and other necessary information to
     reconstruct keys on AWS.
@@ -31,9 +31,9 @@ class _ModelAwsKeyLayout:
 
     def __init__(self,
                  name: str,
-                 bucket: str,
-                 key_template: str,
+                 uri_path_template: str,
                  filetype: str = 'netcdf',
+                 scheme: str = 's3',
                  mapping_variable_name_model_to_sofar: Dict[str,str] = None,
                  single_variable_per_file: bool = True,
                  model_time_configuration: dict = None):
@@ -41,14 +41,14 @@ class _ModelAwsKeyLayout:
         """
         :param name: Model name
         :param bucket: bucket
-        :param key_template: template of the AWS key
+        :param uri_path_template: template of the AWS key
         :param filetype: filetype of the data
         :param model_time_configuration: Description on the timebase of the
         model (how often is the mode run, at what interval is output etc.).
         """
         self.name = name
-        self.bucket = bucket
-        self.key_template = key_template
+        self.scheme = scheme
+        self.uri_path_template = uri_path_template
         self.filetype = filetype
         self.mapping_variable_name_model_to_sofar = \
             mapping_variable_name_model_to_sofar
@@ -137,7 +137,7 @@ def model_timebase_forecast(
         init_time + forecast_hour
     """
 
-    aws_layout = _get_model_aws_layout(model)
+    aws_layout = _get_resource_specification(model)
     return timebase_forecast(
         init_time=init_time,
         duration=duration,
@@ -170,7 +170,7 @@ def model_timebase_lead(
     :return: List of (init_time, forecast_hour) so that valid_time =
         init_time + forecast_hour
     """
-    aws_layout = _get_model_aws_layout(model)
+    aws_layout = _get_resource_specification(model)
     return timebase_lead(
         start_time=start_time,
         end_time=end_time,
@@ -196,7 +196,7 @@ def model_timebase_evaluation(model:str,
     :return: List of (init_time, forecast_hour) so that evaluation_time =
         init_time + forecast_hour
     """
-    aws_layout = _get_model_aws_layout(model)
+    aws_layout = _get_resource_specification(model)
     return timebase_evaluation(
         evaluation_time=evaluation_time,
         maximum_lead_time=maximum_lead_time,
@@ -206,7 +206,7 @@ def model_timebase_evaluation(model:str,
 
 # -----------------------------------------------------------------------------
 def _generate_aws_key(variable, init_time: datetime, forecast_hour: timedelta,
-                      model: _ModelAwsKeyLayout) -> str:
+                      model: _RemoteResourceSpecification) -> str:
     """
     Function that generates a valid AWS key for the given model that represents
     date from the model initialized at the given init_time and with the given
@@ -312,7 +312,6 @@ def _generate_aws_key(variable, init_time: datetime, forecast_hour: timedelta,
 
     # Define keywords
     keywords = {
-        "bucket": {'method': _replace, 'args': (model.bucket,)},
         "forecasthour": {
             'method': _replace, 'args': (
                 "{hours:03d}".format(
@@ -330,14 +329,13 @@ def _generate_aws_key(variable, init_time: datetime, forecast_hour: timedelta,
             'method': _ecmwf_special, 'args': (init_time, forecast_hour)
         }
     }
-
     # Loop over properties and invoke method to replace keywords.
-    string = model.key_template
+    uri = model.uri_path_template
     for keyword, action in keywords.items():
-        if keyword in string:
-            string = action['method'](string, keyword, *action['args'])
+        if keyword in uri:
+            uri = action['method'](uri, keyword, *action['args'])
 
-    return f"{model.bucket}/{string}"
+    return uri
 
 
 # -----------------------------------------------------------------------------
@@ -367,7 +365,7 @@ def list_available_variables(model_name, init_time: datetime = None):
 
     init_time = datetime(2022, 6, 1) if init_time is None else init_time
     # get model aws key template description
-    model = _get_model_aws_layout(model_name)
+    model = _get_resource_specification(model_name)
 
     if model.mapping_variable_name_model_to_sofar is not None:
         return list(model.mapping_variable_name_model_to_sofar.keys())
@@ -376,7 +374,7 @@ def list_available_variables(model_name, init_time: datetime = None):
     s3 = boto3_resource('s3')
     my_bucket = s3.Bucket(model.bucket)
 
-    if 'variable' not in model.key_template:
+    if 'variable' not in model.uri_path_template:
         raise ValueError('Listing variables for a particular model only works'
                          'if the variable name is part of the aws keys.')
 
@@ -407,13 +405,13 @@ def list_available_variables(model_name, init_time: datetime = None):
 # =============================================================================
 
 
-def _get_model_aws_layout(name) -> _ModelAwsKeyLayout:
+def _get_resource_specification(name) -> _RemoteResourceSpecification:
     """
     Return the object representing key layout on aws
     :param name:
     :return: Model
     """
-    return _ModelAwsKeyLayout(name=name, **MODELS[name])
+    return _RemoteResourceSpecification(name=name, **MODELS[name])
 
 
 # -----------------------------------------------------------------------------

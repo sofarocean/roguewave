@@ -3,7 +3,7 @@
 import os
 import hashlib
 import boto3
-from typing import List, Tuple, Union, Dict, Iterable
+from typing import List, Tuple, Union, Dict, Iterable, Callable
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 from roguewave import logger
@@ -31,7 +31,7 @@ _ACTIVE_FILE_CACHES = {}  # type: Dict[str,FileCache]
 
 # Classes
 # =============================================================================
-class _RemoteResourceError(Exception):
+class _RemoteResourceUriNotFound(Exception):
     pass
 
 
@@ -45,13 +45,12 @@ class RemoteResource():
     """
     URI_PREFIX = 'uri://'
 
-    def download(self):
+    def download(self)-> Callable[[str, str], bool]:
         """
-        Download the given URI
-        :param uri: Uniform Resource Identifier.
-        :param filepath: Path to save the file to. It may be assumed the
-            directory exists.
-        :return: Succes or failure to download.
+        Return a function that takes uri (first argument) and filepath (second
+        argument), and downloads the given uri to the given filepath. Return
+        True on Success. Raise _RemoteResourceUriNotFound if URI does not
+        exist on the resource.
         """
         pass
 
@@ -77,19 +76,20 @@ class RemoteResourceS3(RemoteResource):
         self.s3 = boto3.client('s3')
 
     def download(self):
-        def _download_file_from_aws(uri: str, filepath: str):
+        def _download_file_from_aws(uri: str, filepath: str)->bool:
             """
-            Worker function to download files from s3
-            :param args: Tuple/List with as first entry the aws key to download and
-                as second entry the filepath to download to
-            :return:
+            Worker function to download files from s3. Raise error if the
+            object does not exist on s3.
+            :param uri: valid uri for resource
+            :param filepath: valid filepath to download remote object to.
+            :return: True on success
             """
             s3 = self.s3
             bucket, key = uri.replace(self.URI_PREFIX,'').split('/', maxsplit=1)
             try:
                 s3.download_file(bucket, key, filepath)
             except ClientError as e:
-                raise _RemoteResourceError(
+                raise _RemoteResourceUriNotFound(
                     f'Error downloading from {uri}. \n'
                     f'Error code: {e.response["Error"]["Code"]} '
                     f'Error message: {e.response["Error"]["Message"]}'
@@ -103,20 +103,22 @@ class RemoteResourceHTTPS(RemoteResource):
     URI_PREFIX = 'https://'
 
     def download(self):
-        def _download_file_from_https(uri: str, filepath: str):
+        def _download_file_from_https(uri: str, filepath: str)->bool:
             """
-            Worker function to download files from s3
-            :param args: Tuple/List with as first entry the uri key to download and
-                as second entry the filepath to download to
-            :return:
+            Worker function to download files from https url. Raise error if
+            the object does not exist on s3.
+            :param uri: valid uri for resource
+            :param filepath: valid filepath to download remote object to.
+            :return: True on success
             """
             try:
                 response = get(uri, allow_redirects=True)
                 status_code = response.status_code
                 response.raise_for_status()
             except HTTPError as error:
-                raise _RemoteResourceError(
-                    f"Error downloading from: {uri}, http status code: {status_code},"
+                raise _RemoteResourceUriNotFound(
+                    f"Error downloading from: {uri}, "
+                    f"http status code: {status_code},"
                     f" message: {response.text}"
                 )
 
@@ -696,7 +698,7 @@ def _worker(args)->bool:
     try:
         download_func(uri, filepath)
         return True
-    except _RemoteResourceError as e:
+    except _RemoteResourceUriNotFound as e:
         if allow_for_missing_files:
             warning = f'Uri not retrieved: {str(e)}'
             warn( warning )

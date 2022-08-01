@@ -12,3 +12,4 @@ tqdm
 boto3
 xarray
 requests
+cfgrib

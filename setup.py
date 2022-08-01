@@ -21,7 +21,8 @@ setuptools.setup(
         's3fs',
         'boto3',
         'xarray',
-        'requests'
+        'requests',
+        'cfgrib'
     ],
     description='Python package to interact with Sofar wave data',
     long_description=readme_contents,

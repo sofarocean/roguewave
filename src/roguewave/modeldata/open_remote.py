@@ -18,7 +18,7 @@
         the cache remains of requested size.
 """
 
-from roguewave.filecache.filecache import filepaths
+from roguewave import filecache
 import xarray
 from typing import List, Union, Iterable
 from datetime import datetime, timedelta, timezone
@@ -174,10 +174,12 @@ def open_remote_evaluation(
 
 def _open_aws_keys_as_dataset(
         aws_keys: List[str],
+        model_variables: List[str],
+        single_variables_per_file:bool,
         filetype='netcdf',
         cache_name: str = None,
         concatenation_dimension='time',
-        model_variables=None) -> xarray.Dataset:
+        ) -> xarray.Dataset:
     """
     Open a set of remote resources as a single local dataset using a local
     Cache. Datasets will be concatenated along the given concatenation
@@ -195,20 +197,27 @@ def _open_aws_keys_as_dataset(
     # the latter to do a conversion from grib to netcdf for a freshly
     # downloaded file so we can use a unified netcdf interface and because
     # Grib == Slow.
-    files, files_were_in_cache = \
-        filepaths(aws_keys, cache_name, return_cache_hits=True)
+    def post_process(filepath:str):
+        if filetype=='grib':
+            _convert_grib_to_netcdf(filepath, model_variables)
 
-    datasets = []
-    for file, file_was_in_cache in zip(files, files_were_in_cache):
+    def validate(filepath:str):
+        if not single_variables_per_file:
+            ds = xarray.open_dataset(filepath,engine='netcdf4')
+            for variable in model_variables:
+                if variable not in ds:
+                    ds.close()
+                    return False
+            ds.close()
+        return True
 
-        # If the file was not in cache (aka downloaded from remote) and the
-        # remote file format is grib, do a conversion to netcdf.
-        if not file_was_in_cache and filetype == 'grib':
-            _convert_grib_to_netcdf(file, model_variables)
+    filecache.set_post_process_function(post_process)
+    filecache.set_validate_function(validate)
+    filepaths = filecache.filepaths(aws_keys, cache_name )
 
-        datasets.append(
-            xarray.open_dataset(file, engine='netcdf4', decode_times=False)
-        )
+    datasets = [
+        xarray.open_dataset(file,engine='netcdf4', decode_times=False)
+            for file in filepaths ]
 
     # Concatenate and return resulting dataset
     return xarray.concat(datasets, dim=concatenation_dimension)
@@ -262,6 +271,7 @@ def _open_variables(variables,
         dataset = _open_aws_keys_as_dataset(
             aws_keys=aws_keys,
             filetype=aws_layout.filetype,
+            single_variables_per_file=aws_layout.single_variable_per_file,
             cache_name=cache_name,
             concatenation_dimension=concatenation_dimension,
             model_variables=model_variable_names
@@ -273,13 +283,13 @@ def _open_variables(variables,
         # variable and merge the dataset at the end.
         for variable in model_variable_names:
             aws_keys = key_generation_function(variable)
-            datasets.append(
-                _open_aws_keys_as_dataset(
-                    aws_keys=aws_keys,
-                    filetype=aws_layout.filetype,
-                    cache_name=cache_name,
-                    concatenation_dimension=concatenation_dimension,
-                    model_variables=model_variable_names
+            datasets.append( _open_aws_keys_as_dataset(
+                aws_keys=aws_keys,
+                filetype=aws_layout.filetype,
+                single_variables_per_file=aws_layout.single_variable_per_file,
+                cache_name=cache_name,
+                concatenation_dimension=concatenation_dimension,
+                model_variables=model_variable_names
                 )
             )
         dataset = xarray.merge(datasets)

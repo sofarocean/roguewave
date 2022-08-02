@@ -17,14 +17,15 @@ Classes:
 """
 
 from typing import Callable
-import boto3
+from boto3 import client
 from botocore.exceptions import ClientError
 from requests.api import get
 from requests.exceptions import HTTPError
 from .exceptions import _RemoteResourceUriNotFound
+from shutil import copyfile
 
 
-class RemoteResource():
+class RemoteResource:
     """
     Abstract class defining the resource protocol used for remote retrieval. It
     contains just two methods that need to be implemented:
@@ -59,7 +60,7 @@ class RemoteResourceS3(RemoteResource):
     URI_PREFIX = 's3://'
 
     def __init__(self):
-        self.s3 = boto3.client('s3')
+        self.s3 = client('s3')
 
     def download(self):
         def _download_file_from_aws(uri: str, filepath: str) -> bool:
@@ -102,7 +103,7 @@ class RemoteResourceHTTPS(RemoteResource):
                 response = get(uri, allow_redirects=True)
                 status_code = response.status_code
                 response.raise_for_status()
-            except HTTPError as error:
+            except HTTPError as _:
                 raise _RemoteResourceUriNotFound(
                     f"Error downloading from: {uri}, "
                     f"http status code: {status_code},"
@@ -115,3 +116,23 @@ class RemoteResourceHTTPS(RemoteResource):
             return True
 
         return _download_file_from_https
+
+
+class RemoteResourceLocal(RemoteResource):
+    URI_PREFIX = 'file://'
+
+    def download(self):
+        def _copy_file(uri: str, filepath: str) -> bool:
+            """
+            Worker function to add local files to a cache. Note that we copy
+            to keep the analogy to other remote sources (read only, no changes
+            to source).
+            :param uri: valid uri for resource
+            :param filepath: valid filepath to download remote object to.
+            :return: True on success
+            """
+            source_file = uri.replace(self.URI_PREFIX, '')
+            copyfile(source_file, filepath)
+            return True
+
+        return _copy_file

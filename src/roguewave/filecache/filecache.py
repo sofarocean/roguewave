@@ -22,7 +22,7 @@ Functions:
 # Import
 # =============================================================================
 import os
-from typing import List, Tuple, Union, Dict, Iterable
+from typing import List, Tuple, Union, Dict, Iterable, Callable
 from .cache_object import TEMPORARY_DIRECTORY, \
     CACHE_SIZE_GiB, FileCache
 
@@ -50,8 +50,7 @@ _ACTIVE_FILE_CACHES = {}  # type: Dict[str,FileCache]
 
 def filepaths(
         uris: Union[List[str],str],
-        cache_name: str = None,
-        return_cache_hits:bool=False,
+        cache_name: str = None
 ) -> Union[List[str], Tuple[List[str], List[bool]]]:
     """
     Return the full file path to locally stored objects corresponding to the
@@ -67,26 +66,22 @@ def filepaths(
         to the list of URI's. IF return_cache_hits=True, additionally return
         a list of cache hits as the second entry of the return tuple.
     """
+    return _get_cache(cache_name)[uris]
 
-    if cache_name is None:
-        cache_name = DEFAULT_CACHE_NAME
 
-    if not exists(cache_name):
-        if cache_name == DEFAULT_CACHE_NAME:
-            create_cache(cache_name)
-        else:
-            raise ValueError(f'Cache with name {cache_name} does not exist.')
+def set_post_process_function(
+        post_process_function: Callable[[str],None] = None,
+        cache_name=None):
 
     cache = _get_cache(cache_name)
-    if return_cache_hits:
+    cache.post_process_function = post_process_function
 
-        cache_hits = cache.in_cache(uris)
-        return cache[uris], cache_hits
 
-    else:
-        # Use the uris as hashes to get data from the cache.
-        return cache[uris]
-
+def set_validate_function(
+        validate_function: Callable[[str], bool] = None,
+        cache_name=None):
+    cache = _get_cache(cache_name)
+    cache.validate_function = validate_function
 
 def exists(cache_name: str):
     """
@@ -204,7 +199,14 @@ def _get_cache(cache_name: str) -> FileCache:
     :return: Cache object
     """
 
-    if exists(cache_name):
-        return _ACTIVE_FILE_CACHES[cache_name]
-    else:
-        raise KeyError(f'Cache with {cache_name} does not exist')
+    if cache_name is None:
+        cache_name = DEFAULT_CACHE_NAME
+
+    if not exists(cache_name):
+        if cache_name == DEFAULT_CACHE_NAME:
+            create_cache(cache_name)
+        else:
+            raise ValueError(f'Cache with name {cache_name} does not exist.')
+
+    return _ACTIVE_FILE_CACHES[cache_name]
+

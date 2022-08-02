@@ -21,11 +21,11 @@ import os
 from _warnings import warn
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Callable
 from tqdm import tqdm
 from roguewave import logger
 from .remote_resources import RemoteResourceS3, \
-    RemoteResourceHTTPS, RemoteResource
+    RemoteResourceHTTPS, RemoteResource, RemoteResourceLocal
 from .exceptions import _RemoteResourceUriNotFound
 
 TEMPORARY_DIRECTORY = '~/temporary_roguewave_files/filecache/'
@@ -79,7 +79,10 @@ class FileCache:
                  do_cache_eviction_on_startup: bool = False,
                  resources=None,
                  parallel=True,
-                 allow_for_missing_files=False):
+                 allow_for_missing_files=False,
+                 post_process_function: Callable[[str],None] = None,
+                 validate_function: Callable[[str], None] = None,
+                 ):
         """
         Initialize Cache
         :param path: path to store cache. If path does not exist it will be
@@ -117,11 +120,41 @@ class FileCache:
         self._entries = {}  # the key/value pair cache
         self._initialize_cache(do_cache_eviction_on_startup)
 
+        # Post processing and validation functions
+        self.post_process_function = post_process_function
+        self.validate_function = validate_function
+
         # download resources
         if resources is None:
-            self.resources = [RemoteResourceS3(), RemoteResourceHTTPS()]
+            self.resources = [RemoteResourceS3(),
+                              RemoteResourceHTTPS(),
+                              RemoteResourceLocal()]
         else:
             self.resources = resources
+
+    def _post_process(self,filepath:str):
+        """
+        Call custom post processing function that gets called after first
+        download- if set.
+        :param filepaths: list of filepaths
+        :return: none
+        """
+        if self.post_process_function is None:
+            return
+        else:
+            self.post_process_function(filepath)
+
+    def _validate(self,filepath:str)->bool:
+        """
+        Call custom post processing function that gets called after first
+        download- if set.
+        :param filepaths: list of filepaths
+        :return: none
+        """
+        if self.validate_function is None:
+            return True
+        else:
+            return self.validate_function(filepath)
 
     def _cache_file_name(self, uri: str) -> str:
         """
@@ -281,9 +314,15 @@ class FileCache:
 
         # collect key, full local path and hash for any hashes that are not
         # in the local cache
-        cache_misses = [(key, self._cache_file_path(key), _hash) for
-                        _hash, key in zip(hashes, uris) if
-                        not self._is_in_cache(_hash)]
+        cache_misses = []
+        for _hash, key in zip(hashes, uris):
+            to_append = (key, self._cache_file_path(key), _hash)
+            if self._is_in_cache(_hash):
+                if not self._validate( self._entries[_hash] ):
+                    self._remove_item_from_cache(_hash)
+                    cache_misses.append(to_append)
+            else:
+                cache_misses.append(to_append)
 
         self._cache_misses += len(cache_misses)
         self._cache_hits += len(hashes) - len(cache_misses)
@@ -302,6 +341,7 @@ class FileCache:
                     succesfully_downloaded, cache_misses):
                 if success:
                     # If succesfull, add to cache.
+                    self._post_process(cache_miss[1])
                     self._add_to_cache(cache_miss[2], cache_miss[1])
                 else:
                     # If not succesful, remove from keys to return

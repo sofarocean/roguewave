@@ -36,6 +36,7 @@ from tqdm import tqdm
 from pandas import DataFrame
 from .helper_functions import _get_sofar_api, get_spotter_ids
 import numpy
+import os
 
 # 2) Constants & Private Variables
 # =============================================================================
@@ -51,6 +52,9 @@ MAXIMUM_NUMBER_OF_WORKERS = 40
 
 # Number of retry attemps if a download fails.
 NUMBER_OF_RETRIES = 2
+
+# Spotter Cache
+CACHE_NAME = '~/roguewave/spotter_cache'
 
 
 # 3) Classes
@@ -77,7 +81,8 @@ def get_spectrum(
         start_date: Union[datetime, int, float, str] = None,
         end_date: Union[datetime, int, float, str] = None,
         session: SofarApi = None,
-        parallel_download=True
+        parallel_download=True,
+        cache = False
 ) -> Dict[str, List[WaveSpectrum1D]]:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
@@ -185,7 +190,8 @@ def get_data(
         include_surface_temp_data=False,
         session: SofarApi = None,
         parallel_download=True,
-        bulk_data_as_dataframe=True
+        bulk_data_as_dataframe=True,
+        cache=False
 ) -> Dict[str, Dict[str, Union[list[WaveSpectrum1D],
                                list[WaveBulkData], DataFrame]]]:
     """
@@ -216,6 +222,9 @@ def get_data(
     :return: Data as a dictornary with spotter_id's as keys, and for each
     corresponding value a dataframe containing the output.
     """
+
+    if cache:
+        uri = spotter_cache_uri( get_data, )
 
     if spotter_ids is None:
         spotter_ids = get_spotter_ids()
@@ -697,3 +706,33 @@ def _get_class(key, data) -> Union[MetoceanData, WaveSpectrum1D]:
     else:
         raise Exception('Unknown variable')
 # -----------------------------------------------------------------------------
+
+
+def spotter_cache_uri( request_type,
+                       spotter_id,
+                       start_date: Union[datetime, int, float, str] = None,
+                       end_date: Union[datetime, int, float, str] = None,
+                       include_frequency_data=False,
+                       include_waves=True,
+                       include_wind=False,
+                       include_barometer_data=False,
+                       include_surface_temp_data=False,
+                       bulk_data_as_dataframe=True):
+
+    if end_date > datetime.now():
+        return None
+
+    uri = os.path.join( f"{os.getcwd()}",
+          f"{request_type}"
+          f"{spotter_id}"
+          f"{start_date.isoformat()}"
+          f"{end_date.isoformat()}"
+          f"{include_frequency_data}"
+          f"{include_waves}"
+          f"{include_wind}"
+          f"{include_barometer_data}"
+          f"{include_surface_temp_data}"
+          f"{bulk_data_as_dataframe}"
+          f".json"
+    )
+    return uri

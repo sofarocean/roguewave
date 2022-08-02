@@ -33,6 +33,7 @@ import json
 from typing import List, Callable
 from pysofar.spotter import SofarApi
 
+
 # Constants
 # =============================================================================
 

@@ -90,13 +90,21 @@ def get_spectrum(
     :param start_date: ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to beginning of spotters
                        history
+
     :param end_date:   ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to end of spotter history
+
     :param session:    Active SofarApi session. If none is provided one will be
                        creatated automatically. This requires that an API key
                        is set in the environment.
+
     :param parallel_download: Use multiple requests to the Api to speed up
                         retrieving data. Only useful for large requests.
+
+    :param cache: Cache requests. If True, returned data will be stored in
+                        a file Cache on disk, and repeated calls with the
+                        same arguments will use locally cached data. The cache
+                        is a FileCache with a maximum of 2GB by default.
 
     :return: Data as a dictornary with spotter_id's as keys, and for each
     corresponding value a List that for each returned timestamp contains a
@@ -142,16 +150,25 @@ def get_bulk_wave_data(
     :param start_date: ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to beginning of spotters
                        history
+
     :param end_date:   ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to end of spotter history
+
     :param session:    Active SofarApi session. If none is provided one will be
                        creatated automatically. This requires that an API key
                        is set in the environment.
+
     :param parallel_download: Use multiple requests to the Api to speed up
                         retrieving data. Only useful for large requests.
+
     :param bulk_data_as_dataframe: return bulk data as a dataframe per Spotter
                        instead of a list of BulkWaveVariable objects.
                        Defaults to yes- only set to false for dev purposes.
+
+    :param cache: Cache requests. If True, returned data will be stored in
+                        a file Cache on disk, and repeated calls with the
+                        same arguments will use locally cached data. The cache
+                        is a FileCache with a maximum of 2GB by default.
 
     :return: Data as a dictornary with spotter_id's as keys, and for each
     corresponding value a dataframe containing the output.
@@ -190,7 +207,7 @@ def get_data(
         session: SofarApi = None,
         parallel_download=True,
         bulk_data_as_dataframe=True,
-        cache=False
+        cache=True
 ) -> Dict[str, Dict[str, Union[list[WaveSpectrum1D],
                                list[WaveBulkData], DataFrame]]]:
     """
@@ -199,24 +216,41 @@ def get_data(
     :param spotter_ids: Can be either 1) a List of spotter_ids or 2) a single
     Spotter_id.
 
-    :param include_frequency_data:
-    :param include_waves:
-    :param include_wind:
-    :param include_surface_temp_data:
-    :param include_barometer_data:
     :param start_date: ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to beginning of spotters
                        history
+
     :param end_date:   ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to end of spotter history
+
+    :param include_frequency_data: set to True to return spectral data
+        (if available)
+
+    :param include_waves: set to True to return wave data (if available)
+
+    :param include_wind: set to True to return wind data (if available)
+
+    :param include_surface_temp_data: set to True to return SST data
+        (if available)
+
+    :param include_barometer_data: set to True to return barometer data
+        (if available)
+
     :param session:    Active SofarApi session. If none is provided one will be
                        created automatically. This requires that an API key is
                        set in the environment.
+
     :param parallel_download: Use multiple requests to the Api to speed up
                        retrieving data. Only useful for large requests.
+
     :param bulk_data_as_dataframe: return bulk data as a dataframe per Spotter
                        instead of a list of BulkWaveVariable objects. Defaults
                        to yes- only set to false for dev purposes.
+
+    :param cache: Cache requests. If True, returned data will be stored in
+                        a file Cache on disk, and repeated calls with the
+                        same arguments will use locally cached data. The cache
+                        is a FileCache with a maximum of 2GB by default.
 
     :return: Data as a dictornary with spotter_id's as keys, and for each
     corresponding value a dataframe containing the output.

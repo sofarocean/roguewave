@@ -24,11 +24,13 @@ from typing import List, Union, Iterable
 from datetime import datetime, timedelta, timezone
 from .modelinformation import _get_resource_specification
 from os import remove, rename
+from roguewave.tools import to_datetime
 from glob import glob
 from .keygeneration import generate_lead_keys, \
     generate_forecast_keys, \
     generate_evaluation_time_keys, \
     generate_analysis_keys
+import numpy
 
 
 # Main functions to interact with module
@@ -211,6 +213,8 @@ def _open_aws_keys_as_dataset(
             ds.close()
         return True
 
+    # TODO: what happens if we ask the cache to get a something else outside
+    #  of this path? will it start to apply the given pre-process functions?
     filecache.set_post_process_function(post_process)
     filecache.set_validate_function(validate)
     filepaths = filecache.filepaths(aws_keys, cache_name )
@@ -218,6 +222,13 @@ def _open_aws_keys_as_dataset(
     datasets = [
         xarray.open_dataset(file,engine='netcdf4', decode_times=False)
             for file in filepaths ]
+
+    # Convert time etc to cf conventions
+    datasets = [xarray.decode_cf(dataset) for dataset in datasets ]
+    for dataset in datasets:
+        init_time = to_datetime(dataset.attrs.get('init_time'))
+        if init_time is not None:
+            dataset['init_time'] = [numpy.datetime64(init_time)]
 
     # Concatenate and return resulting dataset
     return xarray.concat(datasets, dim=concatenation_dimension)

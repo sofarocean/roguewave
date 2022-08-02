@@ -36,7 +36,7 @@ from tqdm import tqdm
 from pandas import DataFrame
 from .helper_functions import _get_sofar_api, get_spotter_ids
 import numpy
-import os
+import roguewave.spotterapi.spotter_cache as spotter_cache
 
 # 2) Constants & Private Variables
 # =============================================================================
@@ -52,9 +52,6 @@ MAXIMUM_NUMBER_OF_WORKERS = 40
 
 # Number of retry attemps if a download fails.
 NUMBER_OF_RETRIES = 2
-
-# Spotter Cache
-CACHE_NAME = '~/roguewave/spotter_cache'
 
 
 # 3) Classes
@@ -73,7 +70,6 @@ class VariablesToInclude(TypedDict):
     surfaceTemp: bool
     barometerData: bool
 
-
 # 4) Main Functions
 # =============================================================================
 def get_spectrum(
@@ -82,7 +78,7 @@ def get_spectrum(
         end_date: Union[datetime, int, float, str] = None,
         session: SofarApi = None,
         parallel_download=True,
-        cache = False
+        cache:bool=True
 ) -> Dict[str, List[WaveSpectrum1D]]:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
@@ -117,6 +113,7 @@ def get_spectrum(
         include_surface_temp_data=False,
         session=session,
         parallel_download=parallel_download,
+        cache=cache
     )
     out = {}
     for key in data:
@@ -133,7 +130,8 @@ def get_bulk_wave_data(
         end_date: Union[datetime, int, float, str] = None,
         session: SofarApi = None,
         parallel_download: bool = True,
-        bulk_data_as_dataframe: bool = True
+        bulk_data_as_dataframe: bool = True,
+        cache:bool=True
 ) -> Union[Dict[str, List[WaveBulkData]], Dict[str, DataFrame]]:
     """
     Gets the requested bulk wave data for the spotter(s) in the given interval
@@ -168,7 +166,8 @@ def get_bulk_wave_data(
         include_surface_temp_data=False,
         session=session,
         parallel_download=parallel_download,
-        bulk_data_as_dataframe=bulk_data_as_dataframe
+        bulk_data_as_dataframe=bulk_data_as_dataframe,
+        cache=cache
     )
     out = {}
     for key in data:
@@ -223,9 +222,6 @@ def get_data(
     corresponding value a dataframe containing the output.
     """
 
-    if cache:
-        uri = spotter_cache_uri( get_data, )
-
     if spotter_ids is None:
         spotter_ids = get_spotter_ids()
 
@@ -244,18 +240,29 @@ def get_data(
     if session is None:
         session = _get_sofar_api()
 
-    def worker(_spotter_id):
-        return _download_data(_spotter_id, session, variables_to_include,
-                              start_date, end_date, bulk_data_as_dataframe)
-
-    if parallel_download:
-        with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
-            out = list(
-                tqdm(pool.imap(worker, spotter_ids),
-                     total=len(spotter_ids)))
+    if cache and end_date < datetime.now(tz=timezone.utc):
+        # Use the cache _only_ for requests that concern the past. In real-time
+        # things may change.
+        spotter_cache.create_cache( 'get_data', _download_data, session )
+        out = spotter_cache.get_data(
+            'get_data',spotter_ids,
+             variables_to_include=variables_to_include,
+             start_date=start_date,
+             end_date=end_date,
+             bulk_data_as_dataframe=bulk_data_as_dataframe)
     else:
-        out = list(
-            tqdm(map(worker, spotter_ids), total=len(spotter_ids)))
+        def worker(_spotter_id):
+            return _download_data(_spotter_id, session, variables_to_include,
+                                  start_date, end_date, bulk_data_as_dataframe)
+
+        if parallel_download:
+            with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
+                out = list(
+                    tqdm(pool.imap(worker, spotter_ids),
+                         total=len(spotter_ids)))
+        else:
+            out = list(
+                tqdm(map(worker, spotter_ids), total=len(spotter_ids)))
 
     data = {}
     for spotter_id, spotter_data in zip(spotter_ids, out):
@@ -276,6 +283,7 @@ def search_circle(
         center_lat_lon: Tuple,
         radius: float,
         session: SofarApi = None,
+        cache=True
 ):
     """
     Search for all Spotters that have data available within the give spatio-
@@ -294,7 +302,20 @@ def search_circle(
 
     geometry = {'type': 'circle', 'points': center_lat_lon, 'radius': radius}
 
-    return _search(start_date, end_date, geometry, session)
+    if session is None:
+        session = _get_sofar_api()
+
+    if cache:
+        spotter_cache.create_cache('search_circle',_search,session)
+        return spotter_cache.get_data_search(
+            'search_circle',
+            start_date=start_date,
+            end_date=end_date,
+            geometry=geometry
+        )
+    else:
+        #
+        return _search(start_date, end_date, geometry, session)
 
 
 # -----------------------------------------------------------------------------
@@ -305,6 +326,7 @@ def search_rectangle(
         end_date: Union[datetime, str],
         bounding_box,
         session: SofarApi = None,
+        cache=False
 ):
     """
     Search for all Spotters that have data available within the give spatio-
@@ -326,7 +348,20 @@ def search_rectangle(
                 'points': bounding_box,
                 'radius': None}
 
-    return _search(start_date, end_date, geometry, session)
+    if session is None:
+        session = _get_sofar_api()
+
+    if cache:
+        spotter_cache.create_cache('search_rectangle',_search,session)
+        return spotter_cache.get_data_search(
+            'search_rectangle',
+            start_date=start_date,
+            end_date=end_date,
+            geometry=geometry
+        )
+    else:
+        #
+        return _search(start_date, end_date, geometry, session)
 
 
 # -----------------------------------------------------------------------------
@@ -568,7 +603,7 @@ def _search(start_date: Union[datetime, str],
             session: SofarApi = None,
             variables_to_include: VariablesToInclude = None,
             page_size=500,
-            bulk_data_as_dataframe: bool = True
+            bulk_data_as_dataframe: bool = True,
             ):
     if session is None:
         session = _get_sofar_api()
@@ -706,33 +741,3 @@ def _get_class(key, data) -> Union[MetoceanData, WaveSpectrum1D]:
     else:
         raise Exception('Unknown variable')
 # -----------------------------------------------------------------------------
-
-
-def spotter_cache_uri( request_type,
-                       spotter_id,
-                       start_date: Union[datetime, int, float, str] = None,
-                       end_date: Union[datetime, int, float, str] = None,
-                       include_frequency_data=False,
-                       include_waves=True,
-                       include_wind=False,
-                       include_barometer_data=False,
-                       include_surface_temp_data=False,
-                       bulk_data_as_dataframe=True):
-
-    if end_date > datetime.now():
-        return None
-
-    uri = os.path.join( f"{os.getcwd()}",
-          f"{request_type}"
-          f"{spotter_id}"
-          f"{start_date.isoformat()}"
-          f"{end_date.isoformat()}"
-          f"{include_frequency_data}"
-          f"{include_waves}"
-          f"{include_wind}"
-          f"{include_barometer_data}"
-          f"{include_surface_temp_data}"
-          f"{bulk_data_as_dataframe}"
-          f".json"
-    )
-    return uri

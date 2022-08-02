@@ -77,7 +77,7 @@ class FileCache:
                  path: str = TEMPORARY_DIRECTORY,
                  size_GB: Union[float, int] = CACHE_SIZE_GB,
                  do_cache_eviction_on_startup: bool = False,
-                 resources=None,
+                 resources:List[RemoteResource]=None,
                  parallel=True,
                  allow_for_missing_files=False,
                  post_process_function: Callable[[str],None] = None,

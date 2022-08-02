@@ -54,6 +54,7 @@ def open_remote_forecast(
     :return: xarray dataset
     """
 
+    print(f"Get from data from {model_name} for a forecast")
     init_time = init_time.astimezone(tz=timezone.utc)
     return _open_variables(
         variable,
@@ -82,6 +83,7 @@ def open_remote_analysis(
     :return: xarray dataset
     """
 
+    print(f"Get data from model {model_name} at anlysis time")
     start_time = _to_utc(start_time)
     end_time = _to_utc(end_time)
     return _open_variables(
@@ -121,6 +123,8 @@ def open_remote_lead(
     :return: xarray dataset
     """
 
+    print(f"Get data from model {model_name} "
+          f"at lead={int(lead_time.seconds/3600)} hour(s)")
     start_time = _to_utc(start_time)
     end_time = _to_utc(end_time)
     return _open_variables(
@@ -155,6 +159,9 @@ def open_remote_evaluation(
         be used.
     :return: xarray dataset
     """
+
+    print(f"Get data from model {model_name} "
+          f"at valid time {evaluation_time.strftime('%Y-%m-%dT%H:%M:%D')}Z")
 
     evaluation_time = _to_utc(evaluation_time)
     return _open_variables(

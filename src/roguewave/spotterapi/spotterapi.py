@@ -223,9 +223,6 @@ def get_data(
     corresponding value a dataframe containing the output.
     """
 
-    if cache:
-        uri = spotter_cache_uri( get_data, )
-
     if spotter_ids is None:
         spotter_ids = get_spotter_ids()
 

@@ -29,11 +29,11 @@ from .remote_resources import RemoteResourceS3, \
 from .exceptions import _RemoteResourceUriNotFound
 
 TEMPORARY_DIRECTORY = '~/temporary_roguewave_files/filecache/'
-CACHE_SIZE_GiB = 5
+CACHE_SIZE_GB = 5
 MAXIMUM_NUMBER_OF_WORKERS = 10
-KILOBYTE = 1024
-MEGABYTE = 1024 * KILOBYTE
-GIGABYTE = 1024 * MEGABYTE
+KILOBYTE = 1000
+MEGABYTE = 1000 * KILOBYTE
+GIGABYTE = 1000 * MEGABYTE
 
 
 class FileCache:
@@ -75,7 +75,7 @@ class FileCache:
 
     def __init__(self,
                  path: str = TEMPORARY_DIRECTORY,
-                 size_GiB: Union[float, int] = CACHE_SIZE_GiB,
+                 size_GB: Union[float, int] = CACHE_SIZE_GB,
                  do_cache_eviction_on_startup: bool = False,
                  resources=None,
                  parallel=True,
@@ -87,7 +87,7 @@ class FileCache:
         Initialize Cache
         :param path: path to store cache. If path does not exist it will be
             created.
-        :param size_GiB: Maximum size of the cache in GiB. If cache exceeds
+        :param size_GB: Maximum size of the cache in GiB. If cache exceeds
             the size, then files with oldest access/modified dates get deleted
             until everthing fits in the cache again. Fractional values (floats)
             are allowed.
@@ -102,7 +102,7 @@ class FileCache:
         """
 
         self.path = os.path.expanduser(path)
-        self.max_size = int(size_GiB * GIGABYTE)
+        self.max_size = int(size_GB * GIGABYTE)
         self.parallel = parallel
         self.allow_for_missing_files = allow_for_missing_files
 

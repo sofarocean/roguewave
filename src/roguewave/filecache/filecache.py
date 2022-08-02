@@ -24,7 +24,7 @@ Functions:
 import os
 from typing import List, Tuple, Union, Dict, Iterable, Callable
 from .cache_object import TEMPORARY_DIRECTORY, \
-    CACHE_SIZE_GiB, FileCache
+    CACHE_SIZE_GB, FileCache
 
 
 # Constants
@@ -95,7 +95,7 @@ def exists(cache_name: str):
 
 def create_cache(cache_name: str,
                  cache_path: str = TEMPORARY_DIRECTORY,
-                 cache_size_GiB: Union[int, float] = CACHE_SIZE_GiB,
+                 cache_size_GiB: Union[int, float] = CACHE_SIZE_GB,
                  do_cache_eviction_on_startup: bool = False,
                  download_in_parallel=True
                  ) \
@@ -140,7 +140,7 @@ def create_cache(cache_name: str,
 
     _ACTIVE_FILE_CACHES[cache_name] = FileCache(
         cache_path,
-        size_GiB=cache_size_GiB,
+        size_GB=cache_size_GiB,
         do_cache_eviction_on_startup=do_cache_eviction_on_startup,
         parallel=download_in_parallel
     )

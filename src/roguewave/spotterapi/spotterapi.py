@@ -237,15 +237,18 @@ def get_data(
     if not isinstance(spotter_ids, list):
         spotter_ids = [spotter_ids]
 
+    print(f"Get spotter data: retrieving data for {len(spotter_ids)} Spotters")
     if session is None:
         session = _get_sofar_api()
 
     if cache and end_date < datetime.now(tz=timezone.utc):
         # Use the cache _only_ for requests that concern the past. In real-time
         # things may change.
-        spotter_cache.create_cache( 'get_data', _download_data, session )
+
         out = spotter_cache.get_data(
-            'get_data',spotter_ids,
+             spotter_ids,
+             session,
+             _download_data,
              variables_to_include=variables_to_include,
              start_date=start_date,
              end_date=end_date,
@@ -283,7 +286,7 @@ def search_circle(
         center_lat_lon: Tuple,
         radius: float,
         session: SofarApi = None,
-        cache=True
+        cache=False
 ):
     """
     Search for all Spotters that have data available within the give spatio-
@@ -305,10 +308,11 @@ def search_circle(
     if session is None:
         session = _get_sofar_api()
 
+    print("Get Spotter data: retrieving all data from spatio-temporal region")
     if cache:
-        spotter_cache.create_cache('search_circle',_search,session)
         return spotter_cache.get_data_search(
-            'search_circle',
+            handler=_search,
+            session=session,
             start_date=start_date,
             end_date=end_date,
             geometry=geometry
@@ -351,10 +355,11 @@ def search_rectangle(
     if session is None:
         session = _get_sofar_api()
 
+    print("Get Spotter data: retrieving all data from spatio-temporal region")
     if cache:
-        spotter_cache.create_cache('search_rectangle',_search,session)
         return spotter_cache.get_data_search(
-            'search_rectangle',
+            _search,
+            session,
             start_date=start_date,
             end_date=end_date,
             geometry=geometry

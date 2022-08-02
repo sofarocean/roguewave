@@ -66,21 +66,21 @@ def filepaths(
         to the list of URI's. IF return_cache_hits=True, additionally return
         a list of cache hits as the second entry of the return tuple.
     """
-    return _get_cache(cache_name)[uris]
+    return get_cache(cache_name)[uris]
 
 
 def set_post_process_function(
         post_process_function: Callable[[str],None] = None,
         cache_name=None):
 
-    cache = _get_cache(cache_name)
+    cache = get_cache(cache_name)
     cache.post_process_function = post_process_function
 
 
 def set_validate_function(
         validate_function: Callable[[str], bool] = None,
         cache_name=None):
-    cache = _get_cache(cache_name)
+    cache = get_cache(cache_name)
     cache.validate_function = validate_function
 
 def exists(cache_name: str):
@@ -185,16 +185,12 @@ def delete_files(uris: Union[str, Iterable[str]],
     if not isinstance(uris, Iterable) or isinstance(uris, str):
         uris = [uris]
 
-    cache = _get_cache(cache_name)
+    cache = get_cache(cache_name)
     for key in uris:
         cache.remove(key)
 
 
-# Private module helper functions
-# =============================================================================
-
-
-def _get_cache(cache_name: str) -> FileCache:
+def get_cache(cache_name: str) -> FileCache:
     """
     Get a valid cache object, error if the name does not exist.
     :param cache_name: Name of the cache

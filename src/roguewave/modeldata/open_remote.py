@@ -207,8 +207,7 @@ def _open_aws_keys_as_dataset(
     # downloaded file so we can use a unified netcdf interface and because
     # Grib == Slow.
     def post_process(filepath:str):
-        if filetype=='grib':
-            _convert_grib_to_netcdf(filepath, model_variables)
+        _convert_grib_to_netcdf(filepath, model_variables)
 
     def validate(filepath:str):
         if not single_variables_per_file:
@@ -222,8 +221,13 @@ def _open_aws_keys_as_dataset(
 
     # TODO: what happens if we ask the cache to get a something else outside
     #  of this path? will it start to apply the given pre-process functions?
-    filecache.set_post_process_function(post_process)
-    filecache.set_validate_function(validate)
+    filecache.set_post_process_function('grib',post_process)
+    filecache.set_validate_function('grib',validate)
+
+    if filetype == 'grib':
+        aws_keys = [ f'validate=grib;postprocess=grib:{x}' for x in aws_keys ]
+
+    # Load data into cache and get filenames
     filepaths = filecache.filepaths(aws_keys, cache_name )
 
     datasets = [

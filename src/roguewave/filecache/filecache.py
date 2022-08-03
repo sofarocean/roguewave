@@ -69,19 +69,20 @@ def filepaths(
     return get_cache(cache_name)[uris]
 
 
-def set_post_process_function(
+def set_post_process_function( name:str,
         post_process_function: Callable[[str],None] = None,
         cache_name=None):
 
     cache = get_cache(cache_name)
-    cache.post_process_function = post_process_function
+    cache.post_process_function[name] = post_process_function
 
 
 def set_validate_function(
+        name:str,
         validate_function: Callable[[str], bool] = None,
         cache_name=None):
     cache = get_cache(cache_name)
-    cache.validate_function = validate_function
+    cache.validate_function[name] = validate_function
 
 def exists(cache_name: str):
     """

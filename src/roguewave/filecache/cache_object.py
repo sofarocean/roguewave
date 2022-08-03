@@ -21,7 +21,8 @@ import os
 from _warnings import warn
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
-from typing import Union, List, Tuple, Callable
+from typing import Union, List, Tuple, Callable, Dict
+from dataclasses import dataclass
 from tqdm import tqdm
 from roguewave import logger
 from .remote_resources import RemoteResourceS3, \
@@ -34,6 +35,16 @@ MAXIMUM_NUMBER_OF_WORKERS = 10
 KILOBYTE = 1000
 MEGABYTE = 1000 * KILOBYTE
 GIGABYTE = 1000 * MEGABYTE
+
+
+@dataclass()
+class CacheMiss:
+    uri: str
+    filepath: str
+    filename: str
+    allow_for_missing_files: bool
+    post_process_function: Callable[[str], None]
+    download_function: Callable[[str, str], bool] = None
 
 
 class FileCache:
@@ -77,11 +88,9 @@ class FileCache:
                  path: str = TEMPORARY_DIRECTORY,
                  size_GB: Union[float, int] = CACHE_SIZE_GB,
                  do_cache_eviction_on_startup: bool = False,
-                 resources:List[RemoteResource]=None,
+                 resources: List[RemoteResource] = None,
                  parallel=True,
                  allow_for_missing_files=False,
-                 post_process_function: Callable[[str],None] = None,
-                 validate_function: Callable[[str], None] = None,
                  ):
         """
         Initialize Cache
@@ -121,8 +130,8 @@ class FileCache:
         self._initialize_cache(do_cache_eviction_on_startup)
 
         # Post processing and validation functions
-        self.post_process_function = post_process_function
-        self.validate_function = validate_function
+        self.post_process_function = {}
+        self.validate_function = {}
 
         # download resources
         if resources is None:
@@ -132,30 +141,6 @@ class FileCache:
         else:
             self.resources = resources
 
-    def _post_process(self,filepath:str):
-        """
-        Call custom post processing function that gets called after first
-        download- if set.
-        :param filepaths: list of filepaths
-        :return: none
-        """
-        if self.post_process_function is None:
-            return
-        else:
-            self.post_process_function(filepath)
-
-    def _validate(self,filepath:str)->bool:
-        """
-        Call custom post processing function that gets called after first
-        download- if set.
-        :param filepaths: list of filepaths
-        :return: none
-        """
-        if self.validate_function is None:
-            return True
-        else:
-            return self.validate_function(filepath)
-
     def _cache_file_name(self, uri: str) -> str:
         """
         Return the filename that corresponds to the given uri. We construct
@@ -163,7 +148,7 @@ class FileCache:
         with a cache file prefix. THe later is introduced to seperate cache
         files in a path from user files (and avoid including/deleting those).
 
-        :param uri: valis uri"
+        :param uri: valid uri stripped from directives
         :return: valid cache file
         """
         return self.CACHE_FILE_PREFIX + _hashname(
@@ -173,7 +158,7 @@ class FileCache:
         """
         Construct the path where the given uri is stored locally.
 
-        :param uri: valis uri of form "bucket/key"
+        :param uri: valid uri stripped from directives.
         :return: valid cache file
         """
         return os.path.join(self.path, self._cache_file_name(uri))
@@ -219,10 +204,12 @@ class FileCache:
                                  'size of the object or allow eviction of '
                                  'files on startup.')
 
-    def in_cache(self, uris) -> List[bool]:
+    def in_cache(self, unparsed_uris) -> List[bool]:
         # make sure input is a list
-        if isinstance(uris, str):
-            uris = [uris]
+        if isinstance(unparsed_uris, str):
+            unparsed_uris = [unparsed_uris]
+
+        uris, _ = parse_directives(unparsed_uris)
 
         # Create the hashes from the URI's
         hashes = [self._cache_file_name(uri) for uri in uris]
@@ -241,12 +228,14 @@ class FileCache:
         # add entry to the cache.
         self._entries[_hash] = filepath
 
-    def remove(self, uri: str) -> None:
+    def remove(self, unparsed_uri: str) -> None:
         """
         Remove an entry from the cache
-        :param uri: uri
+        :param unparsed_uri: uri
         :return: None
         """
+        uri, _ = parse_directive(unparsed_uri)
+
         if not self.in_cache(uri):
             raise ValueError(f'Key {uri} not in Cache')
 
@@ -297,59 +286,117 @@ class FileCache:
 
         return filepath
 
+    def get_cache_misses(self, uris: List[str],
+                         directives: List[Dict[str, str]]) \
+            -> List[CacheMiss]:
+        """
+        Function to get all cache misses and return a list of CacheMiss objects
+        needed to download the misses from remote resources.
+
+        This function also perform validates on potential cache hits if a
+        relevant validation function is set *and* validation is requested
+        through a directive.
+
+        :param uris: list of uris stripped of directives
+        :param directives: list of directives per uri (empty dict if none)
+        :return: list of cache misses
+        """
+
+        cache_misses = []
+        for uri, directive in zip(uris, directives):
+
+            # what is the hashkey/filename
+            hashkey = self._cache_file_name(uri)
+            filepath = self._cache_file_path(uri)
+
+            # is the key in cache?
+            valid_entry = False
+            if self._is_in_cache(hashkey):
+                # If so is it a valid entry
+                if 'validate' in directive:
+                    # Call the user supplied validation function with the
+                    # filepath as argument
+                    validation_function = \
+                        self.validate_function[directive['validate']]
+                    valid_entry = validation_function(filepath)
+
+                    if not valid_entry:
+                        # remove the locally stored entry if not valid
+                        os.remove(filepath)
+                else:
+                    # Defaults to True if no validation directive is given
+                    valid_entry = True
+
+            if not valid_entry:
+                # If not a valid entry (either missing or invalid)
+                #
+                if 'postprocess' in directive:
+                    # Add the postprocess function to use if requested.
+                    post_process_function = self.post_process_function[
+                        directive['postprocess']
+                    ]
+                else:
+                    # otherwise set a null function as postprocessor
+                    post_process_function = do_nothing
+
+                cache_misses.append(
+                    CacheMiss(
+                        uri=uri,
+                        filepath=filepath,
+                        filename=hashkey,
+                        allow_for_missing_files=self.allow_for_missing_files,
+                        post_process_function=post_process_function
+                    )
+                )
+        return cache_misses
+
     def __len__(self) -> int:
         """
         :return: Number of entries in the cache.
         """
         return len(self._entries)
 
-    def __getitem__(self, uris: Union[List, str]) -> List[str]:
+    def __getitem__(self, unparsed_uris: Union[List, str]) -> List[str]:
+        """
+        Get filenames corresponding to locally stored versions of the objects
+        the URI points to. Note that the unparsed_uris take the form:
 
+        [ directive=option ; ... directive=option ] ":" [scheme] "://" [path]
+
+        e.g for amazon s3 where we want to perform validation and post
+            processing on entries:
+
+            validate=grib;postprocess=grib:s3://bucket/key
+
+        or without cache directives
+
+            s3://bucket/key
+
+        Cache directives are optional, but if specified the corresponding
+        user defined handling function must have been set. By default no
+        validation or postprocessing functions are set.
+
+        :param unparsed_uris: URI's that may still include directives.
+        :return:
+        """
         # make sure input is a list
-        if isinstance(uris, str):
-            uris = [uris]
+        if isinstance(unparsed_uris, str):
+            unparsed_uris = [unparsed_uris]
 
-        # Create the hashes from the URI's
-        hashes = [self._cache_file_name(uri) for uri in uris]
-
-        # collect key, full local path and hash for any hashes that are not
-        # in the local cache
-        cache_misses = []
-        for _hash, key in zip(hashes, uris):
-            to_append = (key, self._cache_file_path(key), _hash)
-            if self._is_in_cache(_hash):
-                if not self._validate( self._entries[_hash] ):
-                    self._remove_item_from_cache(_hash)
-                    cache_misses.append(to_append)
-            else:
-                cache_misses.append(to_append)
-
-        self._cache_misses += len(cache_misses)
-        self._cache_hits += len(hashes) - len(cache_misses)
+        # Remove cache directives from uris (if included)
+        uris, directives = parse_directives(unparsed_uris)
+        filepaths = [self._cache_file_path(uri) for uri in uris]
 
         # for all URI's not in cache
-        if cache_misses:
-            # download all the files
-            succesfully_downloaded = _download_from_resources(
+        if cache_misses := self.get_cache_misses(uris, directives):
+            _ = _download_from_resources(
                 cache_misses,
                 self.resources,
-                parallel_download=self.parallel,
-                allow_for_missing_files=self.allow_for_missing_files)
+                parallel_download=self.parallel)
 
-            # For all downloaded files do
-            for success, cache_miss in zip(
-                    succesfully_downloaded, cache_misses):
-                if success:
-                    # If succesfull, add to cache.
-                    self._post_process(cache_miss[1])
-                    self._add_to_cache(cache_miss[2], cache_miss[1])
-                else:
-                    # If not succesful, remove from keys to return
-                    # Todo some logging or erroring?
-                    hashes.pop(hashes.index(cache_miss[2]))
-
-        # Get the filepaths to return
-        filepaths = [self._get_from_cache(_hash) for _hash in hashes]
+            for cache_miss in cache_misses:
+                self._add_to_cache(cache_miss.filename,
+                                   cache_miss.filepath)
 
         size_of_requested_data = _get_total_size_of_files_in_bytes(filepaths)
         if size_of_requested_data > self.max_size:
@@ -361,6 +408,9 @@ class FileCache:
             warn(warning)
             logger.warning(warning)
             self.max_size = size_of_requested_data + MEGABYTE
+
+        self._cache_misses += len(cache_misses)
+        self._cache_hits += len(uris) - len(cache_misses)
 
         # See if we need to do any cache eviction because the cache has become
         # to big.
@@ -435,49 +485,67 @@ class FileCache:
         logger.debug(f'Purging cache done')
 
 
-def _download_from_resources(key_and_filenames: List[Tuple],
+def _download_from_resources(cache_misses: List[CacheMiss],
                              resources: List[RemoteResource],
                              parallel_download=False,
-                             allow_for_missing_files=False) -> List[bool]:
+                             ) -> List[bool]:
     """
     Wrapper function to download multiple uris from the resource(s).
-
-    :param key_and_filenames: List containing (uri,filename)
+    :param cache_misses: List containing cache misses to download
     :param parallel_download: If true, downloading is performed in parallel.
     :return: List of boolean indicating if the download was a success.
     """
 
+    def _worker(cache_miss: CacheMiss) -> bool:
+        try:
+            cache_miss.download_function(cache_miss.uri, cache_miss.filepath)
+            cache_miss.post_process_function(cache_miss.filepath)
+            return True
+        except _RemoteResourceUriNotFound as e:
+            if cache_miss.allow_for_missing_files:
+                warning = f'Uri not retrieved: {str(e)}'
+                warn(warning)
+                logger.warning(warning)
+            else:
+                raise e
+            return False
+
     # construct the arguments to be used for parallel downloading of files.
     # Specifically, we need to match the right resource for downloading to the
     # right URI.
-    args = []
-    for key_and_filename in key_and_filenames:
+    for cache_miss in cache_misses:
         # Loop over all resources until we find one that can interpret the URI
         # (this is pretty naive approach and should probably be refactored to
         #  some direct mapping if the number of resources ever gets very long)
         for resource in resources:
             # For each resource check if the resource can interpret the URI
-            if resource.valid_uri(key_and_filename[0]):
+            if resource.valid_uri(cache_miss.uri):
                 # If so, get the download function, and other arguments and
                 # break
-                args.append(
-                    (resource.download(), *key_and_filename[0:2],
-                     allow_for_missing_files)
-                )
+                cache_miss.download_function = resource.download()
                 break
         else:
             # If we didn't break the loop no valid resource was found, raise
             # error
             raise ValueError(f'No resource available for URI: '
-                             f'{key_and_filename[0]}')
+                             f'{cache_miss.uri}')
 
     # Download the requested objects.
     if parallel_download:
         with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
-            output = list(tqdm(pool.imap(_worker, args), total=len(args)))
+            output = list(
+                tqdm(
+                    pool.imap(_worker, cache_misses),
+                    total=len(cache_misses)
+                )
+            )
     else:
-        output = list(tqdm(map(_worker, args),total=len(args)))
-
+        output = list(
+            tqdm(
+                map(_worker, cache_misses),
+                total=len(cache_misses)
+            )
+        )
     return output
 
 
@@ -509,19 +577,76 @@ def _hashname(string: str) -> str:
     return hashlib.md5(string.encode(), usedforsecurity=False).hexdigest()
 
 
-def _worker(args) -> bool:
-    download_func = args[0]
-    uri = args[1]
-    filepath = args[2]
-    allow_for_missing_files = args[3]
-    try:
-        download_func(uri, filepath)
-        return True
-    except _RemoteResourceUriNotFound as e:
-        if allow_for_missing_files:
-            warning = f'Uri not retrieved: {str(e)}'
-            warn(warning)
-            logger.warning(warning)
-        else:
-            raise e
-        return False
+def parse_directives(raw_uris: List[str]) -> Tuple[List[str], List[dict]]:
+    uris = []
+    directives = []
+    for raw_uri in raw_uris:
+        uri, directive = parse_directive(raw_uri)
+        uris.append(uri)
+        directives.append(directive)
+    return uris, directives
+
+
+def parse_directive(unparsed_uri: str) -> Tuple[str, dict]:
+    """
+    unparsed_uris take the form:
+
+        [ directive=option ; ... directive=option ] ":" [scheme] "://" [path]
+
+        e.g for amazon s3 where we want to perform validation and post
+            processing on entries:
+
+            validate=grib;postprocess=grib:s3://bucket/key
+
+        or without cache directives
+
+            s3://bucket/key
+
+    This function seperates the directive/option pairs into a directove
+    dictionary, and a valid uri, i.e.
+
+                validate=grib;postprocess=grib:s3://bucket/key
+
+    becomes
+
+        directive = { "validate":"grib", "postprocess":"grib}
+        uri = s3://bucket/key
+
+    The parsing is really simple.
+
+    :param unparsed_uri: uri possibly containing cache directives
+    :return:
+    """
+
+    # split in directives_scheme part and a path.
+    directives_and_scheme, path = unparsed_uri.split('://')
+
+    parsed_directives = {}
+    # if a colon is present then directives are provided.
+    if ':' in directives_and_scheme:
+        # split directives from the scheme
+        directives, scheme = directives_and_scheme.split(':')
+
+        # split multiple directives (if present)
+        directives = directives.split(';')
+
+        # for each directive store in the dict.
+        for directive in directives:
+            directive_name, directive_parameter = directive.split('=')
+            parsed_directives[directive_name] = directive_parameter
+    else:
+        # no directives
+        scheme = directives_and_scheme
+
+    uri = scheme + '://' + path
+    return uri, parsed_directives
+
+
+def do_nothing(*arg, **kwargs):
+    """
+    Null function for convenience
+    :param arg:
+    :param kwargs:
+    :return:
+    """
+    return None

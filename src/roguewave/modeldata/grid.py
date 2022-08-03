@@ -1,7 +1,26 @@
 import numpy
 from datetime import datetime
-from numpy import interp
-from typing import List,Dict,Union,Tuple
+from numpy import interp, ndarray
+from typing import List,Dict,Union,Tuple, overload, Hashable
+from xarray import Dataset, DataArray
+
+
+def interpolate_dataset( dataset:DataArray, points:Tuple[ndarray,...] ):
+
+    # Get dimension
+    dimensions = dataset.dims # type: Tuple[Hashable,...]
+
+    if len(points) != len(dimensions):
+        dim_str = [str(dim) for dim in dimensions]
+        raise ValueError( f' Points expected to have {len(dimensions)} '
+                    f'coordinates corresponding to: { ", ".join(dim_str)}' )
+
+
+    pass
+
+
+
+
 
 def interpolation_weights(latitude,
                           longitude,

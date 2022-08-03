@@ -279,7 +279,7 @@ def _open_variables(variables,
         model_variable_names = variables
 
     concatenation_dimension = aws_layout.to_model_variable_name('time')
-    if aws_layout.single_variable_per_file or len(model_variable_names) == 1:
+    if not aws_layout.single_variable_per_file or len(model_variable_names) == 1:
         # For a single variable there is no need to merge datasets. Further,
         # if all variables per valid_time are stored in a the same file
         # (e.g. ECMWF Grib) then we only need to load data once. To note,

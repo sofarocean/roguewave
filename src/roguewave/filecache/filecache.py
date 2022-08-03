@@ -33,7 +33,6 @@ from .remote_resources import RemoteResource
 
 DEFAULT_CACHE_NAME = '__default__'
 
-
 # Private Module Variables
 # =============================================================================
 
@@ -47,9 +46,8 @@ _ACTIVE_FILE_CACHES = {}  # type: Dict[str,FileCache]
 # =============================================================================
 
 
-
 def filepaths(
-        uris: Union[List[str],str],
+        uris: Union[List[str], str],
         cache_name: str = None
 ) -> Union[List[str], Tuple[List[str], List[bool]]]:
     """
@@ -69,20 +67,22 @@ def filepaths(
     return get_cache(cache_name)[uris]
 
 
-def set_post_process_function( name:str,
-        post_process_function: Callable[[str],None] = None,
+def remove_directive_function(directive: str, name: str, cache_name=None):
+    _ = get_cache(cache_name).remove_directive_function(directive, name)
+
+
+def set_directive_function(
+        directive: str, name: str,
+        post_process_function: Union[
+            Callable[[str], None], Callable[[str], bool]] = None,
         cache_name=None):
+    #
+    _ = get_cache(cache_name).set_directive_function(
+        directive,
+        name,
+        post_process_function
+    )
 
-    cache = get_cache(cache_name)
-    cache.post_process_function[name] = post_process_function
-
-
-def set_validate_function(
-        name:str,
-        validate_function: Callable[[str], bool] = None,
-        cache_name=None):
-    cache = get_cache(cache_name)
-    cache.validate_function[name] = validate_function
 
 def exists(cache_name: str):
     """
@@ -208,4 +208,3 @@ def get_cache(cache_name: str) -> FileCache:
             raise ValueError(f'Cache with name {cache_name} does not exist.')
 
     return _ACTIVE_FILE_CACHES[cache_name]
-

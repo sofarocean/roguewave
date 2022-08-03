@@ -130,8 +130,7 @@ class FileCache:
         self._initialize_cache(do_cache_eviction_on_startup)
 
         # Post processing and validation functions
-        self.post_process_function = {}
-        self.validate_function = {}
+        self.directives = {"validate": {}, "postprocess":{}}
 
         # download resources
         if resources is None:
@@ -140,6 +139,36 @@ class FileCache:
                               RemoteResourceLocal()]
         else:
             self.resources = resources
+
+    def set_directive_function(
+            self,
+            directive,
+            name,
+            function: Union[
+                Callable[[str],None],
+                Callable[[str],bool]
+            ]
+        ):
+
+        if directive not in self.directives:
+            raise KeyError(f'{directive} is not a valid cache directive.')
+
+        if name in self.directives[directive]:
+            raise ValueError(f'Function  for {name} already exists')
+        else:
+            self.directives[directive][name] = function
+
+
+    def remove_directive_function(self,directive:str,name:str):
+
+        if directive not in self.directives:
+            raise KeyError(f'{directive} is not a valid cache directive.')
+
+        if name not in self.directives[directive]:
+            raise ValueError(f'Function  for {name} does not exist')
+        else:
+            self.directives[directive].pop(name)
+
 
     def _cache_file_name(self, uri: str) -> str:
         """
@@ -317,7 +346,7 @@ class FileCache:
                     # Call the user supplied validation function with the
                     # filepath as argument
                     validation_function = \
-                        self.validate_function[directive['validate']]
+                        self.directives['validate'][directive['validate']]
                     valid_entry = validation_function(filepath)
 
                     if not valid_entry:
@@ -332,9 +361,10 @@ class FileCache:
                 #
                 if 'postprocess' in directive:
                     # Add the postprocess function to use if requested.
-                    post_process_function = self.post_process_function[
-                        directive['postprocess']
-                    ]
+                    post_process_function = \
+                        self.directives[
+                            'postprocess'][directive['postprocess']]
+
                 else:
                     # otherwise set a null function as postprocessor
                     post_process_function = do_nothing

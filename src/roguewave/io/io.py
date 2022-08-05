@@ -103,10 +103,18 @@ def object_hook(dictionary:dict):
     if '__class__' in dictionary:
         if dictionary['__class__'] == 'DataFrame':
             #
-            #print(dictionary['data'])
             df = read_json(dictionary['data'])
             if 'timestamp' in df:
                 df['timestamp'] = df['timestamp'].apply(
+                    lambda x: x.tz_localize('utc'))
+            elif 'time' in df:
+                df['time'] = df['time'].apply(
+                    lambda x: x.tz_localize('utc'))
+            elif 'valid_time' in df:
+                df['valid_time'] = df['valid_time'].apply(
+                    lambda x: x.tz_localize('utc'))
+            elif 'init_time' in df:
+                df['valid_time'] = df['valid_time'].apply(
                     lambda x: x.tz_localize('utc'))
             else:
                 df.index = [ x.tz_localize('utc') for x in df.index]
@@ -130,23 +138,6 @@ def object_hook(dictionary:dict):
         elif dictionary['__class__'] == 'BarometricPressure':
             return BarometricPressure(**dictionary['data'])
     else:
-        # legacy - should delete soonish.
-        if 'directions' in dictionary:
-            if isinstance(dictionary['directions'],numpy.ndarray):
-                return dictionary
-            # if directions -> create a wavespectrum2d. The keys directly map
-            # to the constructor arguments.
-            return WaveSpectrum2D(**dictionary)
-        elif 'frequency' in dictionary:
-            if isinstance(dictionary['frequency'],numpy.ndarray):
-                return dictionary
-            # if not directions but has frequency -> create a wavespectrum1d.
-            # The keys directly map to the constructor arguments.
-            return WaveSpectrum1D(**dictionary)
-        elif 'dataframe' in dictionary:
-            df = read_json(dictionary['dataframe'])
-            df['timestamp'] = df['timestamp'].apply(lambda x: x.tz_localize('utc'))
-            return df #DataFrame.from_dict(data['dataframe'])
         return dictionary
 
 def load(filename: str) -> _UNION:

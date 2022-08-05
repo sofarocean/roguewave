@@ -1,11 +1,23 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List
-
 import numpy
 from pandas import DataFrame
-
 from roguewave.tools import to_datetime
+
+SOFAR_STANDARD_NAMES_WAVE_BULK = {
+    "latitude": "latitude",
+    "longitude": "longitude",
+    "timestamp": "time",
+    "significant_waveheight": "significantWaveHeight",
+    "peak_period": "peakPeriod",
+    "mean_period": "meanPeriod",
+    "peak_direction": "peakDirection",
+    "peak_directional_spread": "peakDirectionalSpread",
+    "mean_direction": "meanDirection",
+    "mean_directional_spread": "meanDirectionalSpread",
+    "peak_frequency": "peakFrequency"
+}
 
 
 @dataclass
@@ -33,12 +45,24 @@ class MetoceanData():
             time = time.fdel
         self._timestamp = to_datetime(time)
 
-    def as_dict(self):
-        return {
+    def _convert(self, data,standard_sofar_names:bool=True ):
+        if not standard_sofar_names:
+            return data
+
+        out = {}
+        for key in data:
+            if key in SOFAR_STANDARD_NAMES_WAVE_BULK:
+                out[SOFAR_STANDARD_NAMES_WAVE_BULK[key]] = data[key]
+            else:
+                out[key] = data[key]
+        return out
+
+    def as_dict(self,standard_sofar_names:bool=True):
+        return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
             "timestamp": self.timestamp
-            }
+            }, standard_sofar_names)
 
 @dataclass
 class WaveBulkData(MetoceanData):
@@ -52,8 +76,8 @@ class WaveBulkData(MetoceanData):
     mean_directional_spread: float = numpy.nan
     peak_frequency: float = numpy.nan
 
-    def as_dict(self):
-        return {
+    def as_dict(self,standard_sofar_names:bool=True):
+        return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
             "timestamp": self.timestamp,
@@ -65,20 +89,20 @@ class WaveBulkData(MetoceanData):
             "mean_direction": self.mean_direction,
             "mean_directional_spread": self.mean_directional_spread,
             "peak_frequency": self.peak_frequency
-        }
+        },standard_sofar_names)
 
 
 @dataclass
 class SSTData(MetoceanData):
     degrees: float = numpy.nan
 
-    def as_dict(self):
-        return {
+    def as_dict(self,standard_sofar_names:bool=True):
+        return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
             "timestamp": self.timestamp,
             "degrees": self.degrees,
-        }
+        },standard_sofar_names)
 
 @dataclass
 class WindData(MetoceanData):
@@ -86,15 +110,15 @@ class WindData(MetoceanData):
     direction: float = numpy.nan
     seasurfaceId: float = numpy.nan
 
-    def as_dict(self):
-        return {
+    def as_dict(self,standard_sofar_names:bool=True):
+        return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
             "timestamp": self.timestamp,
             "speed": self.speed,
             "direction": self.direction,
             "seasurfaceId": self.seasurfaceId
-        }
+        },standard_sofar_names)
 
 @dataclass
 class BarometricPressure(MetoceanData):
@@ -103,8 +127,8 @@ class BarometricPressure(MetoceanData):
     unit_type: str = ''
     data_type_name: str = ''
 
-    def as_dict(self):
-        return {
+    def as_dict(self,standard_sofar_names:bool=True):
+        return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
             "timestamp": self.timestamp,
@@ -112,13 +136,14 @@ class BarometricPressure(MetoceanData):
             "unit_type": self.unit_type,
             "data_type_name": self.data_type_name,
             "value": self.value
-        }
+        }, standard_sofar_names)
 
 
-def as_dataframe(bulk_wave_properties:List[MetoceanData]):
+def as_dataframe(bulk_wave_properties:List[MetoceanData],
+                 standard_sofar_names=True):
     data = {}
     for bulk_propererties in bulk_wave_properties:
-        dictionary = bulk_propererties.as_dict()
+        dictionary = bulk_propererties.as_dict(standard_sofar_names)
         for key in dictionary:
             if key not in data:
                 data[key] = []
@@ -128,5 +153,9 @@ def as_dataframe(bulk_wave_properties:List[MetoceanData]):
         data[key] = numpy.array(data[key])
 
     df= DataFrame.from_dict(data)
-    df.set_index('timestamp', inplace=True)
+    if standard_sofar_names:
+        df.set_index('time', inplace=True)
+    else:
+        df.set_index('timestamp', inplace=True)
+
     return df

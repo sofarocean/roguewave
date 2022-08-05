@@ -70,6 +70,7 @@ class VariablesToInclude(TypedDict):
     surfaceTemp: bool
     barometerData: bool
 
+
 # 4) Main Functions
 # =============================================================================
 def get_spectrum(
@@ -78,7 +79,7 @@ def get_spectrum(
         end_date: Union[datetime, int, float, str] = None,
         session: SofarApi = None,
         parallel_download=True,
-        cache:bool=True
+        cache: bool = True
 ) -> Dict[str, List[WaveSpectrum1D]]:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
@@ -139,7 +140,7 @@ def get_bulk_wave_data(
         session: SofarApi = None,
         parallel_download: bool = True,
         bulk_data_as_dataframe: bool = True,
-        cache:bool=True
+        cache: bool = True
 ) -> Union[Dict[str, List[WaveBulkData]], Dict[str, DataFrame]]:
     """
     Gets the requested bulk wave data for the spotter(s) in the given interval
@@ -272,22 +273,22 @@ def get_data(
         spotter_ids = [spotter_ids]
 
     print(f"Get spotter data: retrieving data for {len(spotter_ids)} Spotters")
-    if session is None:
-        session = _get_sofar_api()
-
     if cache and end_date < datetime.now(tz=timezone.utc):
         # Use the cache _only_ for requests that concern the past. In real-time
         # things may change.
 
         out = spotter_cache.get_data(
-             spotter_ids,
-             session,
-             _download_data,
-             variables_to_include=variables_to_include,
-             start_date=start_date,
-             end_date=end_date,
-             bulk_data_as_dataframe=bulk_data_as_dataframe)
+            spotter_ids,
+            session,
+            _download_data,
+            variables_to_include=variables_to_include,
+            start_date=start_date,
+            end_date=end_date,
+            bulk_data_as_dataframe=bulk_data_as_dataframe)
     else:
+        if session is None:
+            session = _get_sofar_api()
+
         def worker(_spotter_id):
             return _download_data(_spotter_id, session, variables_to_include,
                                   start_date, end_date, bulk_data_as_dataframe)
@@ -745,7 +746,8 @@ def _none_filter(data: List[Union[WaveSpectrum1D, WaveBulkData]]):
     return list(
         filter(
             lambda x: (x['latitude'] is not None) and (
-                x['longitude'] is not None) and (x['timestamp'] is not None),
+                    x['longitude'] is not None) and (
+                                  x['timestamp'] is not None),
             data
         )
     )

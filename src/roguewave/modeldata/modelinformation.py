@@ -372,7 +372,7 @@ def list_available_variables(model_name, init_time: datetime = None):
 
     # open s3 resource
     s3 = boto3_resource('s3')
-    my_bucket = s3.Bucket(model.bucket)
+
 
     if 'variable' not in model.uri_path_template:
         raise ValueError('Listing variables for a particular model only works'
@@ -385,10 +385,13 @@ def list_available_variables(model_name, init_time: datetime = None):
 
     # Split in prefix and suffix, and remove the bucket name from the prefix
     prefix, suffix = key.split('####')
-    prefix = prefix.replace(model.bucket + '/', '')
+    prefix = prefix.replace('s3://','')
+    bucket,prefix = prefix.split('/',1)
+
 
     # loop over all objects conforming to the prefix
     variables = []
+    my_bucket = s3.Bucket(bucket)
     for obj in my_bucket.objects.filter(Prefix=prefix):
         if suffix in obj.key:
             # If the suffix is part of the key, add the part in between the

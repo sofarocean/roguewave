@@ -7,7 +7,39 @@ from roguewave.wavespectra import WaveSpectrum1D
 from roguewave.metoceandata import MetoceanData
 
 
-def interpolate_along_spotter_tracks(
+def interpolate_dataset_at_point(
+        dataset:Dataset,
+        latitude:float,
+        longitude:float,
+        time_variable_in_dataset:str = 'time',
+        longitude_variable_in_dataset: str = 'longitude',
+        latitude_variable_in_dataset: str = 'latitude',
+        cyclic_coordinates: dict[str,float] = None,
+        cyclic_data:Dict[str,Tuple[float,float,float]] = None
+        ) -> DataFrame:
+
+    time = dataset[time_variable_in_dataset].values
+    ones = numpy.ones( (len(time),))
+    points = {
+        time_variable_in_dataset: time,
+        latitude_variable_in_dataset: latitude*ones,
+        longitude_variable_in_dataset: longitude*ones
+    }
+
+    if cyclic_coordinates is None:
+        cyclic_coordinates = {longitude_variable_in_dataset: 360}
+
+    data = interpolate_points_data_set(
+        data_set=dataset,
+        points=points,
+        independent_variable=time_variable_in_dataset,
+        cyclic_coordinates=cyclic_coordinates,
+        cyclic_data=cyclic_data
+    )
+    return data.to_dataframe()
+
+
+def interpolate_dataset_along_spotter_tracks(
         dataset:Dataset,
         spotter_data:Dict[str, Union[Dict,DataFrame,List]],
         time_variable_in_dataset:str = 'time',

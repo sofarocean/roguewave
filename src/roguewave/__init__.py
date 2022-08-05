@@ -13,6 +13,8 @@ import roguewave.filecache as filecache
 # External API tools
 from .modeldata import sofarspectralapi
 from roguewave.modeldata.sofarspectralapi import load_sofar_spectral_file
+from roguewave.modeldata.interpolate_tracks import \
+    interpolate_dataset_along_spotter_tracks, interpolate_dataset_at_point
 
 # Wave spectrum
 from .wavespectra.spectrum1D import WaveSpectrum1D

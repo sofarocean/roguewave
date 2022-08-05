@@ -140,7 +140,8 @@ def get_bulk_wave_data(
         session: SofarApi = None,
         parallel_download: bool = True,
         bulk_data_as_dataframe: bool = True,
-        cache: bool = True
+        cache: bool = True,
+        convert_to_sofar_model_names = False
 ) -> Union[Dict[str, List[WaveBulkData]], Dict[str, DataFrame]]:
     """
     Gets the requested bulk wave data for the spotter(s) in the given interval
@@ -185,7 +186,8 @@ def get_bulk_wave_data(
         session=session,
         parallel_download=parallel_download,
         bulk_data_as_dataframe=bulk_data_as_dataframe,
-        cache=cache
+        cache=cache,
+        convert_to_sofar_model_names=convert_to_sofar_model_names
     )
     out = {}
     for key in data:
@@ -208,7 +210,8 @@ def get_data(
         session: SofarApi = None,
         parallel_download=True,
         bulk_data_as_dataframe=True,
-        cache=True
+        cache=True,
+        convert_to_sofar_model_names=False
 ) -> Dict[str, Dict[str, Union[list[WaveSpectrum1D],
                                list[WaveBulkData], DataFrame]]]:
     """
@@ -284,14 +287,16 @@ def get_data(
             variables_to_include=variables_to_include,
             start_date=start_date,
             end_date=end_date,
-            bulk_data_as_dataframe=bulk_data_as_dataframe)
+            bulk_data_as_dataframe=bulk_data_as_dataframe,
+            convert_to_sofar_model_names=convert_to_sofar_model_names)
     else:
         if session is None:
             session = _get_sofar_api()
 
         def worker(_spotter_id):
             return _download_data(_spotter_id, session, variables_to_include,
-                                  start_date, end_date, bulk_data_as_dataframe)
+                                  start_date, end_date, bulk_data_as_dataframe,
+                                  convert_to_sofar_model_names)
 
         if parallel_download:
             with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
@@ -416,7 +421,8 @@ def _download_data(
         start_date: Union[datetime, str, int, float] = None,
         end_date: Union[datetime, str, int, float] = None,
         bulk_data_as_dataframe: bool = True,
-        limit: int = None) -> \
+        limit: int = None,
+        convert_to_sofar_model_names=False) -> \
         Dict[str, Union[List[WaveSpectrum1D], List[WaveBulkData]]]:
     """
     Function that downloads data from the API for the requested Spotter
@@ -514,7 +520,7 @@ def _download_data(
                 if key == 'frequencyData':
                     # We cannot convert the list of wavespectra to a dataframe.
                     continue
-                data[key] = as_dataframe(data[key])
+                data[key] = as_dataframe(data[key],convert_to_sofar_model_names)
 
     return data
 

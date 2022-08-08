@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import List
 import numpy
 from pandas import DataFrame
-from roguewave.tools import to_datetime
+from roguewave.tools.time import to_datetime_utc
 
 SOFAR_STANDARD_NAMES_WAVE_BULK = {
     "latitude": "latitude",
@@ -43,7 +43,7 @@ class MetoceanData():
             # the wave the dataclass and getters and setters interact and
             # the magic involved to make it work.
             time = time.fdel
-        self._timestamp = to_datetime(time)
+        self._timestamp = to_datetime_utc(time)
 
     def _convert(self, data,standard_sofar_names:bool=True ):
         if not standard_sofar_names:
@@ -150,7 +150,7 @@ def as_dataframe(bulk_wave_properties:List[MetoceanData],
             data[key].append( dictionary[key])
 
     for key in data:
-        data[key] = numpy.array(data[key])
+        data[key] = data[key]
 
     df= DataFrame.from_dict(data)
     if standard_sofar_names:

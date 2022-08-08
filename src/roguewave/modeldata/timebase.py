@@ -22,9 +22,9 @@ Functions:
 # Import
 # =============================================================================
 
-
 from datetime import datetime, timezone, timedelta
 from typing import List, Union, Tuple
+from roguewave.tools.time import to_datetime_utc
 
 
 # Model private variables
@@ -112,6 +112,71 @@ class ModelTimeConfiguration:
         else:
             interval = self.output_interval[-1][1]
         return interval
+
+
+class TimeSlice:
+    def __init__(self, start_time:datetime, end_time:datetime):
+        self.start_time = to_datetime_utc(start_time)
+        self.end_time = to_datetime_utc(end_time)
+
+    def time_base(self, time_configuration:ModelTimeConfiguration)\
+            -> List[Tuple[datetime, timedelta]]:
+        pass
+
+
+class TimeSliceForecast(TimeSlice):
+    def __init__(self, init_time:datetime, duration:timedelta):
+        self.init_time = to_datetime_utc(init_time)
+        self.duration = duration
+        super().__init__(self.init_time,self.init_time+duration)
+
+    def time_base(self, time_configuration:ModelTimeConfiguration):
+        return timebase_forecast(
+            init_time=self.init_time,
+            duration=self.duration,
+            time_configuration=time_configuration)
+
+
+class TimeSliceLead(TimeSlice):
+    def __init__(self,start_time:datetime,end_time:datetime,
+                 lead_time:timedelta,exact=False):
+        super().__init__(start_time,end_time)
+        self.lead_time = lead_time
+        self.exact = exact
+
+    def time_base(self, time_configuration:ModelTimeConfiguration):
+        return timebase_lead(
+            start_time = self.start_time,
+            end_time = self.end_time,
+            lead_time=self.lead_time,
+            time_configuration=time_configuration,
+            exact=self.exact)
+
+
+class TimeSliceAnalysis(TimeSlice):
+    def __init__(self,start_time:datetime,end_time:datetime):
+        super().__init__(start_time,end_time)
+
+    def time_base(self, time_configuration:ModelTimeConfiguration):
+        return timebase_lead(
+            start_time = self.start_time,
+            end_time = self.end_time,
+            lead_time=timedelta(hours=0),
+            time_configuration=time_configuration,
+            exact=False)
+
+
+class TimeSliceEvaluation(TimeSlice):
+    def __init__(self, evaluation_time:datetime, maximum_lead_time:timedelta):
+        super().__init__(start_time=evaluation_time,end_time=evaluation_time)
+        self.evaluation_time = evaluation_time
+        self.maximum_lead_time = maximum_lead_time
+
+    def time_base(self, time_configuration:ModelTimeConfiguration):
+        return timebase_evaluation(
+            evaluation_time=self.evaluation_time,
+            maximum_lead_time=self.maximum_lead_time,
+            time_configuration=time_configuration)
 
 
 # Main Public Functions

@@ -27,11 +27,11 @@ from .exceptions import ExceptionNoDataForVariable
 from multiprocessing.pool import ThreadPool
 from pysofar.spotter import Spotter, SofarApi
 from roguewave import logger
-from roguewave.tools import datetime_to_iso_time_string, to_datetime
+from roguewave.tools.time import datetime_to_iso_time_string, to_datetime_utc
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
 from roguewave.metoceandata import WaveBulkData, as_dataframe, WindData, \
     SSTData, MetoceanData, BarometricPressure
-from typing import Dict, List, Union, TypedDict, Tuple
+from typing import Dict, List, Union, TypedDict, Tuple, Sequence
 from tqdm import tqdm
 from pandas import DataFrame
 from .helper_functions import _get_sofar_api, get_spotter_ids
@@ -134,7 +134,7 @@ def get_spectrum(
 
 
 def get_bulk_wave_data(
-        spotter_ids: Union[str, List[str]],
+        spotter_ids: Union[str, Sequence[str]],
         start_date: Union[datetime, int, float, str] = None,
         end_date: Union[datetime, int, float, str] = None,
         session: SofarApi = None,
@@ -142,7 +142,7 @@ def get_bulk_wave_data(
         bulk_data_as_dataframe: bool = True,
         cache: bool = True,
         convert_to_sofar_model_names = False
-) -> Union[Dict[str, List[WaveBulkData]], Dict[str, DataFrame]]:
+) -> Dict[str, Union[DataFrame,list[WaveBulkData]]]:
     """
     Gets the requested bulk wave data for the spotter(s) in the given interval
 
@@ -566,8 +566,8 @@ def _get_next_page(
     """
 
     # Retry mechanism
-    start_date = to_datetime(start_date)
-    end_date = to_datetime(end_date)
+    start_date = to_datetime_utc(start_date)
+    end_date = to_datetime_utc(end_date)
     json_data = None
     for retry in range(0, NUMBER_OF_RETRIES + 1):
         try:

@@ -8,7 +8,7 @@ Sofar Ocean Technologies
 Authors: Pieter Bart Smit
 """
 import numpy
-from roguewave.tools import to_datetime, datetime_to_iso_time_string
+from roguewave.tools.time import to_datetime_utc
 from typing import List, Tuple, Union
 from .windSpotter import U10
 from roguewave.wavetheory.lineardispersion import \
@@ -53,7 +53,7 @@ class WaveSpectrum():
         varianceDensity = numpy.array(varianceDensity)
         mask = (varianceDensity < 0) | (numpy.isnan(varianceDensity))
         self._variance_density = MaskedArray(varianceDensity, dtype='float64', mask=mask,fill_value=numpy.nan )
-        self.timestamp = to_datetime(timestamp)
+        self.timestamp = to_datetime_utc(timestamp)
 
 
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> float:

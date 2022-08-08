@@ -21,26 +21,22 @@
 from roguewave import filecache
 import xarray
 from typing import List, Union, Iterable
-from datetime import datetime, timedelta, timezone
 from .modelinformation import _get_resource_specification
 from os import remove, rename
-from roguewave.tools import to_datetime
+from roguewave.tools.time import to_datetime_utc
 from glob import glob
-from .keygeneration import generate_lead_keys, \
-    generate_forecast_keys, \
-    generate_evaluation_time_keys, \
-    generate_analysis_keys
+from .timebase import TimeSlice
+from .keygeneration import generate_uris
 import numpy
 
 
 # Main functions to interact with module
 # =============================================================================
-def open_remote_forecast(
+def open_remote_dataset(
         variable: Union[List[str], str],
-        init_time: datetime,
-        duration: timedelta,
+        time_slice: TimeSlice,
         model_name: str,
-        cache_name: str = None) -> xarray.Dataset:
+        cache_name: str = None )-> xarray.Dataset:
     """
     Get a local dataset associated with a forecast for a given
     model.
@@ -55,133 +51,19 @@ def open_remote_forecast(
     """
 
     print(f"Get from data from {model_name} for a forecast")
-    init_time = init_time.astimezone(tz=timezone.utc)
+
     return _open_variables(
         variable,
-        lambda x: generate_forecast_keys(x, init_time, duration, model_name),
+        lambda x: generate_uris(x, time_slice, model_name),
         model_name=model_name,
         cache_name=cache_name
     )
-
-
-def open_remote_analysis(
-        variable: Union[List[str], str],
-        start_time: datetime,
-        end_time: datetime,
-        model_name: str,
-        cache_name: str = None) -> xarray.Dataset:
-    """
-    Get a local dataset associated with the analysis results for
-    a given model.
-
-    :param variable: name of the variable of interest
-    :param start_time: Start of time interval of interest
-    :param end_time: End of time interval of interest
-    :param model_name: model name
-    :param cache_name: name of local cache. If None, default cache setup will
-        be used.
-    :return: xarray dataset
-    """
-
-    print(f"Get data from model {model_name} at anlysis time")
-    start_time = _to_utc(start_time)
-    end_time = _to_utc(end_time)
-    return _open_variables(
-        variable,
-        lambda x: generate_analysis_keys(
-            variable=x,
-            start_time=start_time,
-            end_time=end_time,
-            model_name=model_name
-        ),
-        model_name=model_name,
-        cache_name=cache_name
-    )
-
-
-def open_remote_lead(
-        variable: Union[List[str], str],
-        start_time: datetime,
-        end_time: datetime,
-        lead_time: timedelta,
-        model_name: str,
-        exact: bool = False,
-        cache_name: str = None) -> xarray.Dataset:
-    """
-    Get a local dataset associated with a given lead time for a
-    given model.
-
-    :param variable: name of the variable of interest
-    :param start_time: Start of time interval of interest
-    :param end_time: End of time interval of interest
-    :param lead_time: Lead time of interest
-    :param model_name: model name
-    :param exact: If true, generate keys exactly at given lead time. Otherwise
-    generate keys as close as possible.
-    :param cache_name: name of local cache. If None, default cache setup will
-        be used.
-    :return: xarray dataset
-    """
-
-    print(f"Get data from model {model_name} "
-          f"at lead={int(lead_time.seconds/3600)} hour(s)")
-    start_time = _to_utc(start_time)
-    end_time = _to_utc(end_time)
-    return _open_variables(
-        variable,
-        lambda x: generate_lead_keys(
-            variable=x,
-            start_time=start_time,
-            end_time=end_time,
-            lead_time=lead_time,
-            model_name=model_name,
-            exact=exact
-        ),
-        model_name=model_name,
-        cache_name=cache_name
-    )
-
-
-def open_remote_evaluation(
-        variable: Union[List[str], str],
-        evaluation_time: datetime,
-        model_name: str,
-        maximum_lead_time: timedelta = None,
-        cache_name: str = None) -> xarray.Dataset:
-    """
-    Get a local dataset associated with a given evaluation time.
-
-    :param variable: name of the variable of interest
-    :param evaluation_time: evaluation time of interest
-    :param model_name: model name
-    :param maximum_lead_time: maximum lead time of interest
-    :param cache_name: name of local cache. If None, default cache setup will
-        be used.
-    :return: xarray dataset
-    """
-
-    print(f"Get data from model {model_name} "
-          f"at valid time {evaluation_time.strftime('%Y-%m-%dT%H:%M:%D')}Z")
-
-    evaluation_time = _to_utc(evaluation_time)
-    return _open_variables(
-        variable,
-        lambda x: generate_evaluation_time_keys(
-            variable=x,
-            evaluation_time=evaluation_time,
-            model_name=model_name,
-            maximum_lead_time=maximum_lead_time
-        ),
-        model_name=model_name,
-        cache_name=cache_name
-    )
-
 
 # Functions internal to the module.
 # =============================================================================
 
 
-def _open_aws_keys_as_dataset(
+def _open_uris_as_dataset(
         aws_keys: List[str],
         model_variables: List[str],
         single_variables_per_file:bool,
@@ -240,7 +122,7 @@ def _open_aws_keys_as_dataset(
     # Convert time etc to cf conventions
     datasets = [xarray.decode_cf(dataset) for dataset in datasets ]
     for dataset in datasets:
-        init_time = to_datetime(dataset.attrs.get('init_time'))
+        init_time = to_datetime_utc(dataset.attrs.get('init_time'))
         if init_time is not None:
             dataset['init_time'] = [numpy.datetime64(init_time)]
 
@@ -293,7 +175,7 @@ def _open_variables(variables,
         # in that case the key_generation_function will not use the variable
         # name.
         aws_keys = key_generation_function(model_variable_names[0])
-        dataset = _open_aws_keys_as_dataset(
+        dataset = _open_uris_as_dataset(
             aws_keys=aws_keys,
             filetype=aws_layout.filetype,
             single_variables_per_file=aws_layout.single_variable_per_file,
@@ -308,7 +190,7 @@ def _open_variables(variables,
         # variable and merge the dataset at the end.
         for variable in model_variable_names:
             aws_keys = key_generation_function(variable)
-            datasets.append( _open_aws_keys_as_dataset(
+            datasets.append( _open_uris_as_dataset(
                 aws_keys=aws_keys,
                 filetype=aws_layout.filetype,
                 single_variables_per_file=aws_layout.single_variable_per_file,
@@ -336,15 +218,6 @@ def _open_variables(variables,
 
 # Helper Functions
 # =============================================================================
-
-
-def _to_utc(time: datetime) -> datetime:
-    """
-    Ensure _utc timezone
-    :param time: datetime
-    :return: datetime with timezone utc.
-    """
-    return time.astimezone(tz=timezone.utc)
 
 
 def _convert_grib_to_netcdf(filepath: str, model_variables) -> None:

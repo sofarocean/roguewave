@@ -28,6 +28,7 @@ from roguewave import logger
 from .remote_resources import RemoteResourceS3, \
     RemoteResourceHTTPS, RemoteResource, RemoteResourceLocal
 from .exceptions import _RemoteResourceUriNotFound
+from json import dumps, load
 
 TEMPORARY_DIRECTORY = '~/temporary_roguewave_files/filecache/'
 CACHE_SIZE_GB = 5
@@ -111,9 +112,20 @@ class FileCache:
         """
 
         self.path = os.path.expanduser(path)
-        self.max_size = int(size_GB * GIGABYTE)
-        self.parallel = parallel
-        self.allow_for_missing_files = allow_for_missing_files
+        self.config = {
+            "size_gb": size_GB,
+            "parallel": parallel,
+            "allow_for_missing_files":allow_for_missing_files
+        }
+        if self.config_exists():
+            self.config |= self.load_config()
+        else:
+            self._write_config()
+
+
+        # self._max_size = int(size_GB * GIGABYTE)
+        # self.parallel = parallel
+        # self.allow_for_missing_files = allow_for_missing_files
 
         # create the path if it does not exist
         if not os.path.exists(path):
@@ -139,6 +151,59 @@ class FileCache:
                               RemoteResourceLocal()]
         else:
             self.resources = resources
+
+    @property
+    def config_name(self) -> str:
+        return os.path.join(self.path,'file_cache_config.json')
+
+    def config_exists(self)->bool:
+        return os.path.exists(self.config_name)
+
+    def load_config(self)->Dict:
+        with open( self.config_name, 'rb' ) as fp:
+            return load(fp)
+
+    def _update_config(self, key, value, write=True):
+        self.config[key] = value
+        if write:
+            self._write_config()
+
+    def _write_config(self):
+        with open( os.path.join(
+                self.path,'file_cache_config.json'),'wt' ) as fp:
+            fp.write(dumps(self.config,indent=4))
+
+    @property
+    def max_size(self)->int:
+        return self.config['size_gb']
+
+    @max_size.setter
+    def max_size(self,size_gb:float):
+        self._update_config('size_gb',size_gb)
+
+    @property
+    def max_size_bytes(self)->int:
+        return  int( self.config['size_gb'] * GIGABYTE)
+
+    @max_size_bytes.setter
+    def max_size_bytes(self,size_bytes:int):
+        self._update_config('size_gb',size_bytes / GIGABYTE)
+
+    @property
+    def parallel(self)->bool:
+        return self.config['parallel']
+
+    @parallel.setter
+    def parallel(self, parallel:bool):
+        self._update_config('parallel',parallel)
+
+    @property
+    def allow_for_missing_files(self)->bool:
+        return self.config['allow_for_missing_files']
+
+    @allow_for_missing_files.setter
+    def allow_for_missing_files(self, allow_for_missing_files:bool):
+        self._update_config('allow_for_missing_files',allow_for_missing_files)
 
     def set_directive_function(
             self,
@@ -226,12 +291,13 @@ class FileCache:
         if do_cache_eviction_on_startup:
             self._cache_eviction()
         else:
-            if self._size() > self.max_size:
+            if self._size() > self.max_size_bytes:
                 raise ValueError('The cache currently existing on disk '
                                  'exceeds the maximum cache size of the '
-                                 'current cache.\n Either increase the cache '
-                                 'size of the object or allow eviction of '
-                                 'files on startup.')
+                                 f'current cache ({self.max_size} gb).'
+                                 f'\n The cache size can be increased by'
+                                 f' editting the cache config file: '
+                                 f'{self.config_name}')
 
     def in_cache(self, unparsed_uris) -> List[bool]:
         # make sure input is a list
@@ -429,15 +495,15 @@ class FileCache:
                                    cache_miss.filepath)
 
         size_of_requested_data = _get_total_size_of_files_in_bytes(filepaths)
-        if size_of_requested_data > self.max_size:
+        if size_of_requested_data > self.max_size_bytes:
             warning = f'The requested data does not fit into the cache.' \
                       f'To avoid issues the cache is enlarged to ensure' \
                       f'the current set of files fits in the cache. \n' \
-                      f'old size: {self.max_size} bytes; ' \
+                      f'old size: {self.max_size_bytes} bytes; ' \
                       f'new size {size_of_requested_data + MEGABYTE}'
             warn(warning)
             logger.warning(warning)
-            self.max_size = size_of_requested_data + MEGABYTE
+            self.max_size_bytes = size_of_requested_data + MEGABYTE
 
         self._cache_misses += len(cache_misses)
         self._cache_hits += len(uris) - len(cache_misses)
@@ -458,7 +524,7 @@ class FileCache:
         """
 
         # check if we exceed the size, if not return
-        if not self._size() > self.max_size:
+        if not self._size() > self.max_size_bytes:
             return False
 
         # Get access/modified times for all the files in cache
@@ -482,11 +548,11 @@ class FileCache:
 
         # Delete files one by one as long as the cache_size exceeds the max
         # size.
-        while (_size := self._size()) > self.max_size:
+        while (_size := self._size()) > self.max_size_bytes:
             self._cache_evictions += 1
             logger.debug(
                 f'Cache exceeds limits: {_size} bytes, max size: '
-                f'{self.max_size} bytes')
+                f'{self.max_size_bytes} bytes')
 
             # Get the hash and path of the oldest file and remove
             self._remove_item_from_cache(files_in_cache.pop())

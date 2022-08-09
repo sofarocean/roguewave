@@ -20,14 +20,27 @@ def colocate_model_spotter(
         slice_remotely=False
 ) -> Mapping[str,Mapping[str,DataFrame]]:
     """
-
-    :param variable: name of the variable of interest
-    :param spotter_ids:
-    :param init_time: init time of the forecast of interest
-    :param duration: maximum lead time of interest
+    Colocate spoter output and modek data
+    :param variable: name of the variable of interest. Can be a list in which
+            case all variables in the list are retrieved.
+    :param spotter_ids: List of spotter ids of interest
+    :param time_slice: time slice of interest.
     :param model_name: model name
+    :param slice_remotely: (default False) if True Skip local cache and try to
+    read directly from
+        remote. This tries to avoid downloading full files and instead tries
+        to only grab the data it needs. Typically slower.
+        Does not work for grib files.
+    :param parallel: If slice_remotely=True controls whether we download in
+        parallel. To note- if parallel is enabled we need to make sure the
+        main script is guarded by if __name__ == '__main__'.
     :param cache_name: name of local cache. If None, default cache setup will
         be used.
+    :param timebase: Can be ['native','spotter','model'] if
+        - native: output for spotters and model at spotters will be generated
+                  at their own valid times
+        - spotter: model data will be interpolated to spotter reporting time
+        - model: Spotter data will be interpolated to model time
     :return:
     """
 

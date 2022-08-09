@@ -126,6 +126,11 @@ class TimeSlice:
 
 class TimeSliceForecast(TimeSlice):
     def __init__(self, init_time:datetime, duration:timedelta):
+        """
+        Timeslice for a single forecast
+        :param init_time: init time of forecast (datetime)
+        :param duration: forecast length (time delta)
+        """
         self.init_time = to_datetime_utc(init_time)
         self.duration = duration
         super().__init__(self.init_time,self.init_time+duration)
@@ -140,6 +145,14 @@ class TimeSliceForecast(TimeSlice):
 class TimeSliceLead(TimeSlice):
     def __init__(self,start_time:datetime,end_time:datetime,
                  lead_time:timedelta,exact=False):
+        """
+        Slice at constant lead time
+        :param start_time: start time of period of interest (datetime)
+        :param end_time: end time of period of interest (datetime)
+        :param lead_time: lead time (timedelta) of interest.
+        :param exact: boolean. Do we want data only exactly at the given lead
+            time, or as close as possible
+        """
         super().__init__(start_time,end_time)
         self.lead_time = lead_time
         self.exact = exact
@@ -155,6 +168,11 @@ class TimeSliceLead(TimeSlice):
 
 class TimeSliceAnalysis(TimeSlice):
     def __init__(self,start_time:datetime,end_time:datetime):
+        """
+        Analysis time
+        :param start_time: start time of period of interest (datetime)
+        :param end_time: end time of period of interest (datetime)
+        """
         super().__init__(start_time,end_time)
 
     def time_base(self, time_configuration:ModelTimeConfiguration):
@@ -168,6 +186,11 @@ class TimeSliceAnalysis(TimeSlice):
 
 class TimeSliceEvaluation(TimeSlice):
     def __init__(self, evaluation_time:datetime, maximum_lead_time:timedelta):
+        """
+        All data for a constant point in time
+        :param evaluation_time: evaluation point (datetime)
+        :param maximum_lead_time:  maximum lead time considered (timedelta)
+        """
         super().__init__(start_time=evaluation_time,end_time=evaluation_time)
         self.evaluation_time = evaluation_time
         self.maximum_lead_time = maximum_lead_time

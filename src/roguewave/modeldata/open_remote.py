@@ -42,8 +42,7 @@ def open_remote_dataset(
     model.
 
     :param variable: name of the variable of interest
-    :param init_time: init time of the forecast of interest
-    :param duration: maximum lead time of interest
+    :param time_slice: time slice of interest.
     :param model_name: model name
     :param cache_name: name of local cache. If None, default cache setup will
         be used.

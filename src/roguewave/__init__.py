@@ -30,7 +30,6 @@ from .wavespectra import spectrum1D, spectrum2D
 from .wavespectra.estimators import convert_to_1d_spectrum, \
     convert_to_2d_spectrum
 
-
 # save/load
 from .io.io import save, load
 
@@ -42,14 +41,13 @@ from .wavespectra.partitioning.observations import \
     get_bulk_partitions_from_observations, \
     get_spectral_partitions_from_observations
 
-
-
 # Model data
 from .modeldata.open_remote import open_remote_dataset
 from .modeldata.modelinformation import model_timebase, model_valid_time, \
     available_models, list_available_variables
 from roguewave.modeldata.extract import extract_from_remote_dataset
 from roguewave.colocate.bulk import colocate_model_spotter
+from roguewave.modeldata.keygeneration import generate_uris
 
 
 

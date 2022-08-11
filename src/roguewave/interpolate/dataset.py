@@ -1,7 +1,9 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Mapping
 import numpy
-from xarray import Dataset
+from pandas import DataFrame
+from xarray import Dataset, DataArray
 from roguewave.interpolate.dataarray import interpolate_track_data_arrray
+from roguewave.interpolate.dataframe import interpolate_dataframe_time
 from roguewave.interpolate.geometry import Geometry, convert_to_track_set
 
 
@@ -77,3 +79,23 @@ def interpolate_at_points(
             discont=discont
         )
     return return_data_set
+
+
+def tracks_as_dataset(time, drifter_tracks:Mapping[str,DataFrame],subkey=None):
+    tracks = {}
+    for track_id, track in drifter_tracks.items():
+        if subkey is not None:
+            _track = track[subkey]
+        else:
+            _track = track
+        variables = list(_track.columns)
+
+        tracks[track_id] = DataArray(
+            interpolate_dataframe_time(_track,time),
+            coords={'time': time, 'variables':variables},
+            dims=['time','variables'],
+            name=track_id,
+        )
+
+    dataset = Dataset(tracks).to_array(dim='spotter_id')
+    return dataset

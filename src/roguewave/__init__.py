@@ -19,7 +19,7 @@ from roguewave.modeldata.timebase import TimeSliceLead, \
     timebase_forecast,TimeSliceForecast, TimeSliceEvaluation, TimeSliceAnalysis
 
 # Interpolate
-from .interpolate.dataset import interpolate_dataset
+from .interpolate.dataset import interpolate_dataset, tracks_as_dataset
 from .interpolate.geometry import TrackSet,Track,Cluster
 
 # Wave spectrum
@@ -46,7 +46,8 @@ from .modeldata.open_remote import open_remote_dataset
 from .modeldata.modelinformation import model_timebase, model_valid_time, \
     available_models, list_available_variables
 from roguewave.modeldata.extract import extract_from_remote_dataset
-from roguewave.colocate.bulk import colocate_model_spotter
+from roguewave.colocate.bulk import colocate_model_spotter, \
+    colocated_tracks_as_dataset
 from roguewave.modeldata.keygeneration import generate_uris
 
 

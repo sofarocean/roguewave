@@ -1,8 +1,10 @@
 from typing import Mapping, Sequence, Union
 from pandas import DataFrame
+
 from roguewave.modeldata.open_remote import open_remote_dataset
 from roguewave.spotterapi.spotterapi import get_bulk_wave_data
-from roguewave.interpolate.dataset import interpolate_dataset
+from roguewave.interpolate.dataset import interpolate_dataset, \
+    tracks_as_dataset
 from roguewave.modeldata.extract import extract_from_remote_dataset
 from roguewave.interpolate.dataframe import interpolate_dataframe_time
 from roguewave.modeldata.timebase import TimeSlice
@@ -77,3 +79,12 @@ def colocate_model_spotter(
             'spotter':s
         }
     return out
+
+
+def colocated_tracks_as_dataset(colocated_data):
+     keys = list(colocated_data.keys())
+     time = colocated_data[keys[0]]['model'].index.values
+
+     model_data = tracks_as_dataset(time, colocated_data, 'model')
+     drifter_data = tracks_as_dataset(time, colocated_data, 'spotter')
+     return drifter_data, model_data

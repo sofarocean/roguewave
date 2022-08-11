@@ -1,6 +1,7 @@
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple
 import numpy
 from xarray import DataArray
+
 from roguewave.interpolate.points import interpolate_points_nd
 
 

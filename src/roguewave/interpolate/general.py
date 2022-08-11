@@ -93,6 +93,12 @@ def interpolation_weights_1d( xp, x, indices, period: float = None ):
 
     weights = numpy.empty_like( indices, dtype='float64' )
 
+    if xp[-1] < xp[0]:
+        # make sure we are in a coordinate frame where the vector is
+        # in ascending order.
+        x =  xp[0] - x
+        xp = xp[0] - xp
+
     delta_x  = wrapped_difference(
         x - xp[indices[0, :]], period=period)
 

@@ -38,9 +38,17 @@ def enclosing_points_1d(
 
 
     """
+
     x = numpy.atleast_1d(x)
     nxp = len(xp)
     nx = len(x)
+
+    if xp[-1] < xp[0]:
+        # make sure we are in a coordinate frame where the vector is
+        # in ascending order.
+        x =  xp[0] - x
+        xp = xp[0] - xp
+
     if period is not None:
         x = (x - xp[0]) % period + xp[0]
 

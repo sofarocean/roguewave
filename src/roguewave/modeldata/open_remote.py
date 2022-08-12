@@ -199,6 +199,7 @@ def _open_variables(variables,
                 )
             )
         dataset = xarray.merge(datasets)
+    dataset = dataset[model_variable_names]
 
     # Remap to Sofar variable naming conventions if requested (and needed).
     if aws_layout.mapping_variable_name_model_to_sofar is not None and \

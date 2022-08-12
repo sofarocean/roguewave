@@ -199,6 +199,11 @@ def _open_variables(variables,
                 )
             )
         dataset = xarray.merge(datasets)
+
+    # Only return requested variables. (for Sofar variables this removes the
+    # mask - or MAPSTA - variable from the NetCDF. Since that information is
+    # already contained as an exception value in the actual variables this
+    # information is superfluous.
     dataset = dataset[model_variable_names]
 
     # Remap to Sofar variable naming conventions if requested (and needed).

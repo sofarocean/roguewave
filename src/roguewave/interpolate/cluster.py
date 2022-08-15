@@ -11,8 +11,7 @@ def interpolate_cluster(
     discont=None
     ):
 
-    coordinates = {'latitude':latitude, 'longitude':longitude}
-
+    coordinates = [('latitude', latitude), ('longitude', longitude)]
     _points = {'latitude': cluster.latitude,
                'longitude': cluster.longitude}
 

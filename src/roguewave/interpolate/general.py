@@ -1,7 +1,6 @@
 import numpy
 from roguewave.tools.math import wrapped_difference
 from roguewave.tools.grid import enclosing_points_1d
-from numba import njit
 
 def interpolate_periodic(
         xp: numpy.ndarray,

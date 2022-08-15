@@ -1,29 +1,34 @@
 import numpy
 
-from roguewave.wavewatch3.io import Resource, create_resource
-from roguewave.wavewatch3.restart_file_metadata import read_header
-from roguewave.wavewatch3.model_definition import Grid, read_model_definition
+from roguewave.wavewatch3.resources import Resource
+from roguewave.wavewatch3.model_definition import Grid, \
+    LinearIndexedGridData
 from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, \
     jacobian_wavenumber_to_radial_frequency
-
-# It just needs to be large _enough_
 from roguewave.wavewatch3.restart_file_metadata import MetaData
 from typing import Sequence, Union
+from roguewave.interpolate.points import interpolate_points_nd
+from datetime import datetime
+from functools import cache
 
 
-class FrequencySpectrum():
+class RestartFile():
     _start_record = 2
-    _dtype = numpy.dtype("float32").newbyteorder("<")
 
-    def __init__(self, grid:Grid, meta_data:MetaData, reader:Resource, depth=None):
+    def __init__(self, grid:Grid, meta_data:MetaData,
+                 resource:Resource, depth:LinearIndexedGridData=None,
+                 convert_to_freq_energy_dens=True):
         self._grid = grid
         self._meta_data = meta_data
-        self._reader = reader
+        self.resource = resource
+        self._dtype = numpy.dtype("float32").newbyteorder(meta_data.byte_order)
+        self._convert = convert_to_freq_energy_dens
 
         if depth is None:
-            self._depth = numpy.inf \
-            * numpy.ones((self.number_of_spatial_points,),dtype='float32')
+            _depth = numpy.inf \
+                * numpy.ones((self.number_of_spatial_points,),dtype='float32')
+            self._depth = LinearIndexedGridData(_depth,grid)
         else:
             self._depth = depth
 
@@ -65,8 +70,12 @@ class FrequencySpectrum():
         return self._grid.number_of_spatial_points
 
     @property
-    def number_of_frequency_points(self) -> int:
+    def number_of_spectral_points(self) -> int:
         return self.number_of_frequencies * self.number_of_directions
+
+    @property
+    def time(self) -> datetime:
+        return self._meta_data.time
 
     def __len__(self):
         return self.number_of_frequencies
@@ -77,29 +86,48 @@ class FrequencySpectrum():
         else:
             data = self._sliced_index(s)
 
-        jacobian = calculate_jacobian_factor( self._depth[s],
-                                              self.frequency )
-        return data * jacobian[:,:,None]
+        if self._convert:
+            jacobian = self.to_frequency_energy_density(s)
+            return data * jacobian[:,:,None]
+        else:
+            return data
 
     def _sliced_index(self,s:slice):
-        if not isinstance(s, slice):
+        if isinstance(s, int):
             s = slice(s, s + 1, 1)
 
-        start,stop,step = s.indices(self.number_of_spatial_points)
+        elif not isinstance( s, slice ):
+            raise ValueError(f'Cannot use type {type(s)} as a spatial index.'
+                             f' Use a slice or int instead.')
 
+        start,stop,step = s.indices(self.number_of_spatial_points)
+        start = start + self._start_record
+        stop = stop + self._start_record
         if step != 1:
-            raise ValueError('Cannot slice with stepsize different from 1')
+            # We cannot use contiguous IO in this case, recast as a fancy index
+            indices = numpy.arange( start, stop, step=step )
+            return self._fancy_index(indices)
 
         byte_slice = slice( self._byte_index(start),
-                            self._byte_index(stop),step
+                            self._byte_index(stop),1
                             )
 
         # Read raw data, cast as numpy array,
-        data = self._reader.read_range(byte_slice)[0]
-        data = numpy.frombuffer(data, dtype=self._dtype)
+        number_of_spatial_points = stop-start
+        if number_of_spatial_points == self.number_of_spatial_points:
+            # If we read all data we just call the read function. This makes
+            # little difference for a local file- but for an aws object this
+            # allows us to use the much more efficient get_object.
+            self.resource.seek( self._byte_index(self._start_record) )
+            data = self.resource.read()
+        else:
+            data = self.resource.read_range(byte_slice)[0]
+        data = numpy.frombuffer(data, dtype=self._dtype,
+            count=self.number_of_spectral_points*number_of_spatial_points)
+
         return numpy.reshape(
             data , (
-                s.stop - s.start,
+                stop - start,
                 self.number_of_frequencies,
                 self.number_of_directions
             )
@@ -110,9 +138,11 @@ class FrequencySpectrum():
         if isinstance(indices, Sequence):
             indices = numpy.array(indices,dtype='int32')
 
+        indices = indices + self._start_record
         slices = [ slice(self._byte_index(index),self._byte_index(index+1),1)
                    for index in indices ]
-        data_for_slices = self._reader.read_range(slices)
+
+        data_for_slices = self.resource.read_range(slices)
         out = []
         for data in data_for_slices:
             data = numpy.frombuffer(data, dtype=self._dtype)
@@ -126,47 +156,104 @@ class FrequencySpectrum():
             )
         return numpy.array(out)
 
-
     def _byte_index(self,index):
-        offset = self._meta_data.record_size_bytes * self._start_record
-        return offset + index * self._meta_data.record_size_bytes
+        return index * self._meta_data.record_size_bytes
 
+    def interpolate(self, latitude, longitude):
 
-def calculate_jacobian_factor(
-    depth: numpy.array, frequencies: numpy.array
-) -> numpy.array:
+        points = {"latitude":numpy.atleast_1d(latitude),
+                  "longitude":numpy.atleast_1d(longitude)}
 
-    """
-    # Jacobian is:
-    # 1) transformation from k-> omega     (jacobian_wavenumber_to_radial_frequency() )
-    # 2) transformation from omega -> f    ( 2 * pi )
-    # 3) transformation from radians -> degrees   ( pi / 180.)
-    """
+        coordinates = [("latitude",self.latitude),
+                       ("longitude",self.longitude)]
 
+        periodic_coordinates = {"longitude":360}
 
-    # depth = numpy.reshape( depth, ( len(depth),1 ))
-    # w     = numpy.reshape( w    , (len(depth), 1))
+        def _get_data(  indices ):
+            # To note- latitudes are the fast index, so this is swapped from
+            # the "lat,lon" in the fortran code (leading index is fast index
+            # in Fortran) to "lon,lat" here.
+            index = self._grid.to_linear_index[indices[1],indices[0] ]
 
+            output = numpy.zeros( (len(index),
+                                     self.number_of_frequencies,
+                                     self.number_of_directions ) )
+            mask = index >= 0
+            output[ mask,:,:] = self.__getitem__(index[mask])
+            output[~mask,:,:] =numpy.nan
+            return output
 
-    depth = depth[:, None]
-    w = frequencies[None, :] * numpy.pi * 2
-    w = numpy.repeat(w, len(depth), axis=0)
+        output_shape = ( len(points['latitude']),
+                         self.number_of_frequencies,
+                         self.number_of_directions)
 
-    wavenumbers = inverse_intrinsic_dispersion_relation(w, depth)
+        return interpolate_points_nd(
+            coordinates, points, periodic_coordinates,_get_data,
+            period_data=None,discont=360, output_shape=output_shape
+        )
 
-    jacobian = (
-        jacobian_wavenumber_to_radial_frequency(wavenumbers, depth)
-        * numpy.pi**2
-        / 90.0
-    )
+    def to_wavenumber_action_density(
+            self, s:Union[slice, numpy.ndarray, Sequence] ) -> numpy.array:
+        return 1 / self.to_frequency_energy_density(s)
 
-    # Data is Action Density so also multiply with w
-    return jacobian * w
+    def to_frequency_energy_density(
+            self, s:Union[slice, numpy.ndarray, Sequence]
+                                    ) -> numpy.array:
 
-def create_spectra( restart_file , model_definition_file  ) -> FrequencySpectrum:
-    restart_file_resource = create_resource(restart_file)
-    model_definition_resource = create_resource(model_definition_file)
+        """
+        To convert a wavenumber Action density as a function of radial
+        frequency (as stored by ww3) to a frequency Energy density we need to
+        multiply the action density with the angular frequency (Action -> to
+        Energy) and the proper Jacobians of the transformations. Specficically
+                 #
+        # 1) transformation from k-> omega
+            (jacobian_wavenumber_to_radial_frequency() )
+        # 2) transformation from omega -> f    ( 2 * pi )
+        # 3) transformation from radians -> degrees   ( pi / 180.)
+        """
 
-    meta_data = read_header(restart_file_resource)
-    grid, depth, mask = read_model_definition(model_definition_resource)
-    return FrequencySpectrum(grid, meta_data, restart_file_resource,depth)
+        # get the depth and make sure it has dimension [ spatial_points , 1 ]
+        depth = self._depth[s, None]
+
+        # Get omega and make sure it has dimensions [ 1 , frequency_points ]
+        w = self.frequency[None, :] * numpy.pi * 2
+
+        # Repeat w along the spatial axis
+        w = numpy.repeat(w, len(depth), axis=0)
+
+        # get the wavenumber
+        k = inverse_intrinsic_dispersion_relation(w, depth)
+
+        # Calculate the various (Jacobian) factors
+        jac_k_to_w = jacobian_wavenumber_to_radial_frequency(k, depth)
+        jac_omega_f = 2*numpy.pi
+        jac_rad_to_deg = numpy.pi/180
+        action_to_energy = w
+
+        # Return the result
+        return action_to_energy * jac_rad_to_deg * jac_omega_f * jac_k_to_w
+
+    @cache
+    def header_bytes(self) -> bytes:
+        s = slice(self._byte_index(0),
+                  self._byte_index(self._start_record),1)
+        return self.resource.read_range(s)[0]
+
+    @cache
+    def tail_bytes(self) -> bytes:
+        self.resource.seek(self._byte_index(self._start_record
+                                            + self.number_of_spatial_points))
+        return self.resource.read()
+
+    def number_of_header_bytes(self) -> int:
+        a = self.header_bytes()
+        return len(self.header_bytes())
+
+    def number_of_tail_bytes(self) -> int:
+        return len(self.tail_bytes())
+
+    def size_in_bytes(self):
+        return self.number_of_tail_bytes() + self.number_of_header_bytes() + \
+               self.number_of_spatial_points * \
+               self.number_of_spectral_points * self._dtype.itemsize
+

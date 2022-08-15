@@ -20,7 +20,6 @@ class SpatialPoint(_Geometry):
     def is_valid(self)->bool:
         return numpy.isfinite(self.latitude) and numpy.isfinite(self.longitude)
 
-
 @dataclass()
 class SpaceTimePoint(SpatialPoint):
     time: datetime
@@ -29,18 +28,6 @@ class SpaceTimePoint(SpatialPoint):
     def from_spatial_point(cls,point:SpatialPoint,time:datetime):
         return cls( point.latitude,point.longitude,point.id,time )
 
-@dataclass()
-class SpacialPointSet(_Geometry):
-    points: Sequence[SpatialPoint]
-
-    @classmethod
-    def from_lat_lon_arrays(cls, lats, lons):
-        points = []
-        for index in range(0, len(lats)):
-            points.append(
-                SpatialPoint(lats[index], lons[index],str(index))
-            )
-        return cls(points)
 
 @dataclass()
 class Cluster(_Geometry):
@@ -48,6 +35,15 @@ class Cluster(_Geometry):
     A cluster is a set of points, each identified by unique id.
     """
     points: Mapping[str,SpatialPoint]
+
+    @classmethod
+    def from_lat_lon_arrays(cls, lats, lons):
+        points = {}
+        for index in range(0, len(lats)):
+            _id = str(index)
+            points[_id] = SpatialPoint(lats[index], lons[index],_id)
+
+        return cls(points)
 
     @property
     def latitude(self) -> numpy.ndarray:
@@ -210,10 +206,10 @@ class TrackSet(_Geometry):
         return TrackSet(tracks)
 
     @classmethod
-    def from_spatial_point_set(cls,point_set:SpacialPointSet,
-                               time: numpy.ndarray) -> "TrackSet":
+    def from_cluster(cls,cluster:Cluster,
+                         time: numpy.ndarray) -> "TrackSet":
         tracks = {}
-        for point in point_set.points:
+        for _id, point in cluster.points:
             track_points = [
                 SpaceTimePoint.from_spatial_point(point,t) for t in time ]
             tracks[point.id] = Track( points=track_points, id=point.id)
@@ -270,9 +266,10 @@ def convert_to_track_set(geometry:Geometry, time:numpy.ndarray
         else:
             _geometry = geometry
 
-        spatial_point_set = SpacialPointSet.from_lat_lon_arrays(
+        cluster = Cluster.from_lat_lon_arrays(
                 _geometry[0],_geometry[1])
-        return TrackSet.from_spatial_point_set(spatial_point_set, time)
+        return TrackSet.from_cluster(cluster, time)
+
     elif isinstance(geometry,Mapping):
         return TrackSet.from_spotters(geometry).interpolate(time)
 

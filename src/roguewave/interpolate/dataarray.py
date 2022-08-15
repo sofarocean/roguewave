@@ -101,10 +101,11 @@ def interpolate_track_data_arrray(data_array: DataArray,
             raise ValueError(f' Coordinate {coordinate_name} not in data array'
                              f'coordinates: {", ".join(dim_str)}')
 
-    coordinates = { }
+    coordinates = []
     for index, coordinate_name in enumerate(data_array.dims):
         # Get weights and indices
-        coordinates[coordinate_name] = data_array[coordinate_name].values
+        coordinates.append((coordinate_name,
+                            data_array[coordinate_name].values))
 
     interpolated_values = interpolate_points_nd(
         coordinates,

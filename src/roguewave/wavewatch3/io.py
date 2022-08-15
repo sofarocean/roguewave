@@ -1,208 +1,217 @@
-import struct
-from io import BytesIO, BufferedIOBase
-from typing import Union, Sequence, List
+import numpy
+
+from roguewave.wavewatch3.model_definition import read_model_definition
+from roguewave.wavewatch3.resources import create_resource
+from roguewave.wavewatch3.restart_file import RestartFile
+from roguewave.wavewatch3.restart_file_metadata import read_header
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 
-from boto3 import resource
+
+def open_restart_file( restart_file, model_definition_file) -> RestartFile:
+    """
+    Open a restart file locally or remote and return a restart file object.
+
+    :param restart_file: path or uri to a valid restart file
+    :param model_definition_file: path or uri to model definition file that
+        corresponds to the restart file.
+    :return: A restart file object
+    """
+    restart_file_resource = create_resource(restart_file)
+    model_definition_resource = create_resource(model_definition_file)
+
+    meta_data = read_header(restart_file_resource)
+    grid, depth, mask = read_model_definition(model_definition_resource)
+    return RestartFile(grid, meta_data, restart_file_resource, depth)
 
 
-class FortranType:
-    kind = ''
-    byte_length_type = 1
+def reassemble_restart_file_from_parts( target_file,
+                                        locations,
+                                        source_restart_file):
+    """
+    Reassemble a valid restart file from partial restart files and write the
+    result to the target file.
 
-    def __init__(self, endianness="<"):
-        self.endianness = endianness
+    :param target_file: Location to construct new restart file.
+    :param locations:  Locations (remote or local) to read partial restart
+        files from.
+    :param model_definition_file: Location (remote or local) of model
+        definition file.
+    :return: None
+    """
 
-    def byte_length(self, number):
-        return number * self.byte_length_type
+    # Open the partial restart files
+    data = []
 
-    def format(self, number):
-        return f"{self.endianness}{self.kind * number}"
+    def _worker(location):
+        partial_spectra_reader = PartialRestartFileReader( location,
+                                                           source_restart_file )
+        return partial_spectra_reader.start, partial_spectra_reader.spectra()
 
-    def _read(self, number, stream: BufferedIOBase,
-              unformatted_sequential=False):
-        """
-        https://gcc.gnu.org/onlinedocs/gfortran/File-format-of-unformatted-sequential-files.html
-
-        Read sequential unformatted data written by a Fortran program compiled
-        with the GFortran compiler. Each record in the file contains a leading
-        start of record (sor) 4 byte marker indicating size N of the record,
-        the data written (N bytes), and a trailing end of record (eor) marker again
-        indicating the size of the data. No information on the type of the data is
-        provided, and this has to be known in advance.
-
-        :return:
-        """
-        if unformatted_sequential:
-            sor = self._read_record_marker(stream)
-            number = sor // self.byte_length_type
-
-        data = stream.read(self.byte_length(number))
-        fmt = self.format(number)
-
-        if unformatted_sequential:
-            eor = self._read_record_marker(stream)
-            assert sor == eor
-        return fmt, data
-
-    def _unpack(self, number, stream: BufferedIOBase,
-                unformatted_sequential=False):
-        return struct.unpack(
-            *self._read(number, stream, unformatted_sequential))
-
-    def unpack(self, stream: BufferedIOBase, number=1,
-               unformatted_sequential=False):
-        return self._unpack(number, stream, unformatted_sequential)
-
-    def _read_record_marker(self, stream):
-        return struct.unpack(
-            f"{self.endianness}i",stream.read(4)
-        )[0]
+    with ThreadPool(processes=10) as pool:
+        data = list(
+            tqdm(
+                pool.imap(_worker, locations),
+                total=len(locations)
+            )
+        )
 
 
-class FortranCharacter(FortranType):
-    kind = 'B'
+    with create_resource(target_file,'wb') as file:
+        # Write the header
+        file.write(source_restart_file.header_bytes())
 
-    def unpack(self, stream: BufferedIOBase, number=1,
-               unformatted_sequential=False):
-        return "".join([chr(x) for x in
-                        self._unpack(number, stream,unformatted_sequential)])
+        # Write the partial spectra sorted by start index of the spectra
+        for i_start, partial_spectra in tqdm(
+                sorted(data, key=lambda x: x[0]),total=len(data)):
 
+            # Write to file
+            file.write(partial_spectra.tobytes('C'))
 
-class FortranFloat(FortranType):
-    kind = 'f'
-    byte_length_type = 4
-
-class FortranInt(FortranType):
-    kind = 'i'
-    byte_length_type = 4
-
-class FortranRecordMarker(FortranType):
-    kind = 'i'
-    byte_length_type = 4
-
-    def unpack(self, stream: BufferedIOBase, number=1,
-               unformatted_sequential=False):
-        return self._unpack(number, stream)[0]
+        # write the tail
+        file.write(source_restart_file.tail_bytes())
 
 
-class Resource():
-    def read_range(self, s:Union[slice,Sequence[slice]]) -> bytes:
-        pass
+def write_restart_file( spectra:numpy.ndarray,
+                        target_file,
+                        restart_file:RestartFile,
+                        spectra_are_frequence_energy_density=True
+                        ):
+    """
 
-    def read(self, number_of_bytes=-1) -> bytes:
-        pass
+    :param spectra:
+    :param target_file:
+    :param restart_file:
+    :param s:
+    :return:
+    """
 
-    def __enter__(self):
-        return self
+    dtype = numpy.dtype('float32') #
+    dtype = dtype.newbyteorder( restart_file._meta_data.byte_order )
 
-    def close(self):
-        pass
+    shape = spectra.shape
+    if shape[0] != restart_file.number_of_spatial_points:
+        raise ValueError('Input spectra have more spatial points than the '
+                         'source resource file contains')
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-        self.resource_handle = None
+    if shape[1] != restart_file.number_of_frequencies:
+        raise ValueError('Input spectra have more frequences than the '
+                         'source resource file contains')
 
-    def __del__(self):
-        if self.resource_handle is not None:
-            self.close()
+    if shape[2] != restart_file.number_of_frequencies:
+        raise ValueError('Input spectra have more directions than the '
+                         'source resource file contains')
 
-    def seek(self, position_bytes):
-        pass
-
-    def tell(self):
-        pass
-
-
-class FileResource(Resource):
-    def __init__(self, file_name):
-        self.resource_handle = open(file_name, 'rb')
-
-    def read_range(self, slices:Union[slice,Sequence[slice]]) \
-            -> Union[bytes,List[bytes]]:
-
-        if isinstance(slices,slice):
-            slices = [slices]
-
-        out = []
-        for s in slices:
-            self.resource_handle.seek(s.start)
-            number_bytes = s.stop - s.start
-            out.append(self.resource_handle.read(number_bytes))
-        return out
-
-    def read(self, number_of_bytes=-1) -> bytes:
-        return self.resource_handle.read(number_of_bytes)
-
-    def close(self):
-        if self.resource_handle is not None:
-            self.resource_handle.close()
-
-    def seek(self, position_bytes):
-        return self.resource_handle.seek(position_bytes)
-
-    def tell(self):
-        return self.resource_handle.tell()
+    # Ensure we are writing the right floating point accuracy and byte_order
+    spectra = spectra.astype(dtype, copy=False)
+    if spectra_are_frequence_energy_density:
+        conversion_factor = \
+            restart_file.to_wavenumber_action_density( slice( None,None,None ) )
+        spectra[:,:,:] = spectra[:,:,:] * conversion_factor[ :,:,None]
 
 
-class S3Resource(Resource):
-    def __init__(self, s3_uri):
-        bucket, key = \
-            s3_uri.replace('s3://', '').split('/', maxsplit=1)
-        self._key = key
-        self._bucket = bucket
-        self.resource_handle = resource('s3')
-        self._position = 0
-
-    def read_range(self, slices: Union[slice, Sequence[slice]]) \
-            -> Union[bytes, List[bytes]]:
-
-        def _worker( s:slice):
-            obj = self.resource_handle.Object(self._bucket, self._key)
-            data = obj.get(Range=f'bytes={s.start}-{s.stop-1}')['Body']
-            return data.read()
-
-        if isinstance(slices,slice):
-            slices = [slices]
-
-        if len(slices) > 1:
-            with ThreadPool(processes=10) as pool:
-                output = list(
-                    tqdm(
-                        pool.imap(_worker, slices),
-                        total=len(slices)
-                    )
-                )
-        else:
-            output = [_worker(slices[0])]
-        return output
-
-    def _read_all(self):
-        obj = self.resource_handle.Object(self._bucket, self._key)
-        return obj.get()['Body'].read()
-
-    def read(self, number_of_bytes=-1) -> bytes:
-        if number_of_bytes == -1:
-            return self._read_all()
-
-        start_byte = self._position
-        end_byte = self._position + number_of_bytes
-        self._position += number_of_bytes
-        return self.read_range(slice( start_byte,end_byte,1 ))[0]
-
-    def close(self):
-        self.resource_handle = None
-
-    def tell(self):
-        return self._position
-
-    def seek(self, position_bytes):
-        self._position = position_bytes
+    with create_resource(target_file,'wb') as file:
+        file.write( restart_file.header_bytes() )
+        file.write( spectra.tobytes('C') )
+        file.write( restart_file.tail_bytes())
 
 
-def create_resource(uri:str):
-    if 's3://' in uri:
-        return S3Resource(s3_uri=uri)
-    else:
-        return FileResource(file_name=uri)
+def write_partial_restart_file(
+        spectra: numpy.ndarray,
+        target_file: str,
+        restart_file: RestartFile,
+        s: slice,
+        spectra_are_frequence_energy_density=True
+        ):
+    """
+
+    :param spectra:
+    :param target_file:
+    :param restart_file:
+    :param s:
+    :return:
+    """
+
+    dtype = numpy.dtype('float32')  #
+    dtype = dtype.newbyteorder(restart_file._meta_data.byte_order)
+
+    shape = spectra.shape
+    start, stop, step = s.indices(restart_file.number_of_spatial_points)
+    if shape[0] != stop - start:
+        raise ValueError('Input spectra have more spatial points than the '
+                         'source resource file contains')
+
+    if shape[1] != restart_file.number_of_frequencies:
+        raise ValueError('Input spectra have more frequences than the '
+                         'source resource file contains')
+
+    if shape[2] != restart_file.number_of_frequencies:
+        raise ValueError('Input spectra have more directions than the '
+                         'source resource file contains')
+
+    # Ensure we are writing the right floating point accuracy and byte_order
+    spectra = spectra.astype(dtype, copy=False)
+
+    if spectra_are_frequence_energy_density:
+        spectra[:, :, :] = spectra[:, :, :] * \
+                           restart_file.to_wavenumber_action_density(
+                               slice(start, stop, step))[:, :, None]
+
+    with create_resource(target_file,'wb') as file:
+        location = restart_file.resource.resource_location.encode('utf-8')
+
+        # for a partial file we will just write as a header:
+        #  1) the length of the location string (path, uri) of the
+        #     source restart file
+        #  2) the location string in utf-8
+        #  3) the start index in int32, little endian.
+        #  4) the stop index in int32, little endian.
+        #  5) the spectra themselves.
+        # All other information (spectral size etc.) is contained in the
+        # source restart file we point to.
+        file.write(len(location).to_bytes(4, 'little'))
+        file.write(location)
+        file.write(start.to_bytes(4, 'little'))
+        file.write(stop.to_bytes(4, 'little'))
+        file.write(spectra.tobytes('C'))
+
+
+class PartialRestartFileReader:
+    def __init__(self, location, source_restart_file):
+
+        self.resource = create_resource(location)
+
+        # Read the header information
+        self.location_length = int.from_bytes(self.resource.read(4), 'little')
+        self.location = self.resource.read(
+            self.location_length).decode('utf-8')
+
+        self.start = int.from_bytes(self.resource.read(4), 'little')
+        self.stop = int.from_bytes(self.resource.read(4), 'little')
+
+        self.source_restart_file = source_restart_file
+        assert self.source_restart_file.resource.resource_location \
+                   == self.location
+
+    def spectra(self):
+        raw_data = self.resource.read()
+        dtype = numpy.dtype('float32')
+        dtype = dtype.newbyteorder(
+            self.source_restart_file._meta_data.byte_order)
+        spectra = numpy.frombuffer( raw_data, dtype=dtype )
+        spectra = numpy.reshape( spectra,
+            (
+            self.stop-self.start ,
+            self.source_restart_file.number_of_frequencies,
+            self.source_restart_file.number_of_directions)
+        )
+        return spectra
+
+
+def clone_restart_file( restart_file,
+                        model_definition_file, target) -> None:
+
+    restart_file = open_restart_file( restart_file ,
+                                      model_definition_file )
+    restart_file._convert = False
+    write_restart_file( restart_file[:], target, restart_file,False )

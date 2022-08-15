@@ -1,13 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from io import BytesIO
+from typing import Literal
 
-from roguewave.wavewatch3.io import Resource, FortranCharacter, FortranInt, \
-    FortranFloat
-
-_FLOAT_SIZE = 4
-_ENDIANNESS = '<'
-_GUESS_RECORD_SIZE = 36*36 * _FLOAT_SIZE # 36 freq by 36 dir for float 4.
+from roguewave.wavewatch3.fortran_types import FortranCharacter, FortranInt
+from roguewave.wavewatch3.resources import Resource
 
 
 @dataclass()
@@ -20,8 +17,8 @@ class MetaData:
     nspec: int
     record_size_bytes: int
     time: datetime
-    float_size = _FLOAT_SIZE
-    endianness = '<'
+    byte_order: Literal["<", ">", "="]
+    float_size: int
 
 
 def unpack_date_time_from_int( t ):
@@ -32,17 +29,21 @@ def unpack_date_time_from_int( t ):
 
 
 def read_header(reader: Resource,
-                guess_record_size_bytes = _GUESS_RECORD_SIZE) -> MetaData:
+                guess_number_of_spectral_points = 36 * 36,
+                byte_order = '<', float_size = 4) -> MetaData:
     data = {}
 
     # first read the character arrays for name, version, grid name and
-    # restart_type.
+    # restart_type. We do not know the record size yet with which the file
+    # was written, so we just guess a record size.
+    guess_record_size_bytes = guess_number_of_spectral_points * float_size
     stream = BytesIO( reader.read(guess_record_size_bytes*2) )
 
-    fort_char = FortranCharacter(endianness=_ENDIANNESS)
-    fort_int = FortranInt(endianness=_ENDIANNESS)
-    fort_float = FortranFloat(endianness=_ENDIANNESS)
+    fort_char = FortranCharacter(endianness=byte_order)
+    fort_int = FortranInt(endianness=byte_order)
 
+    data['byte_order'] = byte_order
+    data['float_size'] = float_size
     data["name"] = fort_char.unpack(stream, 26)
     data["version"] = fort_char.unpack(stream, 10)
     data["grid_name"] = fort_char.unpack(stream, 30)
@@ -52,7 +53,7 @@ def read_header(reader: Resource,
     data["nsea"] = fort_int.unpack(stream, 1)[0]
     data["nspec"] = fort_int.unpack(stream, 1)[0]
     data['record_size_bytes'] = \
-        data["nspec"] * _FLOAT_SIZE
+        data["nspec"] * float_size
 
     if (guess_record_size_bytes*2 < data['record_size_bytes'] + 8):
         # We only need to read 8 more bytes than the actual length to get the

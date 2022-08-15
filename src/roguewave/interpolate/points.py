@@ -11,7 +11,9 @@ def interpolate_points_nd(
         periodic_coordinates,
         get_data:Callable[ [List[numpy.ndarray]],numpy.ndarray],
         period_data,
-        discont ):
+        discont,
+        output_shape = None
+        ):
     """
 
     :param period_data:
@@ -21,16 +23,15 @@ def interpolate_points_nd(
     :param discont:
     :return:
     """
-    coordinate_names = list(coordinates.keys())
+
     number_coor = len(coordinates)
-    number_points = len( points[coordinate_names[0]] )
+    number_points = len( points[coordinates[0][0]] )
 
     # Find indices and weights for the succesive 1d interpolation problems
     indices_1d = numpy.empty((number_coor, 2, number_points), dtype='int64')
     weights_1d = numpy.empty((number_coor, 2, number_points), dtype='float64')
 
-    for index, coordinate_name in enumerate(coordinate_names):
-        coordinate = coordinates[coordinate_name]
+    for index, (coordinate_name, coordinate) in enumerate(coordinates):
         if coordinate_name in periodic_coordinates:
             period = periodic_coordinates[coordinate_name]
         else:
@@ -50,10 +51,13 @@ def interpolate_points_nd(
     # invalid.
     weights_sum = numpy.zeros((number_points,))
 
+    if output_shape is None:
+        output_shape = (number_points,)
+
     if period_data is not None:
-        interp_val = numpy.zeros((number_points,), dtype=numpy.complex64)
+        interp_val = numpy.zeros(output_shape, dtype=numpy.complex64)
     else:
-        interp_val = numpy.zeros((number_points,), dtype=numpy.float64)
+        interp_val = numpy.zeros(output_shape, dtype=numpy.float64)
 
     for intp_indices_nd, intp_weight_nd in _next_point(
             number_coor, indices_1d, weights_1d):
@@ -65,11 +69,15 @@ def interpolate_points_nd(
             try:
                 val = get_data(intp_indices_nd)
             except Exception as e:
-                print('eh')
                 raise e
 
 
         mask = numpy.isfinite(val)
+        ndim = mask.ndim
+        while ndim > 1:
+            mask = numpy.all( mask,axis=-1 )
+            ndim = mask.ndim
+
         weights_sum[mask] += intp_weight_nd[mask]
         interp_val[mask] += intp_weight_nd[mask] * val[mask]
 

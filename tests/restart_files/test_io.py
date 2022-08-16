@@ -1,41 +1,25 @@
 import hashlib
 from roguewave.wavewatch3.io import clone_restart_file, \
-    write_partial_restart_file, reassemble_restart_file_from_parts, \
-    _PartialRestartFileReader
+    write_partial_restart_file, reassemble_restart_file_from_parts
 from roguewave.wavewatch3.io import open_restart_file
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 import os
 from io import BytesIO
 
-REMOTE_HASH = '811449d693c24cca014fbe212a9db011'
-REMOTE_RESTART_FILE = 's3://sofar-wx-data-dev-os1/roguewave/restart001.ww3'
-REMOTE_MOD_DEF = 's3://sofar-wx-data-dev-os1/roguewave/mod_def.ww3'
-TEST_DIR = '.'
-LOCAL_FILE_NAME = 'restart001.ww3'
-REMOTE_WRITE_PATH = 's3://sofar-wx-data-dev-os1/roguewave/partial/'
+from tests.restart_files import REMOTE_HASH, REMOTE_RESTART_FILE, \
+    REMOTE_MOD_DEF, TEST_DIR, LOCAL_FILE_NAME, REMOTE_WRITE_PATH, file_hash, \
+    clone_remote
 
-def file_hash(file):
-    with open(file, "rb") as f:
-        file_hash = hashlib.md5()
-        while chunk := f.read(8192):
-            file_hash.update(chunk)
-
-    return file_hash.hexdigest()
 
 def test_clone_remote():
     #
-    local_file = os.path.join(TEST_DIR,LOCAL_FILE_NAME)
-    if not os.path.exists( local_file ):
-        clone_restart_file( REMOTE_RESTART_FILE,
-                            REMOTE_MOD_DEF,
-                            os.path.join(TEST_DIR,LOCAL_FILE_NAME))
-
+    local_file = os.path.join(TEST_DIR, LOCAL_FILE_NAME)
+    clone_remote()
     assert file_hash(local_file) == REMOTE_HASH
 
 def test_local_partial_write():
-    local_file = os.path.join(TEST_DIR,LOCAL_FILE_NAME)
-    restart_file = open_restart_file(local_file,REMOTE_MOD_DEF)
+    restart_file = clone_remote()
     restart_file._convert = False
     number_of_chunks = 100
     chunksize = restart_file.number_of_spatial_points // number_of_chunks
@@ -54,8 +38,7 @@ def test_local_partial_write():
                                     )
 
 def test_local_reassemble():
-    local_file = os.path.join(TEST_DIR,LOCAL_FILE_NAME)
-    restart_file = open_restart_file(local_file,REMOTE_MOD_DEF)
+    restart_file = clone_remote()
     restart_file._convert = False
     number_of_chunks = 100
     chunksize = restart_file.number_of_spatial_points // number_of_chunks
@@ -80,8 +63,7 @@ def test_local_reassemble():
 
 
 def test_remote_partial_write():
-    local_file = os.path.join(TEST_DIR,LOCAL_FILE_NAME)
-    restart_file = open_restart_file(local_file,REMOTE_MOD_DEF)
+    restart_file = clone_remote()
     restart_file._convert = False
     number_of_chunks = 100
     chunksize = restart_file.number_of_spatial_points // number_of_chunks
@@ -113,8 +95,7 @@ def test_remote_partial_write():
         )
 
 def test_remote_reassemble():
-    local_file = os.path.join(TEST_DIR,LOCAL_FILE_NAME)
-    restart_file = open_restart_file(local_file,REMOTE_MOD_DEF)
+    restart_file = clone_remote()
     restart_file._convert = False
     names = []
     number_of_chunks = 100
@@ -133,13 +114,6 @@ def test_remote_reassemble():
     os.remove(output)
 
 
-def bytes_hash(_bytes):
-    with BytesIO(_bytes) as f:
-        file_hash = hashlib.md5()
-        while chunk := f.read(8192):
-            file_hash.update(chunk)
-
-    return file_hash.hexdigest()
 
 
 if __name__ == '__main__':

@@ -33,6 +33,12 @@ from .wavespectra.estimators import convert_to_1d_spectrum, \
 # save/load
 from .io.io import save, load
 
+# Restart Files:
+from roguewave.wavewatch3 import RestartFile
+from roguewave.wavewatch3 import open_restart_file, \
+    write_partial_restart_file, write_restart_file, \
+    reassemble_restart_file_from_parts
+
 # Partitioning
 from .wavespectra.partitioning.wavefields import (
     get_bulk_partitions_from_spectral_partitions,

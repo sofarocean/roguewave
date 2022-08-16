@@ -36,7 +36,7 @@ from datetime import datetime
 from functools import cache
 
 
-class RestartFile():
+class RestartFile(Sequence):
     _start_record = 2
 
     def __init__(self,
@@ -44,13 +44,13 @@ class RestartFile():
                  meta_data:MetaData,
                  resource:Resource,
                  depth:LinearIndexedGridData=None,
-                 convert_to_freq_energy_dens=True):
+                 return_freq_energy_density=True):
 
         self._grid = grid
         self._meta_data = meta_data
         self.resource = resource
         self._dtype = numpy.dtype("float32").newbyteorder(meta_data.byte_order)
-        self._convert = convert_to_freq_energy_dens
+        self._convert = return_freq_energy_density
 
         if depth is None:
             _depth = numpy.inf \
@@ -59,6 +59,11 @@ class RestartFile():
         else:
             self._depth = depth
 
+    def set_return_freq_energy_density(self):
+        self._convert = True
+
+    def set_return_k_action_density(self):
+        self._convert = False
 
     @property
     def frequency(self) -> numpy.ndarray:
@@ -119,7 +124,7 @@ class RestartFile():
         """
         :return: number of latitudes.
         """
-        return len(self.longitude)
+        return len(self.latitude)
 
     @property
     def number_of_longitudes(self) -> int:
@@ -152,7 +157,7 @@ class RestartFile():
         """
         return self._meta_data.time
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         :return: We consider a restart file as a container of spectra, so its
             length is the number of spatial points.
@@ -161,7 +166,23 @@ class RestartFile():
 
     def __getitem__(self, s:Union[slice,numpy.ndarray,Sequence,int]
                     ) -> numpy.ndarray:
+        """
+        Dunder method for the Sequence protocol. If obj is an instance of
+        RestartFile, this allows us to use `obj[10:13]` to get spectra with
+        linear indices 10 to 12.
 
+        Input can either be a integer, slice, or fancy indexing through
+        a sequency of numbers or a 1d numpy integer array.
+
+        :param s: slice, integer, 1d numpy integer array, Sequence of integers.
+        :return: We return the requested spectra. Depending on how we setup
+            the object we return frequency energy density spectra (default) or
+            wavenumber spectra. Returned data is of type float32 and has
+            the shape:
+                (number_of_spatial_points_requested,
+                number_of_frequencies,
+                number_of_directions)
+        """
         if isinstance(s, Sequence) or isinstance(s, numpy.ndarray):
             data = self._fancy_index(s)
         else:
@@ -170,11 +191,20 @@ class RestartFile():
         if self._convert:
             # Are we using raw wavenumbers or frequency spectra
             jacobian = self.to_frequency_energy_density(s)
-            return data * jacobian[:,:,None]
+            return data * jacobian
         else:
             return data
 
-    def _sliced_index(self,s:slice):
+    def _sliced_index(self,s:slice) -> numpy.ndarray:
+        """
+        Get wavenumber action density spectra at sliced indices.
+        :param s: slice
+        :return: wavenumber spectra from sliced indices. Returned data is of
+        type float32 and has the shape:
+                (s.stop - s.start,
+                number_of_frequencies,
+                number_of_directions)
+        """
         if isinstance(s, int):
             s = slice(s, s + 1, 1)
 
@@ -216,7 +246,18 @@ class RestartFile():
         )
 
 
-    def _fancy_index(self, indices:Union[Sequence,numpy.ndarray]):
+    def _fancy_index(self, indices:Union[Sequence,numpy.ndarray]
+                     ) -> numpy.ndarray:
+        """
+        Get wavenumber action density spectra at given indices.
+        :param indices: linear indices we want spectra from (Sequence or numpy
+            array of integers).
+        :return: wavenumber spectra from sliced indices. Returned data is of
+        type float32 and has the shape:
+                (len(indices),
+                number_of_frequencies,
+                number_of_directions)
+        """
         if isinstance(indices, Sequence):
             indices = numpy.array(indices,dtype='int32')
 
@@ -238,10 +279,33 @@ class RestartFile():
             )
         return numpy.array(out)
 
-    def _byte_index(self,index):
+    def _byte_index(self,index) -> int:
+        """
+        Get a byte index of a requested record. Record sizes are always
+        number_of_spectral_points * 4 bytes. Note that the first
+        self._start_record's contain header information. Spectral data starts
+        at index = self._start_record
+        :param index: Linear index
+        :return: Linear byte index
+        """
         return index * self._meta_data.record_size_bytes
 
-    def interpolate(self, latitude, longitude):
+    def interpolate(self,
+                    latitude:Union[numpy.ndarray,float],
+                    longitude:Union[numpy.ndarray,float]) -> numpy.ndarray:
+        """
+        Extract interpolated spectra at given latitudes and longitudes.
+        Input can be either a single latitude and longitude pair, or a
+        numpy array of latitudes and longitudes.
+
+        :param latitude: latitudes to get interpolated spectra
+        :param longitude: longitudes to get interpolated spectra
+        :return: Interpolated spectra. Returned data is of  type float32 and
+        has the shape:
+                (len(indices),
+                number_of_frequencies,
+                number_of_directions)
+        """
 
         points = {"latitude":numpy.atleast_1d(latitude),
                   "longitude":numpy.atleast_1d(longitude)}
@@ -252,7 +316,8 @@ class RestartFile():
         periodic_coordinates = {"longitude":360}
 
         def _get_data(  indices ):
-            index = self._grid.to_linear_index[indices[0],indices[1] ]
+            index = self._grid.index(latitude_index=indices[0],
+                                     longitude_index=indices[1])
 
             output = numpy.zeros( (len(index),
                                      self.number_of_frequencies,
@@ -273,13 +338,36 @@ class RestartFile():
 
     def to_wavenumber_action_density(
             self, s:Union[slice, numpy.ndarray, Sequence] ) -> numpy.array:
-        return 1 / self.to_frequency_energy_density(s)
+        """
+        Factor that when multiplied with frequency energy density spectra at
+        the givem indices converts them to action wavenumber spectra. E.g:
+            Ek = to_wavenumber_action_density(slice[10,20)) * Ef[10:20]
+
+        :param s: slice for linear indices.
+        :return: Multiplication factor as numpy ndarray of size.
+                (number_of_elements_in_slice,number_of_frequencies,1)
+
+        To note, we add the trailing 1 to make it easy to use broadcasting (
+            the Jacobian is constant in directional space).
+        """
+        return 1 / self.to_frequency_energy_density(s)[:,:,None]
 
     def to_frequency_energy_density(
             self, s:Union[slice, numpy.ndarray, Sequence]
                                     ) -> numpy.array:
 
         """
+        Factor that when multiplied with wavenumber action density spectra at
+        the givem indices converts them to frequency energy spectra. E.g:
+            Ef = to_frequency_energy_density(slice[10,20)) * Ek[10:20]
+
+        :param s: slice for linear indices.
+        :return: Multiplication factor as numpy ndarray of size.
+                (number_of_elements_in_slice,number_of_frequencies,1)
+
+        To note, we add the trailing 1 to make it easy to use broadcasting (
+            the Jacobian is constant in directional space).
+
         To convert a wavenumber Action density as a function of radial
         frequency (as stored by ww3) to a frequency Energy density we need to
         multiply the action density with the angular frequency (Action -> to
@@ -310,28 +398,85 @@ class RestartFile():
         action_to_energy = w
 
         # Return the result
-        return action_to_energy * jac_rad_to_deg * jac_omega_f * jac_k_to_w
+        factor = action_to_energy * jac_rad_to_deg * jac_omega_f * jac_k_to_w
+        return factor[:,:,None]
 
     @cache
     def header_bytes(self) -> bytes:
+        """
+        Return the header bytes, the first self._record_start records. This is
+        primarily used to created a new restart file that has the same metadata
+        as the current restart file.
+
+        We cache this information to allow for more rapid retrieval if the
+        information is stored on s3.
+
+        :return: raw bytes of the header.
+        """
         s = slice(self._byte_index(0),
                   self._byte_index(self._start_record),1)
         return self.resource.read_range(s)[0]
 
     @cache
     def tail_bytes(self) -> bytes:
+        """
+        After all spectral data in the restart file there is a bunch of
+        additional information regarding currents (needed for uniqueness of
+        energy to action) and other information. We do not currently parse this
+        information in any way. Instead, if we want to create an updated
+        version of the restart file (e.g. for data assimilation) we merely
+        append the information from the source (or background) file. This
+        function is a helper method to retrieve that information.
+
+        We cache this information to allow for more rapid retrieval if the
+        information is stored on s3.
+
+        :return: raw bytes of the tail.
+        """
         self.resource.seek(self._byte_index(self._start_record
                                             + self.number_of_spatial_points))
         return self.resource.read()
 
+    def variance(self, latitude_slice:slice, longitude_slice:slice):
+        index = self._grid.index(
+            latitude_index=latitude_slice,
+            longitude_index=longitude_slice,
+            valid_only=True)
+
+        linear_indexed_variance = self.variance_linear_index(index)
+        return self._grid.project( lon_slice=longitude_slice,
+                                   lat_slice=latitude_slice,
+                                   var=linear_indexed_variance)
+
+    def variance_linear_index(self, index):
+        toggle = not self._convert
+        if toggle:
+            self.set_return_freq_energy_density()
+        spectra = self[index]
+        if toggle:
+            self.set_return_k_action_density()
+
+        delta_f = self._grid.frequency_step()[None,:,None]
+        delta_dir = self._grid.direction_step()[None,None,:]
+        return numpy.sum( delta_f*delta_dir*spectra,axis=(1,2) )
+
+
     def number_of_header_bytes(self) -> int:
-        a = self.header_bytes()
+        """
+        :return: length of the header in bytes.
+        """
         return len(self.header_bytes())
 
     def number_of_tail_bytes(self) -> int:
+        """
+        :return: length of the tail in bytes.
+        """
         return len(self.tail_bytes())
 
     def size_in_bytes(self):
+        """
+        :return: Total size in bytes of a restart file.
+        """
         return self.number_of_tail_bytes() + self.number_of_header_bytes() + \
                self.number_of_spatial_points * \
                self.number_of_spectral_points * self._dtype.itemsize

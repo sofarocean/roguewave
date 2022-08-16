@@ -35,6 +35,7 @@ from roguewave.wavewatch3.resources import Resource
 from io import BytesIO
 from dataclasses import dataclass
 from typing import Union, Tuple, Sequence, Literal
+from roguewave.tools.math import wrapped_difference
 
 
 @dataclass()
@@ -54,8 +55,12 @@ class Grid:
     directions: numpy.ndarray
     latitude: numpy.ndarray  # 1D array of model latitudes
     longitude: numpy.ndarray # 1D array of model longitudes
-    to_linear_index: numpy.ndarray  # mapping of [ilon,ilat] => linear index
-    to_point_index: numpy.ndarray  # mapping of linear index => [ilon,ilat]
+    _to_linear_index: numpy.ndarray  # mapping of [ilon,ilat] => linear index
+    _to_point_index: numpy.ndarray  # mapping of linear index => [ilon,ilat]
+
+    @property
+    def _growth_factor(self):
+        return self.frequencies[1]/self.frequencies[0]
 
     def longitude_index(self, linear_index:Union[slice,Sequence,numpy.ndarray]
                         )->numpy.ndarray:
@@ -64,7 +69,7 @@ class Grid:
         :return: longitude 1d index
         """
 
-        return self.to_point_index[0, linear_index]
+        return self._to_point_index[0, linear_index]
 
     def latitude_index(self, linear_index:Union[slice,Sequence,numpy.ndarray]
                         )->numpy.ndarray:
@@ -72,7 +77,34 @@ class Grid:
         :param linear_index: linear 1d index
         :return: latitude 1d index
         """
-        return self.to_point_index[1, linear_index]
+        return self._to_point_index[1, linear_index]
+
+    def index(self,
+              latitude_index:Union[slice,Sequence,numpy.ndarray],
+              longitude_index:Union[slice,Sequence,numpy.ndarray],
+              valid_only=False):
+        """
+        get the linear index of the array
+        :param latitude_index:
+        :param longitude_index:
+        :return:
+        """
+        indices = self._to_linear_index[latitude_index, longitude_index]
+        if valid_only:
+            indices = indices[indices>=0]
+        return indices
+
+    def direction_step(self):
+        return wrapped_difference(
+            numpy.diff(self.directions,append=self.directions[0]),period=360
+        )
+
+    def frequency_step(self):
+        delta = numpy.diff(self.frequencies,
+                       prepend=self.frequencies[0]/self._growth_factor,
+                       append=self.frequencies[-1]*self._growth_factor
+        )
+        return (delta[0:-1] + delta[1:]) / 2
 
     def extract(self, s: slice, var: numpy.ndarray):
         """
@@ -95,7 +127,7 @@ class Grid:
         :param except_val:
         :return:
         """
-        ind = self.to_linear_index[lat_slice, lon_slice]
+        ind = self._to_linear_index[lat_slice, lon_slice]
         mask = ind >= 0
         ind = ind[mask]
         ilon = self.longitude_index(ind)
@@ -120,7 +152,7 @@ class Grid:
         :return:
         """
 
-        ind = self.to_linear_index[lat_slice, lon_slice]
+        ind = self._to_linear_index[lat_slice, lon_slice]
         ind = ind[ind >= 0]
         ilon = self.longitude_index(ind)
         ilat = self.latitude_index(ind)
@@ -350,8 +382,8 @@ def read_model_definition(
                 directions=data['direction_degree'],
                 latitude=latitude,
                 longitude=longitude,
-                to_linear_index=data['to_linear_index'],
-                to_point_index=data['to_point_index'])
+                _to_linear_index=data['to_linear_index'],
+                _to_point_index=data['to_point_index'])
 
     depth = LinearIndexedGridData(- data['bottom_datum'], grid)
 

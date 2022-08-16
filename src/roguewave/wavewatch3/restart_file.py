@@ -1,5 +1,28 @@
-import numpy
+"""
+Copyright (C) 2022
+Sofar Ocean Technologies
 
+Authors: Pieter Bart Smit
+======================
+
+Module defining the restart file class. This is the primary class to interact
+    with wavewatch3 restart file data.
+
+Public Classes:
+- `RestartFile`, file to interact with restart files from WW3.
+
+Functions:
+- N/A
+
+How To Use This Module
+======================
+(See the individual functions for details.)
+
+1. import
+2. create a restart file object.
+"""
+
+import numpy
 from roguewave.wavewatch3.resources import Resource
 from roguewave.wavewatch3.model_definition import Grid, \
     LinearIndexedGridData
@@ -16,9 +39,13 @@ from functools import cache
 class RestartFile():
     _start_record = 2
 
-    def __init__(self, grid:Grid, meta_data:MetaData,
-                 resource:Resource, depth:LinearIndexedGridData=None,
+    def __init__(self,
+                 grid:Grid,
+                 meta_data:MetaData,
+                 resource:Resource,
+                 depth:LinearIndexedGridData=None,
                  convert_to_freq_energy_dens=True):
+
         self._grid = grid
         self._meta_data = meta_data
         self.resource = resource
@@ -35,18 +62,30 @@ class RestartFile():
 
     @property
     def frequency(self) -> numpy.ndarray:
+        """
+        :return: 1D numpy array of frequencies
+        """
         return self._grid.frequencies
 
     @property
     def direction(self) -> numpy.ndarray:
+        """
+        :return: 1D numpy array of directions
+        """
         return self._grid.directions
     
     @property
     def latitude(self) -> numpy.ndarray:
+        """
+        :return: 1D numpy array of latitudes.
+        """
         return self._grid.latitude
 
     @property
     def longitude(self) -> numpy.ndarray:
+        """
+        :return: 1D numpy array of longitudes.
+        """
         return self._grid.longitude
 
     def coordinates(self, index:Union[slice,int,numpy.ndarray]
@@ -57,40 +96,68 @@ class RestartFile():
         :param index: linear index
         :return:  ( latitude(s), longitude(s)
         """
-        ilon = self._grid.to_point_index[0, index]
-        ilat = self._grid.to_point_index[1, index]
+        ilon = self._grid.longitude_index(index)
+        ilat = self._grid.latitude_index(index)
         return self.latitude[ilat], self.longitude[ilon]
 
     @property
     def number_of_directions(self) -> int:
+        """
+        :return: number of directions
+        """
         return len(self.direction)
 
     @property
     def number_of_frequencies(self) -> int:
+        """
+        :return: number of frequencies
+        """
         return len(self.frequency)
     
     @property
     def number_of_latitudes(self) -> int:
+        """
+        :return: number of latitudes.
+        """
         return len(self.longitude)
 
     @property
     def number_of_longitudes(self) -> int:
+        """
+        :return: number of longitudes.
+        """
         return len(self.longitude)
 
     @property
     def number_of_spatial_points(self) -> int:
+        """
+        :return: Number of spatial points in the restart file. This only counts
+            the number of sea points and is *not* equal to
+            self.number_of_latitudes * self.number_of_longitudes
+            Also referred to as "NSEA" in wavewatch III.
+        """
         return self._grid.number_of_spatial_points
 
     @property
     def number_of_spectral_points(self) -> int:
+        """
+        :return: number of spectral points.
+        """
         return self.number_of_frequencies * self.number_of_directions
 
     @property
     def time(self) -> datetime:
+        """
+        :return: Valid time of the restart file.
+        """
         return self._meta_data.time
 
     def __len__(self):
-        return self.number_of_frequencies
+        """
+        :return: We consider a restart file as a container of spectra, so its
+            length is the number of spatial points.
+        """
+        return self.number_of_spatial_points
 
     def __getitem__(self, s:Union[slice,numpy.ndarray,Sequence,int]
                     ) -> numpy.ndarray:

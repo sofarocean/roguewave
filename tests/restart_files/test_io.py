@@ -1,7 +1,7 @@
 import hashlib
 from roguewave.wavewatch3.io import clone_restart_file, \
     write_partial_restart_file, reassemble_restart_file_from_parts, \
-    PartialRestartFileReader
+    _PartialRestartFileReader
 from roguewave.wavewatch3.io import open_restart_file
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm

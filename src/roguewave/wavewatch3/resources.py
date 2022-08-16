@@ -1,15 +1,34 @@
 """
+Copyright (C) 2022
+Sofar Ocean Technologies
+
+Authors: Pieter Bart Smit
+======================
+
 Module defining the various resources we can use. Here a resource is a class
 that acts as a normal file opened for binary read or write in Python. However,
 the underlying object may be a an s3 object or a local file. In the case of
 an s3 object all IO is buffered and changes occur on s3 only once the file
 object is closed.
 
-To create a resource use:
+Classes:
+- `Resource`, abstract parent class
+- `FileResource`, resource implementation when we use local files (basically
+    wrapper around a standard file object)
+- `S3Resource`, resource implementation when we use objects stored on S3.
 
-    resource = create_resource( uri,mode )
+Functions:
 
-See description below in function for further detail.
+- `create_resource`, create a resource, main function to use
+
+How To Use This Module
+======================
+(See the individual functions for details.)
+
+1. `import create_resource from resources`
+2. create a resource: resource = create_resource( uri,mode ), where uri is
+    either a local file path, or a s3 uri, and mode is read binary ('rb') or
+    write binary ('wb').
 """
 from multiprocessing.pool import ThreadPool
 from typing import Union, Sequence, List, Literal

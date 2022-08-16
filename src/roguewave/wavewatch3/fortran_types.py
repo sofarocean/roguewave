@@ -1,5 +1,29 @@
 """
-Module to define the types used to write data in fortran - so we can read them.
+Copyright (C) 2022
+Sofar Ocean Technologies
+
+Authors: Pieter Bart Smit
+=========================
+Module to define the types used to write read data from Fortran generated.
+This is an internal module and there should not be a reason to use this
+directly.
+
+Classes:
+- `FortranType`, abstract parent class
+- `FortranFloat`, class to read Fortran 4 byte floats (float32)
+- `FortranInt`, class to read Fortran 4 byte integers (int32)
+- `FortranCharacters`, class to read a Fortran character array and return a
+    normal python string.
+
+Functions:
+
+- `N/A`
+
+How To Use This Module
+=========================
+(See the individual functions for details.)
+
+1. Don't :-)
 """
 import struct
 from io import BufferedIOBase

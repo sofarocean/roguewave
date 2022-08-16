@@ -1,3 +1,33 @@
+"""
+Copyright (C) 2022
+Sofar Ocean Technologies
+
+Authors: Pieter Bart Smit
+======================
+
+Module defining the various resources we can use. Here a resource is a class
+that acts as a normal file opened for binary read or write in Python. However,
+the underlying object may be a an s3 object or a local file. In the case of
+an s3 object all IO is buffered and changes occur on s3 only once the file
+object is closed.
+
+Classes:
+- `MetaData`, dataclass containing metadata from a restart file
+
+Functions:
+
+- `read_header`, read the header information from a restart file opened by the
+    given resource.
+
+
+How To Use This Module
+======================
+(See the individual functions for details.)
+
+1. import
+2. read metadat using `read_header` which returns a MetaData object.
+"""
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from io import BytesIO
@@ -77,17 +107,17 @@ def read_header(resource: Resource,
     stream.seek(data['record_size_bytes'])
 
     date_int = fort_int.unpack(stream, 1)[0]
-    year, month, day = unpack_date_time_from_int( date_int )
+    year, month, day = _unpack_date_time_from_int(date_int)
 
     time_int = fort_int.unpack(stream, 1)[0]
-    hour, min, sec = unpack_date_time_from_int(time_int)
+    hour, min, sec = _unpack_date_time_from_int(time_int)
 
     data["time"] = datetime(year, month, day, hour, min, sec,
                             tzinfo=timezone.utc)
     return MetaData(**data)
 
 
-def unpack_date_time_from_int( t ):
+def _unpack_date_time_from_int(t):
     """
     Wavewatch 3 restart files store dates and times as integers in the form:
         20220101 for '2022-01-01' or 193000 for '19:30:00Z'. This is a simple

@@ -290,9 +290,9 @@ class RestartFile(Sequence):
         """
         return index * self._meta_data.record_size_bytes
 
-    def interpolate(self,
-                    latitude:Union[numpy.ndarray,float],
-                    longitude:Union[numpy.ndarray,float]) -> numpy.ndarray:
+    def interpolate_in_space(self,
+                             latitude:Union[numpy.ndarray,float],
+                             longitude:Union[numpy.ndarray,float]) -> numpy.ndarray:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -437,7 +437,17 @@ class RestartFile(Sequence):
                                             + self.number_of_spatial_points))
         return self.resource.read()
 
-    def variance(self, latitude_slice:slice, longitude_slice:slice):
+    def variance(self, latitude_slice:slice, longitude_slice:slice
+                 ) -> numpy.ndarray:
+        """
+        Calculate the variance at sliced indices for latitudes and longitudes.
+        Returns a 2d array with constant latitudes along rows and
+        constant longitudes along colunns
+
+        :param latitude_slice: latitude index range as slice
+        :param longitude_slice: longitude index range as slice
+        :return:
+        """
         index = self._grid.index(
             latitude_index=latitude_slice,
             longitude_index=longitude_slice,
@@ -448,7 +458,15 @@ class RestartFile(Sequence):
                                    lat_slice=latitude_slice,
                                    var=linear_indexed_variance)
 
-    def variance_linear_index(self, index):
+    def variance_linear_index(self, index) -> numpy.ndarray:
+        """
+        Calculate the variance at linear indices. Returns a 1d of variances
+        at requested indices
+
+        :param latitude_slice: latitude index range as slice
+        :param longitude_slice: longitude index range as slice
+        :return:
+        """
         toggle = not self._convert
         if toggle:
             self.set_return_freq_energy_density()

@@ -61,7 +61,7 @@ def colocate_model_spotter(
                             time_slice,model_name,slice_remotely=slice_remotely,
                                 parallel=parallel, cache_name=cache_name  )
     out = {}
-    for spotter_id in spotter_ids:
+    for spotter_id in spotters:
         s = spotters[spotter_id] # type: DataFrame
         m = data[spotter_id] # type: DataFrame
         if timebase.lower() == 'native':

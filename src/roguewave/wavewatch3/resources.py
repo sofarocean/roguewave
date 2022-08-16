@@ -1,62 +1,161 @@
+"""
+Module defining the various resources we can use. Here a resource is a class
+that acts as a normal file opened for binary read or write in Python. However,
+the underlying object may be a an s3 object or a local file. In the case of
+an s3 object all IO is buffered and changes occur on s3 only once the file
+object is closed.
+
+To create a resource use:
+
+    resource = create_resource( uri,mode )
+
+See description below in function for further detail.
+"""
 from multiprocessing.pool import ThreadPool
 from typing import Union, Sequence, List, Literal
 from io import BytesIO
 from boto3 import resource
 from tqdm import tqdm
-import tempfile
 
 
 class Resource():
-    def __init__(self, resource_location, mode:Literal['rb','wb']='rb'):
+    """
+    Context manager base clase defining a resource. needs to be implemented.
+    """
+    def __init__(self,
+                 resource_location,
+                 mode:Literal['rb','wb']='rb'):
+        """
+        :param resource_location:
+        :param mode: mode to open file, only binary read ('rb') or binary write
+            ('wb') are supported.
+        """
         self.resource_location = resource_location
         self.mode = mode
 
     @property
     def read_only(self):
+        """
+        :return: resource is opened as readonly
+        """
         return self.mode == 'rb'
 
     @property
     def write_only(self):
+        """
+        :return: resource is opened as writeonly
+        """
         return self.mode == 'wb'
 
     def read_range(self, s:Union[slice,Sequence[slice]]
                    ) -> List[bytearray]:
+        """
+        Read a range of bytes as defined by the slice(s). We can
+        input a single slice, or multiple slices. We always return a list of
+        bytearrays corresponding to the byteranges (list of length 1 if a
+        single slice is used as input
+
+        :param s: slice or list of slices
+        :return: List of bytearrays
+        """
+
         pass
 
     def read(self, number_of_bytes=-1) -> bytearray:
+        """
+        :param number_of_bytes: read number of bytes, if <0 read all bytes to
+            end of resource from current posiiton
+        :return: return a bytearray of the data read
+        """
         pass
 
     def write(self, _bytes:bytes):
+        """
+        write a byte array to the resource
+        :param _bytes: bytes to write
+        :return: None
+        """
         pass
 
     def __enter__(self):
+        """
+        Dunder method to implement the context management protocol on entry of
+        a with block.
+        :return:
+        """
         return self
 
     def close(self):
+        """
+        Close the resource
+        :return: None
+        """
         pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Dunder method to implement the context management protocol on entry of
+        a with block.
+        :param exc_type:
+        :param exc_val:
+        :param exc_tb:
+        :return:
+        """
         self.close()
         self.resource_handle = None
 
     def __del__(self):
+        """
+        Dunder method to make sure we release any resources properly.
+        :return:
+        """
         if self.resource_handle is not None:
             self.close()
 
     def seek(self, position_bytes):
+        """
+        Move the current position in the stream to the indicated position.
+        :param position_bytes: position in bytes
+        :return:
+        """
         pass
 
     def tell(self):
+        """
+        Return the current position in the stream.
+        :return: position in stream in bytes.
+        """
         pass
 
 
 class FileResource(Resource):
-    def __init__(self, resource_location, mode:Literal['rb','wb']='rb'):
+    """
+    Open a file as a "resource". Only needed becuase we want to abstract away
+    the difference between a local and remote file for s3.
+    """
+    def __init__(self,
+                 resource_location,
+                 mode:Literal['rb','wb']='rb'):
+        """
+        :param resource_location:
+        :param mode: mode to open file, only binary read ('rb') or binary write
+            ('wb') are supported.
+        """
         super().__init__(resource_location, mode)
         self.resource_handle = open(resource_location, mode)
 
     def read_range(self, slices:Union[slice,Sequence[slice]]) \
             -> Union[bytearray,List[bytearray]]:
+        """
+        Read a range of bytes as defined by the slice(s). We can
+        input a single slice, or multiple slices. We always return a list of
+        bytearrays corresponding to the byteranges (list of length 1 if a
+        single slice is used as input
+
+        :param s: slice or list of slices
+        :return: List of bytearrays
+        """
+
 
         if self.write_only:
             raise IOError('Resource has been opened as write only, cannot'
@@ -74,9 +173,19 @@ class FileResource(Resource):
         return out
 
     def write(self,_bytes:bytes):
+        """
+        write a byte array to the resource
+        :param _bytes: bytes to write
+        :return: None
+        """
         self.resource_handle.write(_bytes)
 
     def read(self, number_of_bytes=-1) -> bytearray:
+        """
+        :param number_of_bytes: read number of bytes, if <0 read all bytes to
+            end of resource from current posiiton
+        :return: return a bytearray of the data read
+        """
         if self.write_only:
             raise IOError('Resource has been opened as write only, cannot'
                              'read from it.')
@@ -84,18 +193,41 @@ class FileResource(Resource):
         return bytearray(self.resource_handle.read(number_of_bytes))
 
     def close(self):
+        """
+        Close the resource
+        :return: None
+        """
         if self.resource_handle is not None:
             self.resource_handle.close()
 
     def seek(self, position_bytes):
+        """
+        Move the current position in the stream to the indicated position.
+        :param position_bytes: position in bytes
+        :return:
+        """
         return self.resource_handle.seek(position_bytes)
 
     def tell(self):
+        """
+        Return the current position in the stream.
+        :return: position in stream in bytes.
+        """
         return self.resource_handle.tell()
 
 
 class S3Resource(Resource):
+    """
+    Open a s3 object as a "resource". Allows us to interact with an s3 object
+    as if it was a regular stream (supports read, write, seek, tell). Obviously
+    less performant than local IO.
+    """
     def __init__(self, resource_location, mode:Literal['rb','wb']='rb'):
+        """
+        :param resource_location:
+        :param mode: mode to open file, only binary read ('rb') or binary write
+            ('wb') are supported.
+        """
         super().__init__(resource_location,mode)
 
         bucket, key = \
@@ -110,6 +242,18 @@ class S3Resource(Resource):
 
     def read_range(self, slices: Union[slice, Sequence[slice]]) \
             ->List[bytearray]:
+        """
+        Read a range of bytes as defined by the slice(s). We can
+        input a single slice, or multiple slices. We always return a list of
+        bytearrays corresponding to the byteranges (list of length 1 if a
+        single slice is used as input.
+
+        Note that for efficiency we use multiple threads to iterate over the
+        byterange. Only the byterange needed is downloaded.
+
+        :param s: slice or list of slices
+        :return: List of bytearrays
+        """
 
         if self.write_only:
             raise IOError('Resource has been opened as write only, cannot'
@@ -136,6 +280,13 @@ class S3Resource(Resource):
         return output
 
     def _read_all(self) -> bytearray:
+        """
+        Function to read the entire resource, or s3 object. This special
+        function ecists because download_fileobj is much faster (multipart
+        download) for large files compared to a standard get.
+        :return:
+        """
+
         if self.write_only:
             raise IOError('Resource has been opened as write only, cannot'
                              'read from it.')
@@ -149,7 +300,11 @@ class S3Resource(Resource):
         return _bytes
 
     def read(self, number_of_bytes=-1) -> bytearray:
-
+        """
+        :param number_of_bytes: read number of bytes, if <0 read all bytes to
+            end of resource from current posiiton
+        :return: return a bytearray of the data read
+        """
         if self.write_only:
             raise IOError('Resource has been opened as write only, cannot'
                              'read from it.')
@@ -165,28 +320,63 @@ class S3Resource(Resource):
             return self.read_range(slice( start_byte,end_byte,1 ))[0]
 
     def write(self, _bytes:bytes):
+        """
+        Write a byte array to the resource. Note that the s3 resource writes
+        to an internal buffer. Only when the object is closed is the buffer
+        pushed to s3 and "written".
+        :param _bytes: bytes to write
+        :return: None
+        """
+
         self._write_buffer.write(_bytes)
         self._bytes_written = True
 
     def _push_to_s3(self):
+        """
+        Push data in the write buffer to s3.
+        :return:
+        """
+
         self._write_buffer.seek(0)
         obj = self.resource_handle.Object(self._bucket, self._key)
         response = obj.upload_fileobj(self._write_buffer)
 
     def close(self):
+        """
+        Close the resource. Flushes the write buffer (if applicable).
+        :return: None
+        """
         if self._bytes_written:
             self._push_to_s3()
         self._write_buffer.close()
         self._bytes_written = False
 
     def tell(self):
+        """
+        Return the current position in the stream.
+        :return: position in stream in bytes.
+        """
         return self._position
 
     def seek(self, position_bytes):
+        """
+        Move the current position in the stream to the indicated position.
+        :param position_bytes: position in bytes
+        :return:
+        """
         self._position = position_bytes
 
 
-def create_resource(uri:str,mode:Literal['wb','rb']='rb'):
+def create_resource(uri:str,mode:Literal['wb','rb']='rb')->Resource:
+    """
+    Create the appropriate resource object basded on the "uri". If the uri
+    starts with "s3://" we assume it refer to a s3 object in the form
+    "s3://bucket/key". Otherwise we assume it is the path to a local file.
+    :param uri: s3 uri or path to local file.
+    :param mode: Whether to open resource in binary read ('rb') or binary write
+        mode.
+    :return: resource object
+    """
     if 's3://' in uri:
         return S3Resource(resource_location=uri,mode=mode)
     else:

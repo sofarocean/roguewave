@@ -7,7 +7,7 @@ from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, \
     jacobian_wavenumber_to_radial_frequency
 from roguewave.wavewatch3.restart_file_metadata import MetaData
-from typing import Sequence, Union
+from typing import Sequence, Union, Tuple
 from roguewave.interpolate.points import interpolate_points_nd
 from datetime import datetime
 from functools import cache
@@ -49,6 +49,18 @@ class RestartFile():
     def longitude(self) -> numpy.ndarray:
         return self._grid.longitude
 
+    def coordinates(self, index:Union[slice,int,numpy.ndarray]
+                    )->Tuple[Union[float,numpy.ndarray ],
+                             Union[float,numpy.ndarray ]]:
+        """
+        Return the latitude and longitude as a function of the linear index.
+        :param index: linear index
+        :return:  ( latitude(s), longitude(s)
+        """
+        ilon = self._grid.to_point_index[0, index]
+        ilat = self._grid.to_point_index[1, index]
+        return self.latitude[ilat], self.longitude[ilon]
+
     @property
     def number_of_directions(self) -> int:
         return len(self.direction)
@@ -80,13 +92,16 @@ class RestartFile():
     def __len__(self):
         return self.number_of_frequencies
 
-    def __getitem__(self, s):
+    def __getitem__(self, s:Union[slice,numpy.ndarray,Sequence,int]
+                    ) -> numpy.ndarray:
+
         if isinstance(s, Sequence) or isinstance(s, numpy.ndarray):
             data = self._fancy_index(s)
         else:
             data = self._sliced_index(s)
 
         if self._convert:
+            # Are we using raw wavenumbers or frequency spectra
             jacobian = self.to_frequency_energy_density(s)
             return data * jacobian[:,:,None]
         else:
@@ -170,10 +185,7 @@ class RestartFile():
         periodic_coordinates = {"longitude":360}
 
         def _get_data(  indices ):
-            # To note- latitudes are the fast index, so this is swapped from
-            # the "lat,lon" in the fortran code (leading index is fast index
-            # in Fortran) to "lon,lat" here.
-            index = self._grid.to_linear_index[indices[1],indices[0] ]
+            index = self._grid.to_linear_index[indices[0],indices[1] ]
 
             output = numpy.zeros( (len(index),
                                      self.number_of_frequencies,

@@ -72,6 +72,10 @@ class WaveSpectrum():
     def variance_density(self) -> numpy.ndarray:
         return self._variance_density
 
+    @property
+    def time(self) -> datetime:
+        return self.timestamp
+
     def _update(self):
         self._peak_index = None
         self._peak_wavenumber = None

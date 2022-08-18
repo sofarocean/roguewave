@@ -30,11 +30,13 @@ from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, \
     jacobian_wavenumber_to_radial_frequency
 from roguewave.wavewatch3.restart_file_metadata import MetaData
-from typing import Sequence, Union, Tuple
+from typing import Sequence, Union, Tuple, Mapping
 from roguewave.interpolate.points import interpolate_points_nd
 from datetime import datetime
 from functools import cache
 from roguewave.tools.time import to_datetime64
+from roguewave.interpolate.geometry import TrackSet
+from xarray import DataArray, Dataset
 
 
 class RestartFile(Sequence):
@@ -192,9 +194,17 @@ class RestartFile(Sequence):
         if self._convert:
             # Are we using raw wavenumbers or frequency spectra
             jacobian = self.to_frequency_energy_density(s)
-            return data * jacobian
-        else:
-            return data
+            data = data * jacobian
+
+        if isinstance(s,slice):
+            s = range(*slice.indices(self.number_of_spatial_points))
+
+        return Dataset(
+            data_vars={
+                "variance_density": ( ('linear index','frequency','direction'),data )}
+            coords={"linear index":
+            }
+        )
 
     def _sliced_index(self,s:slice) -> numpy.ndarray:
         """
@@ -206,7 +216,7 @@ class RestartFile(Sequence):
                 number_of_frequencies,
                 number_of_directions)
         """
-        if isinstance(s, int):
+        if isinstance(s, (int,numpy.int32,numpy.int64)):
             s = slice(s, s + 1, 1)
 
         elif not isinstance( s, slice ):
@@ -594,12 +604,12 @@ class RestartFileStack:
 
     @property
     def time(self) -> numpy.ndarray:
-        return self.time
+        return self._time
 
     def __len__(self):
         return len(self._restart_files)
 
-    def __getitem__(self, *nargs):
+    def __getitem__(self, nargs):
         if len(nargs) == 2:
             time_index, linear_index = nargs
         elif len(nargs) == 3:
@@ -611,16 +621,20 @@ class RestartFileStack:
 
         if isinstance(time_index,slice):
             time_index = list(range(*time_index.indices(len(self))))
-        elif isinstance(time_index,int):
+            return [self._restart_files[it][linear_index] for it in time_index]
+        elif isinstance(time_index,(int,numpy.int32,numpy.int64)):
             time_index = [time_index]
 
-        return [self._restart_files[it][linear_index] for it in time_index]
+        data = [self._restart_files[it][ilin] for it,ilin in zip(time_index,linear_index)]
+        data = numpy.squeeze(numpy.array(data))
+        return data
+
 
 
     def interpolate(self,latitude:Union[numpy.ndarray,float],
                         longitude:Union[numpy.ndarray,float],
                         time:Union[numpy.ndarray,numpy.datetime64,datetime]
-                    ) -> numpy.ndarray:
+                    ) -> DataArray:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -653,21 +667,37 @@ class RestartFileStack:
                                      longitude_index=indices[2])
 
             output = numpy.zeros( (
-                len(time_index),
                 len(index),
                 self.number_of_frequencies,
                 self.number_of_directions ) )
             mask = index >= 0
-            for it in time_index:
-                    output[ it,  mask,:,:] = self.__getitem__(it,index[mask])
-                    output[ it, ~mask,:,:] =numpy.nan
+
+            output[  mask,:,:] = self.__getitem__((time_index,index[mask]))
+            output[ ~mask,:,:] =numpy.nan
             return output
 
         output_shape = ( len(points['latitude']),
                          self.number_of_frequencies,
                          self.number_of_directions)
 
-        return interpolate_points_nd(
+        dataset = interpolate_points_nd(
             coordinates, points, periodic_coordinates,_get_data,
             period_data=None,discont=360, output_shape=output_shape
         )
+        return DataArray(
+            data=dataset,
+            coords={
+                'time':time,'frequency':self.frequency,
+                'direction':self.direction
+            },
+            dims = ['time','frequency','direction'],
+            name = 'variance density'
+        )
+
+    def interpolate_tracks(self,tracks:TrackSet
+                          ) -> Mapping[str,DataArray]:
+        out = {}
+        for _id,track in tracks.tracks.items():
+            out[_id] = self.interpolate(track.latitude,
+                                          track.longitude,track.time)
+        return out

@@ -49,7 +49,9 @@ def interpolate_points_nd(
     # for interpolation near missing points. Note that if the contribution of
     # missing weights ( 1-weights_sum) exceeds 0.5 - we consider the point
     # invalid.
-    weights_sum = numpy.zeros((number_points,))
+    shape = numpy.ones(len(output_shape),dtype='int32')
+    shape[0] = number_points
+    weights_sum = numpy.zeros(shape)
 
     if output_shape is None:
         output_shape = (number_points,)
@@ -71,15 +73,16 @@ def interpolate_points_nd(
             except Exception as e:
                 raise e
 
-
+        intp_weight_nd = numpy.reshape(intp_weight_nd,shape)
         mask = numpy.isfinite(val)
         ndim = mask.ndim
+
         while ndim > 1:
             mask = numpy.all( mask,axis=-1 )
             ndim = mask.ndim
 
-        weights_sum[mask] += intp_weight_nd[mask]
-        interp_val[mask] += intp_weight_nd[mask] * val[mask]
+        weights_sum[mask,...] += intp_weight_nd[mask,...]
+        interp_val[mask,...] += intp_weight_nd[mask,...] * val[mask,...]
 
     interp_val = numpy.where(
         weights_sum > 0.5, interp_val / weights_sum, numpy.nan)

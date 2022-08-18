@@ -74,7 +74,7 @@ class VariablesToInclude(TypedDict):
 # 4) Main Functions
 # =============================================================================
 def get_spectrum(
-        spotter_ids: Union[str, List[str]],
+        spotter_ids: Union[str, Sequence[str]],
         start_date: Union[datetime, int, float, str] = None,
         end_date: Union[datetime, int, float, str] = None,
         session: SofarApi = None,

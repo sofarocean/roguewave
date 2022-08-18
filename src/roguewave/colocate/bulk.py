@@ -1,14 +1,12 @@
 from typing import Mapping, Sequence, Union
 from pandas import DataFrame
 
-from roguewave.modeldata.open_remote import open_remote_dataset
 from roguewave.spotterapi.spotterapi import get_bulk_wave_data
-from roguewave.interpolate.dataset import interpolate_dataset, \
-    tracks_as_dataset
+from roguewave.interpolate.dataset import tracks_as_dataset
 from roguewave.modeldata.extract import extract_from_remote_dataset
 from roguewave.interpolate.dataframe import interpolate_dataframe_time
 from roguewave.modeldata.timebase import TimeSlice
-from roguewave.interpolate.geometry import TrackSet
+
 
 # =============================================================================
 def colocate_model_spotter(

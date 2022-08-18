@@ -55,6 +55,6 @@ def extract_from_remote_dataset(
     else:
         dataset = open_remote_dataset( variable, time_slice, model_name,
                                        cache_name=cache_name)
-        return interpolate_dataset(dataset,geometry,)
+        return interpolate_dataset(dataset,geometry)
 
 

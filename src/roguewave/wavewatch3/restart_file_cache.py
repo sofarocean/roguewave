@@ -28,7 +28,7 @@ from roguewave import filecache
 from botocore.exceptions import ClientError
 from roguewave.filecache.exceptions import _RemoteResourceUriNotFound
 from boto3 import resource
-from typing import Sequence,List
+from typing import Sequence,List, Iterable
 # Constants
 # =============================================================================
 
@@ -70,7 +70,7 @@ class RestartFileResource(RemoteResource):
                     response = obj.download_file(filepath)
                 else:
                     data = obj.get(Range=f'bytes={decoded_uri["start"]}-'
-                                     f'{decoded_uri["stop"]}')['Body']
+                                     f'{decoded_uri["stop"]-1}')['Body']
                     with open(filepath,'wb') as file:
                         file.write(data.read())
 
@@ -104,6 +104,9 @@ def get_data(uri:Sequence, start_byte:Sequence, stop_byte:Sequence,
             x,y,z in zip(uri,start_byte,stop_byte)]
 
     filepaths = filecache.filepaths(uris, cache_name=cache_name)[0]
+    if isinstance(filepaths,str):
+        filepaths = [filepaths]
+
     output = []
     for filepath in filepaths:
         with open( filepath,'rb') as file:
@@ -114,12 +117,12 @@ def get_data(uri:Sequence, start_byte:Sequence, stop_byte:Sequence,
 # Module internal functions
 # =============================================================================
 def _restart_file_cache_uri(uri:str, start_byte:int, stop_byte:int) -> str:
-    return f'restart-file-{uri}:{start_byte}-{stop_byte}'
+    return f'restart-file-{uri}:{start_byte},{stop_byte}'
 
 def _decode_restart_file_cache_uri(uri:str, uri_prefix) -> dict:
     bucket, key_byterange = uri.replace(uri_prefix, '').split('/', maxsplit=1)
     key, byterange = key_byterange.split(':')
-    start, stop = byterange.split('-')
+    start, stop = byterange.split(',')
     return {'bucket':bucket, 'key':key, 'start':int(start),'stop':int(stop)}
 
 def _create_cache(cache_name):

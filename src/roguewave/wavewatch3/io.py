@@ -37,7 +37,7 @@ How To Use This Module
 import numpy
 from roguewave.wavewatch3.model_definition import read_model_definition
 from roguewave.wavewatch3.resources import create_resource
-from roguewave.wavewatch3.restart_file import RestartFile
+from roguewave.wavewatch3.restart_file import RestartFile, RestartFileStack
 from roguewave.wavewatch3.restart_file_metadata import read_header
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
@@ -58,6 +58,34 @@ def open_restart_file( restart_file, model_definition_file) -> RestartFile:
     meta_data = read_header(restart_file_resource)
     grid, depth, mask = read_model_definition(model_definition_resource)
     return RestartFile(grid, meta_data, restart_file_resource, depth)
+
+def open_restart_file_stack( uris, model_definition_file,
+                             cache=False,cache_name=None) -> RestartFileStack:
+    """
+    Open a restart file locally or remote and return a restart file object.
+
+    :param restart_file: path or uri to a valid restart file
+    :param model_definition_file: path or uri to model definition file that
+        corresponds to the restart file.
+    :return: A restart file object
+    """
+    restart_files = []
+    model_definition_resource = create_resource(model_definition_file,'rb',
+                                                cache,cache_name)
+    grid, depth, mask = read_model_definition(model_definition_resource)
+
+    first = True
+    meta_data = None
+    for uri in uris:
+        restart_file_resource = create_resource(uri,'rb',cache,cache_name)
+        if first:
+            meta_data = read_header(restart_file_resource)
+            first = False
+        restart_files.append(
+            RestartFile(grid, meta_data, restart_file_resource, depth)
+        )
+
+    return RestartFileStack(restart_files)
 
 
 def reassemble_restart_file_from_parts( target_file,

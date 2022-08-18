@@ -184,6 +184,18 @@ class TimeSliceAnalysis(TimeSlice):
             exact=False)
 
 
+class TimeSliceBestForecast(TimeSliceAnalysis):
+    def __init__(self,start_time:datetime,end_time:datetime):
+        """
+        Analysis time
+        :param start_time: start time of period of interest (datetime)
+        :param end_time: end time of period of interest (datetime)
+        """
+        super().__init__(start_time,end_time)
+
+    def time_base(self, time_configuration:ModelTimeConfiguration):
+        return super().time_base(time_configuration)
+
 class TimeSliceEvaluation(TimeSlice):
     def __init__(self, evaluation_time:datetime, maximum_lead_time:timedelta):
         """

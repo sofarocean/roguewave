@@ -111,7 +111,14 @@ class FileCache:
 
         """
 
-        self.path = os.path.expanduser(path)
+        # self._max_size = int(size_GB * GIGABYTE)
+        # self.parallel = parallel
+        # self.allow_for_missing_files = allow_for_missing_files
+
+        # create the path if it does not exist
+        if not os.path.exists(path):
+            os.makedirs(path, exist_ok=True)
+
         self.config = {
             "size_gb": size_GB,
             "parallel": parallel,
@@ -121,15 +128,6 @@ class FileCache:
             self.config |= self.load_config()
         else:
             self._write_config()
-
-
-        # self._max_size = int(size_GB * GIGABYTE)
-        # self.parallel = parallel
-        # self.allow_for_missing_files = allow_for_missing_files
-
-        # create the path if it does not exist
-        if not os.path.exists(path):
-            os.makedirs(path, exist_ok=True)
 
         # Some counters to keep track of total cache misses, hits and
         # evictions. No downstream use right now/

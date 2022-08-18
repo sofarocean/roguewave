@@ -220,7 +220,6 @@ def _open_variables(variables,
     # return the dataset
     return dataset
 
-
 # Helper Functions
 # =============================================================================
 

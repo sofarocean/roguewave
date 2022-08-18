@@ -163,7 +163,7 @@ def _generate_aws_key(variable, init_time: datetime, forecast_hour: timedelta,
         }
     }
     # Loop over properties and invoke method to replace keywords.
-    uri = model.uri_path_template
+    uri = model.uri_path_template(variable)
     for keyword, action in keywords.items():
         if keyword in uri:
             uri = action['method'](uri, keyword, *action['args'])

@@ -35,6 +35,7 @@ from typing import Union, Sequence, List, Literal
 from io import BytesIO
 from boto3 import resource
 from tqdm import tqdm
+from roguewave.wavewatch3.restart_file_cache import get_data
 
 
 class Resource():
@@ -43,7 +44,10 @@ class Resource():
     """
     def __init__(self,
                  resource_location,
-                 mode:Literal['rb','wb']='rb'):
+                 mode:Literal['rb','wb']='rb',
+                 cache:bool=False,
+                 cache_name: str = None
+                 ):
         """
         :param resource_location:
         :param mode: mode to open file, only binary read ('rb') or binary write
@@ -51,6 +55,8 @@ class Resource():
         """
         self.resource_location = resource_location
         self.mode = mode
+        self.cache = cache
+        self.cache_name = cache_name
 
     @property
     def read_only(self):
@@ -154,13 +160,15 @@ class FileResource(Resource):
     """
     def __init__(self,
                  resource_location,
-                 mode:Literal['rb','wb']='rb'):
+                 mode:Literal['rb','wb']='rb',
+                 cache:bool=False,
+                 cache_name: str = None):
         """
         :param resource_location:
         :param mode: mode to open file, only binary read ('rb') or binary write
             ('wb') are supported.
         """
-        super().__init__(resource_location, mode)
+        super().__init__(resource_location, mode, False, None)
         self.resource_handle = open(resource_location, mode)
 
     def read_range(self, slices:Union[slice,Sequence[slice]]) \
@@ -241,13 +249,14 @@ class S3Resource(Resource):
     as if it was a regular stream (supports read, write, seek, tell). Obviously
     less performant than local IO.
     """
-    def __init__(self, resource_location, mode:Literal['rb','wb']='rb'):
+    def __init__(self, resource_location, mode:Literal['rb','wb']='rb',
+                 cache:bool=False, cache_name: str = None):
         """
         :param resource_location:
         :param mode: mode to open file, only binary read ('rb') or binary write
             ('wb') are supported.
         """
-        super().__init__(resource_location,mode)
+        super().__init__(resource_location,mode,cache,cache_name)
 
         bucket, key = \
             resource_location.replace('s3://', '').split('/', maxsplit=1)
@@ -273,18 +282,38 @@ class S3Resource(Resource):
         :param s: slice or list of slices
         :return: List of bytearrays
         """
+        if isinstance(slices,slice):
+            slices = [slices]
+
+        if self.cache:
+            keys = []
+            start_byte = []
+            stop_byte = []
+            for _slice in slices:
+                stop_byte.append(_slice.stop)
+                start_byte.append(_slice.start)
+                keys.append(self.resource_location)
+            return get_data(keys,start_byte,stop_byte,self.cache_name)
 
         if self.write_only:
             raise IOError('Resource has been opened as write only, cannot'
                              'read from it.')
 
         def _worker( s:slice):
-            obj = self.resource_handle.Object(self._bucket, self._key)
-            data = obj.get(Range=f'bytes={s.start}-{s.stop-1}')['Body']
-            return bytearray(data.read())
+            if s.start == 0 and s.stop == -1:
+                obj = self.resource_handle.Object(self._bucket, self._key)
+                with BytesIO() as file:
+                    response = obj.download_fileobj(file)
+                    file.seek(0)
+                    _bytes = bytearray(file.read())
 
-        if isinstance(slices,slice):
-            slices = [slices]
+                return bytearray(_bytes)
+            else:
+                obj = self.resource_handle.Object(self._bucket, self._key)
+                data = obj.get(Range=f'bytes={s.start}-{s.stop-1}')['Body']
+                return bytearray(data.read())
+
+
 
         if len(slices) > 1:
             with ThreadPool(processes=10) as pool:
@@ -298,25 +327,6 @@ class S3Resource(Resource):
             output = [_worker(slices[0])]
         return output
 
-    def _read_all(self) -> bytearray:
-        """
-        Function to read the entire resource, or s3 object. This special
-        function ecists because download_fileobj is much faster (multipart
-        download) for large files compared to a standard get.
-        :return:
-        """
-
-        if self.write_only:
-            raise IOError('Resource has been opened as write only, cannot'
-                             'read from it.')
-
-        obj = self.resource_handle.Object(self._bucket, self._key)
-        with BytesIO() as file:
-            response = obj.download_fileobj(file)
-            file.seek(0)
-            _bytes = bytearray(file.read())
-
-        return _bytes
 
     def read(self, number_of_bytes=-1) -> bytearray:
         """
@@ -329,9 +339,9 @@ class S3Resource(Resource):
                              'read from it.')
 
         start_byte = self._position
-
         if number_of_bytes < 0:
-            _bytes = self._read_all()
+            end_byte = -1
+            _bytes= self.read_range(slice(0,end_byte,1 ))[0]
             return _bytes[start_byte:]
         else:
             end_byte = self._position + number_of_bytes
@@ -386,7 +396,8 @@ class S3Resource(Resource):
         self._position = position_bytes
 
 
-def create_resource(uri:str,mode:Literal['wb','rb']='rb')->Resource:
+def create_resource(uri:str,mode:Literal['wb','rb']='rb',cache=False,
+                    cache_name=None)->Resource:
     """
     Create the appropriate resource object basded on the "uri". If the uri
     starts with "s3://" we assume it refer to a s3 object in the form
@@ -397,6 +408,8 @@ def create_resource(uri:str,mode:Literal['wb','rb']='rb')->Resource:
     :return: resource object
     """
     if 's3://' in uri:
-        return S3Resource(resource_location=uri,mode=mode)
+        return S3Resource(resource_location=uri,mode=mode,
+                          cache=cache,cache_name=cache_name)
     else:
-        return FileResource(resource_location=uri,mode=mode)
+        return FileResource(resource_location=uri,mode=mode,
+                            cache=cache,cache_name=cache_name)

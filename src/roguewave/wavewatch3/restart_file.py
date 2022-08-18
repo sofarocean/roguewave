@@ -34,6 +34,7 @@ from typing import Sequence, Union, Tuple
 from roguewave.interpolate.points import interpolate_points_nd
 from datetime import datetime
 from functools import cache
+from roguewave.tools.time import to_datetime64
 
 
 class RestartFile(Sequence):
@@ -499,3 +500,174 @@ class RestartFile(Sequence):
                self.number_of_spatial_points * \
                self.number_of_spectral_points * self._dtype.itemsize
 
+
+class RestartFileStack:
+    def __init__(self, restart_files: Sequence[RestartFile]):
+        self._restart_files = restart_files
+        self._grid = restart_files[0]._grid
+        self._time = to_datetime64([ x.time for x in restart_files ])
+
+    @property
+    def frequency(self) -> numpy.ndarray:
+        """
+        :return: 1D numpy array of frequencies
+        """
+        return self._grid.frequencies
+
+    @property
+    def direction(self) -> numpy.ndarray:
+        """
+        :return: 1D numpy array of directions
+        """
+        return self._grid.directions
+
+    @property
+    def latitude(self) -> numpy.ndarray:
+        """
+        :return: 1D numpy array of latitudes.
+        """
+        return self._grid.latitude
+
+    @property
+    def longitude(self) -> numpy.ndarray:
+        """
+        :return: 1D numpy array of longitudes.
+        """
+        return self._grid.longitude
+
+    def coordinates(self, index: Union[slice, int, numpy.ndarray]
+                    ) -> Tuple[Union[float, numpy.ndarray],
+                               Union[float, numpy.ndarray]]:
+        """
+        Return the latitude and longitude as a function of the linear index.
+        :param index: linear index
+        :return:  ( latitude(s), longitude(s)
+        """
+        ilon = self._grid.longitude_index(index)
+        ilat = self._grid.latitude_index(index)
+        return self.latitude[ilat], self.longitude[ilon]
+
+    @property
+    def number_of_directions(self) -> int:
+        """
+        :return: number of directions
+        """
+        return len(self.direction)
+
+    @property
+    def number_of_frequencies(self) -> int:
+        """
+        :return: number of frequencies
+        """
+        return len(self.frequency)
+
+    @property
+    def number_of_latitudes(self) -> int:
+        """
+        :return: number of latitudes.
+        """
+        return len(self.latitude)
+
+    @property
+    def number_of_longitudes(self) -> int:
+        """
+        :return: number of longitudes.
+        """
+        return len(self.longitude)
+
+    @property
+    def number_of_spatial_points(self) -> int:
+        """
+        :return: Number of spatial points in the restart file. This only counts
+            the number of sea points and is *not* equal to
+            self.number_of_latitudes * self.number_of_longitudes
+            Also referred to as "NSEA" in wavewatch III.
+        """
+        return self._grid.number_of_spatial_points
+
+    @property
+    def number_of_spectral_points(self) -> int:
+        """
+        :return: number of spectral points.
+        """
+        return self.number_of_frequencies * self.number_of_directions
+
+    @property
+    def time(self) -> numpy.ndarray:
+        return self.time
+
+    def __len__(self):
+        return len(self._restart_files)
+
+    def __getitem__(self, *nargs):
+        if len(nargs) == 2:
+            time_index, linear_index = nargs
+        elif len(nargs) == 3:
+            time_index, lat_index, lon_index = nargs
+            linear_index = self._grid.index(lat_index,
+                                            lon_index,valid_only=True)
+        else:
+            raise ValueError('unexpected number of indices')
+
+        if isinstance(time_index,slice):
+            time_index = list(range(*time_index.indices(len(self))))
+        elif isinstance(time_index,int):
+            time_index = [time_index]
+
+        return [self._restart_files[it][linear_index] for it in time_index]
+
+
+    def interpolate(self,latitude:Union[numpy.ndarray,float],
+                        longitude:Union[numpy.ndarray,float],
+                        time:Union[numpy.ndarray,numpy.datetime64,datetime]
+                    ) -> numpy.ndarray:
+        """
+        Extract interpolated spectra at given latitudes and longitudes.
+        Input can be either a single latitude and longitude pair, or a
+        numpy array of latitudes and longitudes.
+
+        :param latitude: latitudes to get interpolated spectra
+        :param longitude: longitudes to get interpolated spectra
+        :return: Interpolated spectra. Returned data is of  type float32 and
+        has the shape:
+                (len(indices),
+                number_of_frequencies,
+                number_of_directions)
+        """
+        time = to_datetime64(time)
+        points = {"time":numpy.atleast_1d(time),
+                  "latitude":numpy.atleast_1d(latitude),
+                  "longitude":numpy.atleast_1d(longitude),
+                  }
+
+        coordinates = [("time",to_datetime64(self.time)),
+                        ("latitude",self.latitude),
+                       ("longitude",self.longitude),
+                       ]
+
+        periodic_coordinates = {"longitude":360}
+
+        def _get_data(  indices ):
+            time_index = indices[0]
+            index = self._grid.index(latitude_index=indices[1],
+                                     longitude_index=indices[2])
+
+            output = numpy.zeros( (
+                len(time_index),
+                len(index),
+                self.number_of_frequencies,
+                self.number_of_directions ) )
+            mask = index >= 0
+            for it in time_index:
+                    output[ it,  mask,:,:] = self.__getitem__(it,index[mask])
+                    output[ it, ~mask,:,:] =numpy.nan
+            return output
+
+        output_shape = ( len(points['latitude']),
+                         self.number_of_frequencies,
+                         self.number_of_directions)
+
+        return interpolate_points_nd(
+            coordinates, points, periodic_coordinates,_get_data,
+            period_data=None,discont=360, output_shape=output_shape
+        )

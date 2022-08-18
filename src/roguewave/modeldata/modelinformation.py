@@ -5,7 +5,7 @@ from json import load
 from os.path import expanduser
 from roguewave.modeldata.timebase import ModelTimeConfiguration, \
     TimeSlice
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Literal, Mapping
 
 
 # Model private variables
@@ -21,7 +21,7 @@ except FileNotFoundError as e:
 
 # Classes
 # =============================================================================
-
+model_type = Literal['analysis','forecast']
 
 class _RemoteResourceSpecification:
     """
@@ -34,6 +34,7 @@ class _RemoteResourceSpecification:
                  uri_path_template: str,
                  filetype: str = 'netcdf',
                  scheme: str = 's3',
+                 model_type: model_type = 'analysis',
                  mapping_variable_name_model_to_sofar: Dict[str,str] = None,
                  single_variable_per_file: bool = True,
                  model_time_configuration: dict = None):
@@ -48,7 +49,11 @@ class _RemoteResourceSpecification:
         """
         self.name = name
         self.scheme = scheme
-        self.uri_path_template = uri_path_template
+        self.model_type = model_type
+        if not isinstance(uri_path_template,Mapping):
+            self._uri_path_template = {"default":uri_path_template}
+        else:
+            self._uri_path_template = uri_path_template
         self.filetype = filetype
         self.mapping_variable_name_model_to_sofar = \
             mapping_variable_name_model_to_sofar
@@ -60,6 +65,13 @@ class _RemoteResourceSpecification:
             self.model_time_configuration = ModelTimeConfiguration(
                 **model_time_configuration
             )
+
+    def uri_path_template(self, variable):
+        if variable not in self._uri_path_template:
+            return self._uri_path_template['default']
+        else:
+            return self._uri_path_template[variable]
+
 
     def to_sofar_variable_name(self,variable_name: str) -> str:
         """
@@ -190,7 +202,7 @@ def list_available_variables(model_name, init_time: datetime = None):
     s3 = boto3_resource('s3')
 
 
-    if 'variable' not in model.uri_path_template:
+    if 'variable' not in model.uri_path_template('default'):
         raise ValueError('Listing variables for a particular model only works'
                          'if the variable name is part of the aws keys.')
 

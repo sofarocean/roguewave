@@ -4,8 +4,8 @@ from roguewave.spotterapi import get_spectrum
 from roguewave.modeldata.open_remote_restart_files import \
     open_remote_restart_file
 from roguewave.interpolate.dataset import \
-    interpolate_dataset_along_coordinate, \
-    interpolate_dataset_along_coordinates
+    interpolate_dataset_along_axis, \
+    interpolate_dataset_grid
 from roguewave.modeldata.timebase import TimeSlice
 from roguewave.interpolate.geometry import TrackSet
 from roguewave.wavespectra import wave_spectra_as_data_set
@@ -42,11 +42,11 @@ def colocate_model_spotter_spectra(
         spotter_data = wave_spectra_as_data_set(spotters[spotter_id])
 
         if timebase == 'model':
-            spotter_data = interpolate_dataset_along_coordinate(
+            spotter_data = interpolate_dataset_along_axis(
                 to_datetime64(stack.time),spotter_data,'time')
 
         if spectral_domain == 'model':
-            spotter_data =interpolate_dataset_along_coordinates(
+            spotter_data =interpolate_dataset_grid(
                 coordinates={
                     'frequency':stack.frequency,
                      'direction': stack.direction

@@ -31,7 +31,7 @@ from roguewave.wavetheory.lineardispersion import \
     jacobian_wavenumber_to_radial_frequency
 from roguewave.wavewatch3.restart_file_metadata import MetaData
 from typing import Sequence, Union, Tuple, Mapping
-from roguewave.interpolate.points import interpolate_points_nd
+from roguewave.interpolate.nd_interp import NdInterpolator
 from datetime import datetime
 from functools import cache
 from roguewave.tools.time import to_datetime_utc, to_datetime64
@@ -679,7 +679,8 @@ class RestartFileStack:
 
         periodic_coordinates = {"longitude":360}
 
-        def _get_data(  indices ):
+
+        def _get_data(  indices , idims):
             time_index = indices[0]
             index = self._grid.index(latitude_index=indices[1],
                                      longitude_index=indices[2])
@@ -695,14 +696,27 @@ class RestartFileStack:
             output[ ~mask,:,:] =numpy.nan
             return output
 
-        output_shape = ( len(points['latitude']),
-                         self.number_of_frequencies,
-                         self.number_of_directions)
-
-        dataset = interpolate_points_nd(
-            coordinates, points, periodic_coordinates,_get_data,
-            period_data=None,discont=360, output_shape=output_shape
+        data_shape = [ len(self.time), len(self.latitude), len(self.longitude),
+                       self.number_of_frequencies,self.number_of_directions]
+        data_coordinates = (
+            ('time',to_datetime64(self.time)),
+            ('latitude', self.latitude),
+            ('longitude', self.longitude),
+            ('frequency',self.frequency),
+            ('direction', self.direction)
         )
+
+        interpolator = NdInterpolator(
+            get_data=_get_data,
+            data_coordinates=data_coordinates,
+            data_shape=data_shape,
+            interp_coord_names=list(points.keys()),
+            interp_index_coord_name='time',
+            data_periodic_coordinates=periodic_coordinates,
+            data_period=None,
+            data_discont=None
+        )
+        dataset = interpolator.interpolate(points)
         return Dataset(
             data_vars={
                 "variance_density": (

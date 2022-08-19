@@ -87,7 +87,7 @@ def interpolate_points_nd(
 
 
 
-        weights_sum[mask,...] += intp_weight_nd[mask,...]
+        weights_sum[mask,...] += intp_weight_nd[mask]
         interp_val[mask,...] += intp_weight_nd[mask,...] * val[mask,...]
 
     interp_val = numpy.where(

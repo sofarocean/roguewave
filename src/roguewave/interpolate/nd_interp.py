@@ -4,86 +4,74 @@ from roguewave.tools.math import wrapped_difference
 from roguewave.tools.grid import enclosing_points_1d
 from roguewave.interpolate.general import interpolation_weights_1d
 
-class DataAccesser():
+class NdInterpolator():
     def __init__(self,
                  get_data:Callable[
                      [List[numpy.ndarray],List[int]],numpy.ndarray],
                  data_coordinates,
                  data_shape,
-                 interpolating_loc: Mapping[str, numpy.ndarray],
-                 interp_index_coord_name: str
+                 interp_coord_names,
+                 interp_index_coord_name: str,
+                 data_periodic_coordinates,
+                 data_period = None,
+                 data_discont = None,
                  ):
 
         self.get_data = get_data
         self.coord = [ x[0] for x in data_coordinates]
         self.data_shape = data_shape
-        self.interpolating_loc = interpolating_loc
+        self.interp_coord_names = interp_coord_names
         self.interp_index_coord_name = interp_index_coord_name
-        self.interp_index_coord_index = 0
         self.data_coordinates = data_coordinates
+        self.data_periodic_coordinates = data_periodic_coordinates
+        self.data_period = data_period
+        self.data_discont = data_discont
 
-        # Here we try to do three things:
-        #
-        # 1) Assert the length of the index coordinate (easy) and assert that
-        #    all given path coordinates have the length of the parametrizing
-        #    coordinate of the path.
-        # 2) Find the ordinal number set (zero based) of the dimension of the
-        #    the interpolating coordinate in the m-dimensional data.
-        # 3) Find the ordinal number set (zero based) of the trailing
-        #    (or passive) coordinates in the interpolation.
-        #
-        # Implementation wise we assuming everything is a passive coordinate
-        # at first, and pop coordinates from the list as we find interpolating
-        # coordinates to add to the interpolation coordinate set.
-        self.length_index_coordinate = 0
-        self.interp_coord_dim_indices = []
-        self.passive_coord_dim_indices = list(range(self.data_ndims))
-        for intp_coord_name,intp_coord in interpolating_loc.items():
-            # Check for 1.
-            if self.length_index_coordinate> 0:
-                assert len(intp_coord) == self.length_index_coordinate
-            self.length_index_coordinate = len(intp_coord)
+    @property
+    def passive_coordinate_names(self):
+        return [ name for name in self.coord
+                 if name not in self.interp_coord_names ]
 
-            # Find the ordinal of the interpolating coordinate
-            self.interp_coord_dim_indices.append( self.coord.index(intp_coord_name )
-            )
-            if intp_coord_name == self.interp_index_coord_name:
-                self.interp_index_coord_index = \
-                    self.interp_coord_dim_indices[-1]
+    @property
+    def passive_coord_dim_indices(self) -> List[int]:
+        return [ self.coord.index(x) for x in self.passive_coordinate_names ]
 
-            # Pop the interpolating coordinate from the passive coordinate
-            # list.
-            trailing_index = self.passive_coord_dim_indices.index(
-                self.interp_coord_dim_indices[-1]
-            )
-            _  = self.passive_coord_dim_indices.pop(trailing_index)
+    @property
+    def output_passive_coord_dim_indices(self) -> List[int]:
+        indices = list(range(self.output_ndims))
+        _ =indices.pop(indices.index(self.output_index_coord_index))
+        return tuple(indices)
 
-        # here we determine the shape of the output array - and where the
-        # index of the interpolating indexing coordinate is.
-        self.output_shape = numpy.ones(self.output_ndims,dtype='int32')
+    @property
+    def interp_coord_dim_indices(self) -> List[int]:
+        return [ self.coord.index(x) for x in self.interp_coord_names]
+
+    @property
+    def interp_index_coord_index(self):
+        return self.coord.index(self.interp_index_coord_name)
+
+    def output_shape(self, number_of_points) -> numpy.ndarray:
+        output_shape = numpy.ones(self.output_ndims, dtype='int32')
+        interpolating_index = self.output_index_coord_index
+        passive_ind = self.passive_coord_dim_indices
         jj = 0
-        self.output_passive_dims = numpy.zeros(self.output_ndims-1,dtype='int32')
-        found = False
         for index in range(self.output_ndims):
-            if (self.interp_index_coord_index <
-                self.passive_coord_dim_indices[jj]) and not found:
-                found = True
-                self.output_shape[index] = self.length_index_coordinate
-                self.output_index_coord_index = index
+            if index == interpolating_index:
+                output_shape[index] = number_of_points
             else:
-                self.output_shape[index] = self.data_shape[
-                    self.passive_coord_dim_indices[jj]]
-                self.output_passive_dims[jj] = index
+                output_shape[index] = self.data_shape[ passive_ind[jj] ]
                 jj+=1
+        return output_shape
 
+    @property
+    def output_index_coord_index(self) -> int:
+        return numpy.searchsorted(self.passive_coord_dim_indices,
+                           self.interp_index_coord_index)
 
     @property
     def interpolating_coordinates(self) -> List[Tuple[str,numpy.ndarray]]:
-        out = []
-        for coordinate_name, coordinate in self.data_coordinates:
-            if coordinate_name in self.interpolating_loc:
-                out.append((coordinate_name, coordinate))
-        return out
+        return [ x for x in self.data_coordinates
+                 if x[0] in self.interp_coord_names]
 
     @property
     def output_ndims(self):
@@ -91,7 +79,7 @@ class DataAccesser():
 
     @property
     def interp_ndims(self):
-        return len(self.interpolating_loc)
+        return len(self.interp_coord_names)
 
     @property
     def data_ndims(self):
@@ -107,98 +95,96 @@ class DataAccesser():
         indicer[self.output_index_coord_index] = slicer
         return tuple(indicer)
 
+    def coordinate_period(self, coordinate_name):
+        if coordinate_name in self.data_periodic_coordinates:
+            return self.data_periodic_coordinates[coordinate_name]
+        else:
+            return None
 
-def interpolate_points_nd(
-        data_accessing:DataAccesser,
+    @property
+    def data_is_periodic(self):
+        return self.data_period is not None
+
+    def interpolate(
+        self,
         points,
-        periodic_coordinates,
-        period_data,
-        discont,
         ):
-    """
+        """
 
-    :param data_accessing:
-    :param points:
-    :param periodic_coordinates:
-    :param period_data:
-    :param discont:
-    :return:
-    """
+        :param self:
+        :param interpolatinc_loc:
+        :param periodic_coordinates:
+        :param period_data:
+        :param discont:
+        :return:
+        """
+        number_points = len( points[self.interp_coord_names[0]])
+
+        # Find indices and weights for the succesive 1d interpolation problems
+        indices_1d = numpy.empty((self.interp_ndims, 2,
+                                  number_points), dtype='int64')
+
+        weights_1d = numpy.empty((self.interp_ndims, 2,
+                                  number_points), dtype='float64')
+
+        for index, (coordinate_name, coordinate) in enumerate(
+                self.interpolating_coordinates):
+
+            period = self.coordinate_period(coordinate_name)
+            indices_1d[index, :, :] = enclosing_points_1d(
+                coordinate, points[coordinate_name], period=period )
+            weights_1d[index, :, :] = interpolation_weights_1d(
+                coordinate, points[coordinate_name],
+                indices_1d[index, :, :], period=period)
 
 
-    number_interp_coor = data_accessing.interp_ndims
-    number_points = data_accessing.length_index_coordinate
+        # We keep a running sum of the weights, if a point is excluded because it
+        # contains no data (NaN) the weights will no longer add up to 1 - and we
+        # reschale to account for the missing value. This is an easy way to account
+        # for interpolation near missing points. Note that if the contribution of
+        # missing weights ( 1-weights_sum) exceeds 0.5 - we consider the point
+        # invalid.
+        output_shape = self.output_shape(number_points)
+        weights_sum = numpy.zeros(output_shape)
 
-    # Find indices and weights for the succesive 1d interpolation problems
-    indices_1d = numpy.empty((number_interp_coor, 2, number_points), dtype='int64')
-    weights_1d = numpy.empty((number_interp_coor, 2, number_points), dtype='float64')
-
-    for index, (coordinate_name, coordinate) in enumerate(
-            data_accessing.interpolating_coordinates):
-
-        if coordinate_name in periodic_coordinates:
-            period = periodic_coordinates[coordinate_name]
+        if self.data_is_periodic:
+            interp_val = numpy.zeros(output_shape,dtype=numpy.complex64)
         else:
-            period = None
+            interp_val = numpy.zeros(output_shape,dtype=numpy.float64)
 
-        indices_1d[index, :, :] = enclosing_points_1d(
-            coordinate, points[coordinate_name], period=period )
-        weights_1d[index, :, :] = interpolation_weights_1d(
-            coordinate, points[coordinate_name],
-            indices_1d[index, :, :], period=period)
+        for intp_indices_nd, intp_weight_nd in _next_point(
+                self.interp_ndims, indices_1d, weights_1d):
+            # Loop over all interpolation points one at a time.
+            if self.data_is_periodic:
+                to_rad = numpy.pi * 2 / self.data_period
+                val = numpy.exp(1j * self.get_data(
+                    intp_indices_nd, self.interp_coord_dim_indices)
+                                * to_rad)
+            else:
+                val = self.get_data(intp_indices_nd,
+                                self.interp_coord_dim_indices)
 
+            mask = numpy.all(numpy.isfinite(val),
+                             axis=self.output_passive_coord_dim_indices)
 
-    # We keep a running sum of the weights, if a point is excluded because it
-    # contains no data (NaN) the weights will no longer add up to 1 - and we
-    # reschale to account for the missing value. This is an easy way to account
-    # for interpolation near missing points. Note that if the contribution of
-    # missing weights ( 1-weights_sum) exceeds 0.5 - we consider the point
-    # invalid.
-    weights_sum = numpy.zeros(data_accessing.output_shape)
+            weights_sum[self.output_indexing_full(mask)] += \
+                intp_weight_nd[self.output_indexing_broadcast(mask)]
 
-    if period_data is not None:
-        interp_val = numpy.zeros(data_accessing.output_shape,
-                                 dtype=numpy.complex64)
-    else:
-        interp_val = numpy.zeros(data_accessing.output_shape,
-                                 dtype=numpy.float64)
+            interp_val[self.output_indexing_full(mask)] += \
+                intp_weight_nd[self.output_indexing_broadcast(mask)] \
+                * val[self.output_indexing_full(mask)]
 
-    for intp_indices_nd, intp_weight_nd in _next_point(
-            number_interp_coor, indices_1d, weights_1d):
-        # Loop over all interpolation points one at a time.
-        if period_data is not None:
-            to_rad = numpy.pi * 2 / period_data
-            val = numpy.exp(1j * data_accessing.get_data(
-                intp_indices_nd, data_accessing.interp_coord_dim_indices)
-                            * to_rad)
-        else:
-            try:
-                val = data_accessing.get_data(intp_indices_nd,
-                                    data_accessing.interp_coord_dim_indices)
-            except Exception as e:
-                raise e
+        interp_val = numpy.where(
+            weights_sum > 0.5, interp_val / weights_sum, numpy.nan)
 
-        mask = numpy.all( numpy.isfinite(val),
-                          axis=tuple(data_accessing.output_passive_dims))
+        if self.data_is_periodic:
+            to_data_units =  self.data_period / numpy.pi / 2
+            interp_val = wrapped_difference(
+                delta=numpy.angle(interp_val) * to_data_units,
+                period=self.data_period,
+                discont=self.data_period)
 
-        weights_sum[data_accessing.output_indexing_full(mask)] += \
-            intp_weight_nd[data_accessing.output_indexing_broadcast(mask)]
-
-        interp_val[data_accessing.output_indexing_full(mask)] += \
-            intp_weight_nd[data_accessing.output_indexing_broadcast(mask)] \
-            * val[data_accessing.output_indexing_full(mask)]
-
-    interp_val = numpy.where(
-        weights_sum > 0.5, interp_val / weights_sum, numpy.nan)
-
-    if period_data is not None:
-        to_data_units =  period_data / numpy.pi / 2
-        interp_val = wrapped_difference(
-            delta=numpy.angle(interp_val) * to_data_units,
-            period=period_data,
-            discont=discont)
-
-    return interp_val
+        return interp_val
 
 
 def _next_point(recursion_depth,

@@ -6,10 +6,10 @@ from roguewave.interpolate.dataarray import interpolate_track_data_arrray
 from roguewave.interpolate.dataframe import interpolate_dataframe_time
 from roguewave.interpolate.geometry import Geometry, convert_to_track_set
 #from roguewave.interpolate.points import interpolate_points_nd
-from roguewave.interpolate.nd_interp import interpolate_points_nd, DataAccesser
+from roguewave.interpolate.nd_interp import NdInterpolator
 
 
-def interpolate_dataset_along_coordinates(
+def interpolate_dataset_grid(
         coordinates,
         data_set: Dataset,
         periodic_data: Mapping[str, Tuple[int, int]] = None,
@@ -32,12 +32,12 @@ def interpolate_dataset_along_coordinates(
             first = False
         else:
             _data_set = return_data_set
-        return_data_set = interpolate_dataset_along_coordinate(
+        return_data_set = interpolate_dataset_along_axis(
             coordinate_value, _data_set,coordinate_name
         )
 
 
-def interpolate_dataset_along_coordinate(
+def interpolate_dataset_along_axis(
         coordinate_value,
         data_set: Dataset,
         coordinate_name: str = 'time',
@@ -77,21 +77,23 @@ def interpolate_dataset_along_coordinate(
                 index[idim] = interp_index
             return data_set[variable].values[tuple(index)]
 
-        data_accessing = DataAccesser(get_data,
-                                      data_coordinates,
-                                      data_set[variable].shape,
-                                      points,
-                                      coordinate_name
-                                      )
+        data_accessing = NdInterpolator(get_data,
+                                        data_coordinates,
+                                        data_set[variable].shape,
+                                        list(points.keys()),
+                                        coordinate_name,
+                                        periodic_coordinates,
+                                        period_data,
+                                        discont_data
+                                        )
 
-        coords = data_set.coords
-        coords[coordinate_name] = coordinate_value
+        coor = { value[0]:value[1] for value in data_coordinates }
+        for coor_name,coor_value in points.items():
+            coor[coor_name] = coor_value
+
         return_data_set[variable] = DataArray(
-            data=interpolate_points_nd(
-                data_accessing, points, periodic_coordinates,
-                period_data,discont_data
-            ),
-            coords=coords,
+            data=data_accessing.interpolate(points),
+            coords=coor,
             dims=data_set.dims
         )
 

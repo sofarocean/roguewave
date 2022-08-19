@@ -1,36 +1,35 @@
 from typing import Mapping, Sequence, Union
-from pandas import DataFrame
+from xarray import Dataset
 from roguewave.spotterapi import get_spectrum
-from roguewave.interpolate.dataset import tracks_as_dataset
-from roguewave.modeldata.open_remote_restart_files import open_remote_restart_file
-from roguewave.interpolate.dataframe import interpolate_dataframe_time
+from roguewave.modeldata.open_remote_restart_files import \
+    open_remote_restart_file
+from roguewave.interpolate.dataset import \
+    interpolate_dataset_along_coordinate, \
+    interpolate_dataset_along_coordinates
 from roguewave.modeldata.timebase import TimeSlice
 from roguewave.interpolate.geometry import TrackSet
-from roguewave.wavespectra import wave_spectra_as_data_array
+from roguewave.wavespectra import wave_spectra_as_data_set
+from roguewave.tools.time import to_datetime64
 
 
 # =============================================================================
 def colocate_model_spotter_spectra(
         variable: str,
         spotter_ids: Sequence[str],
-        time_slice:TimeSlice,
+        time_slice: TimeSlice,
         model_name: str,
         model_definition: str,
         cache: bool = True,
         cache_name: str = None,
-        timebase:str = 'native',
-) -> Mapping[str,Mapping[str,DataFrame]]:
+        spectral_domain: str = 'native',
+        timebase: str = 'native',
+) -> Mapping[str, Mapping[str, Dataset]]:
 
-    # dataset = open_remote_dataset(
-    #     variable=variable,
-    #     time_slice=time_slice,
-    #     model_name=model_name,
-    #     cache_name=cache_name
-    # )
-    stack = open_remote_restart_file(variable,time_slice, model_name,
-                            model_definition,cache_name=cache_name,cache=cache)
+    stack = open_remote_restart_file(variable, time_slice, model_name,
+                                     model_definition, cache_name=cache_name,
+                                     cache=cache)
     spotters = get_spectrum(spotter_ids, time_slice.start_time,
-                                  time_slice.end_time,cache=cache)
+                            time_slice.end_time, cache=cache)
 
     if timebase == 'native':
         trackset = TrackSet.from_spotters(spotters).interpolate(stack.time)
@@ -40,7 +39,23 @@ def colocate_model_spotter_spectra(
         trackset = TrackSet.from_spotters(spotters).interpolate(stack.time)
 
     for spotter_id in spotters:
-        spotters[spotter_id] = wave_spectra_as_data_array(spotters[spotter_id])
+        spotter_data = wave_spectra_as_data_set(spotters[spotter_id])
+
+        if timebase == 'model':
+            spotter_data = interpolate_dataset_along_coordinate(
+                to_datetime64(stack.time),spotter_data,'time')
+
+        if spectral_domain == 'model':
+            spotter_data =interpolate_dataset_along_coordinates(
+                coordinates={
+                    'frequency':stack.frequency,
+                     'direction': stack.direction
+                },
+                data_set=spotter_data
+            )
+
+            
+        spotters[spotter_id] = spotter_data
 
     model = stack.interpolate_tracks(trackset)
     out = {}
@@ -49,4 +64,3 @@ def colocate_model_spotter_spectra(
                         'model': model[spotter]}
 
     return out
-

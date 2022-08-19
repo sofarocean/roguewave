@@ -6,32 +6,37 @@ from roguewave.interpolate.general import interpolation_weights_1d
 
 
 def interpolate_points_nd(
-        coordinates,
+        interpolating_coordinates,
         points,
         periodic_coordinates,
         get_data:Callable[ [List[numpy.ndarray]],numpy.ndarray],
         period_data,
         discont,
-        output_shape = None
+        output_shape = None,
+        full_coordinates = None
         ):
     """
 
+    :param interpolating_coordinates:
+    :param points:
+    :param periodic_coordinates:
+    :param get_data:
     :param period_data:
-    :param indices_1d:
-    :param weights_1d:
-    :param data_array:
     :param discont:
+    :param output_shape:
+    :param full_coordinates:
     :return:
     """
 
-    number_coor = len(coordinates)
-    number_points = len( points[coordinates[0][0]] )
+
+    number_interp_coor = len(interpolating_coordinates)
+    number_points = len(points[interpolating_coordinates[0][0]])
 
     # Find indices and weights for the succesive 1d interpolation problems
-    indices_1d = numpy.empty((number_coor, 2, number_points), dtype='int64')
-    weights_1d = numpy.empty((number_coor, 2, number_points), dtype='float64')
+    indices_1d = numpy.empty((number_interp_coor, 2, number_points), dtype='int64')
+    weights_1d = numpy.empty((number_interp_coor, 2, number_points), dtype='float64')
 
-    for index, (coordinate_name, coordinate) in enumerate(coordinates):
+    for index, (coordinate_name, coordinate) in enumerate(interpolating_coordinates):
         if coordinate_name in periodic_coordinates:
             period = periodic_coordinates[coordinate_name]
         else:
@@ -49,20 +54,20 @@ def interpolate_points_nd(
     # for interpolation near missing points. Note that if the contribution of
     # missing weights ( 1-weights_sum) exceeds 0.5 - we consider the point
     # invalid.
-    shape = numpy.ones(len(output_shape),dtype='int32')
-    shape[0] = number_points
-    weights_sum = numpy.zeros(shape)
+
+
 
     if output_shape is None:
         output_shape = (number_points,)
-
+    shape =output_shape
+    weights_sum = numpy.zeros(shape)
     if period_data is not None:
         interp_val = numpy.zeros(output_shape, dtype=numpy.complex64)
     else:
         interp_val = numpy.zeros(output_shape, dtype=numpy.float64)
 
     for intp_indices_nd, intp_weight_nd in _next_point(
-            number_coor, indices_1d, weights_1d):
+            number_interp_coor, indices_1d, weights_1d):
         # Loop over all interpolation points one at a time.
         if period_data is not None:
             to_rad = numpy.pi * 2 / period_data
@@ -73,13 +78,14 @@ def interpolate_points_nd(
             except Exception as e:
                 raise e
 
-        intp_weight_nd = numpy.reshape(intp_weight_nd,shape)
         mask = numpy.isfinite(val)
         ndim = mask.ndim
 
         while ndim > 1:
             mask = numpy.all( mask,axis=-1 )
             ndim = mask.ndim
+
+
 
         weights_sum[mask,...] += intp_weight_nd[mask,...]
         interp_val[mask,...] += intp_weight_nd[mask,...] * val[mask,...]

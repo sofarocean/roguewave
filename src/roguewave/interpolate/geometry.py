@@ -200,6 +200,7 @@ class TrackSet(_Geometry):
         return ClusterStack(time,clusters)
 
     def interpolate(self, time) -> "TrackSet":
+        time = to_datetime64(time)
         tracks = {}
         for id,track in self.tracks.items():
             tracks[id] = track.interpolate(time)

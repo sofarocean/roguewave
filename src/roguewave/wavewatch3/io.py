@@ -78,9 +78,7 @@ def open_restart_file_stack( uris, model_definition_file,
     meta_data = None
     for uri in uris:
         restart_file_resource = create_resource(uri,'rb',cache,cache_name)
-        if first:
-            meta_data = read_header(restart_file_resource)
-            first = False
+        meta_data = read_header(restart_file_resource)
         restart_files.append(
             RestartFile(grid, meta_data, restart_file_resource, depth)
         )

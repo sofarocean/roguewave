@@ -34,9 +34,9 @@ from typing import Sequence, Union, Tuple, Mapping
 from roguewave.interpolate.points import interpolate_points_nd
 from datetime import datetime
 from functools import cache
-from roguewave.tools.time import to_datetime64
+from roguewave.tools.time import to_datetime_utc, to_datetime64
 from roguewave.interpolate.geometry import TrackSet
-from xarray import DataArray, Dataset
+from xarray import DataArray, Dataset, concat
 
 
 class RestartFile(Sequence):
@@ -167,45 +167,6 @@ class RestartFile(Sequence):
         """
         return self.number_of_spatial_points
 
-    def __getitem__(self, s:Union[slice,numpy.ndarray,Sequence,int]
-                    ) -> numpy.ndarray:
-        """
-        Dunder method for the Sequence protocol. If obj is an instance of
-        RestartFile, this allows us to use `obj[10:13]` to get spectra with
-        linear indices 10 to 12.
-
-        Input can either be a integer, slice, or fancy indexing through
-        a sequency of numbers or a 1d numpy integer array.
-
-        :param s: slice, integer, 1d numpy integer array, Sequence of integers.
-        :return: We return the requested spectra. Depending on how we setup
-            the object we return frequency energy density spectra (default) or
-            wavenumber spectra. Returned data is of type float32 and has
-            the shape:
-                (number_of_spatial_points_requested,
-                number_of_frequencies,
-                number_of_directions)
-        """
-        if isinstance(s, Sequence) or isinstance(s, numpy.ndarray):
-            data = self._fancy_index(s)
-        else:
-            data = self._sliced_index(s)
-
-        if self._convert:
-            # Are we using raw wavenumbers or frequency spectra
-            jacobian = self.to_frequency_energy_density(s)
-            data = data * jacobian
-
-        if isinstance(s,slice):
-            s = range(*slice.indices(self.number_of_spatial_points))
-
-        return Dataset(
-            data_vars={
-                "variance_density": ( ('linear index','frequency','direction'),data )}
-            coords={"linear index":
-            }
-        )
-
     def _sliced_index(self,s:slice) -> numpy.ndarray:
         """
         Get wavenumber action density spectra at sliced indices.
@@ -255,6 +216,58 @@ class RestartFile(Sequence):
                 self.number_of_directions
             )
         )
+
+    def __getitem__(self, s:Union[slice,numpy.ndarray,Sequence,int]
+                    ) -> Dataset:
+        """
+        Dunder method for the Sequence protocol. If obj is an instance of
+        RestartFile, this allows us to use `obj[10:13]` to get spectra with
+        linear indices 10 to 12.
+
+        Input can either be a integer, slice, or fancy indexing through
+        a sequency of numbers or a 1d numpy integer array.
+
+        :param s: slice, integer, 1d numpy integer array, Sequence of integers.
+        :return: We return the requested spectra. Depending on how we setup
+            the object we return frequency energy density spectra (default) or
+            wavenumber spectra. Returned data is of type float32 and has
+            the shape:
+                (number_of_spatial_points_requested,
+                number_of_frequencies,
+                number_of_directions)
+        """
+        if isinstance(s, Sequence) or isinstance(s, numpy.ndarray):
+            data = self._fancy_index(s)
+        else:
+            data = self._sliced_index(s)
+
+        if self._convert:
+            # Are we using raw wavenumbers or frequency spectra
+            jacobian = self.to_frequency_energy_density(s)
+            data = data * jacobian
+
+        if isinstance(s,slice):
+            s = list(range(*s.indices(self.number_of_spatial_points)))
+        elif isinstance(s,(int,numpy.int32,numpy.int64)):
+            s = [s]
+
+        coords = self.coordinates(s)
+        return Dataset(
+            data_vars={
+                "variance_density": (
+                    ('point_index','frequency','direction'),data ),
+                "longitude": (
+                    ('point_index'),coords[1] ),
+                "latitude": (
+                    ('point_index'), coords[0]),
+                "linear_index": (
+                    ('point_index'), s),
+            },
+            coords={
+                "point index": numpy.arange(0,len(s) ),
+                'frequency':self.frequency,
+                'direction':self.direction
+            })
 
 
     def _fancy_index(self, indices:Union[Sequence,numpy.ndarray]
@@ -515,7 +528,7 @@ class RestartFileStack:
     def __init__(self, restart_files: Sequence[RestartFile]):
         self._restart_files = restart_files
         self._grid = restart_files[0]._grid
-        self._time = to_datetime64([ x.time for x in restart_files ])
+        self._time = to_datetime_utc([ x.time for x in restart_files ])
 
     @property
     def frequency(self) -> numpy.ndarray:
@@ -603,7 +616,7 @@ class RestartFileStack:
         return self.number_of_frequencies * self.number_of_directions
 
     @property
-    def time(self) -> numpy.ndarray:
+    def time(self) -> Sequence[datetime]:
         return self._time
 
     def __len__(self):
@@ -619,22 +632,27 @@ class RestartFileStack:
         else:
             raise ValueError('unexpected number of indices')
 
-        if isinstance(time_index,slice):
-            time_index = list(range(*time_index.indices(len(self))))
-            return [self._restart_files[it][linear_index] for it in time_index]
-        elif isinstance(time_index,(int,numpy.int32,numpy.int64)):
+        if isinstance(time_index,(int,numpy.int32,numpy.int64)):
             time_index = [time_index]
 
-        data = [self._restart_files[it][ilin] for it,ilin in zip(time_index,linear_index)]
-        data = numpy.squeeze(numpy.array(data))
-        return data
+        if isinstance(time_index,slice):
+            time = self.time[time_index]
+            time_index = list(range(*time_index.indices(len(self))))
+            data = [self._restart_files[it][linear_index] for it in time_index]
+        else:
+            time = [self.time[it] for it in time_index]
+            data = [self._restart_files[it][ilin] for it,ilin
+                    in zip(time_index,linear_index)]
 
+        data = concat( data , dim='time',  )
+        data.coords['time'] = to_datetime64(time)
+        return data
 
 
     def interpolate(self,latitude:Union[numpy.ndarray,float],
                         longitude:Union[numpy.ndarray,float],
                         time:Union[numpy.ndarray,numpy.datetime64,datetime]
-                    ) -> DataArray:
+                    ) -> Dataset:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -672,7 +690,8 @@ class RestartFileStack:
                 self.number_of_directions ) )
             mask = index >= 0
 
-            output[  mask,:,:] = self.__getitem__((time_index,index[mask]))
+            output[  mask,:,:] = numpy.squeeze(
+                self.__getitem__((time_index[mask],index[mask]))['variance_density'])
             output[ ~mask,:,:] =numpy.nan
             return output
 
@@ -684,15 +703,20 @@ class RestartFileStack:
             coordinates, points, periodic_coordinates,_get_data,
             period_data=None,discont=360, output_shape=output_shape
         )
-        return DataArray(
-            data=dataset,
-            coords={
-                'time':time,'frequency':self.frequency,
-                'direction':self.direction
+        return Dataset(
+            data_vars={
+                "variance_density": (
+                    ('time','frequency','direction'),dataset ),
+                "longitude": (
+                    ('time'),longitude ),
+                "latitude": (
+                    ('time'),latitude),
             },
-            dims = ['time','frequency','direction'],
-            name = 'variance density'
-        )
+            coords={
+                'time':time,
+                'frequency':self.frequency,
+                'direction':self.direction
+            })
 
     def interpolate_tracks(self,tracks:TrackSet
                           ) -> Mapping[str,DataArray]:

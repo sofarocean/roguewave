@@ -16,7 +16,7 @@ def interpolate_cluster(
                'longitude': cluster.longitude}
 
     interpolated_points = interpolate_points_nd(
-        coordinates=coordinates,
+        interpolating_coordinates=coordinates,
         points=_points,
         periodic_coordinates={'longitude':360},
         get_data=get_data,

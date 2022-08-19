@@ -339,7 +339,7 @@ class RestartFile(Sequence):
 
         periodic_coordinates = {"longitude":360}
 
-        def _get_data(  indices ):
+        def _get_data(  indices, _dummy ):
             index = self._grid.index(latitude_index=indices[0],
                                      longitude_index=indices[1])
 
@@ -351,14 +351,28 @@ class RestartFile(Sequence):
             output[~mask,:,:] =numpy.nan
             return output
 
-        output_shape = ( len(points['latitude']),
-                         self.number_of_frequencies,
-                         self.number_of_directions)
 
-        return interpolate_points_nd(
-            coordinates, points, periodic_coordinates,_get_data,
-            period_data=None,discont=360, output_shape=output_shape
+        data_shape = [ len(self.latitude), len(self.longitude),
+                       self.number_of_frequencies,self.number_of_directions]
+        data_coordinates = (
+            ('latitude', self.latitude),
+            ('longitude', self.longitude),
+            ('frequency',self.frequency),
+            ('direction', self.direction)
         )
+
+        interpolator = NdInterpolator(
+            get_data=_get_data,
+            data_coordinates=data_coordinates,
+            data_shape=data_shape,
+            interp_coord_names=list(points.keys()),
+            interp_index_coord_name='time',
+            data_periodic_coordinates=periodic_coordinates,
+            data_period=None,
+            data_discont=None
+        )
+
+        return interpolator.interpolate(points)
 
     def to_wavenumber_action_density(
             self, s:Union[slice, numpy.ndarray, Sequence] ) -> numpy.array:

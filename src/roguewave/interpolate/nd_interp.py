@@ -37,7 +37,7 @@ class NdInterpolator():
         return [ self.coord.index(x) for x in self.passive_coordinate_names ]
 
     @property
-    def output_passive_coord_dim_indices(self) -> List[int]:
+    def output_passive_coord_dim_indices(self) -> Tuple[int]:
         indices = list(range(self.output_ndims))
         _ =indices.pop(indices.index(self.output_index_coord_index))
         return tuple(indices)
@@ -137,6 +137,15 @@ class NdInterpolator():
                 coordinate, points[coordinate_name],
                 indices_1d[index, :, :], period=period)
 
+        if self.data_is_periodic:
+            return self._periodic_data_interpolator(
+                number_points, indices_1d, weights_1d)
+        else:
+            return self._data_interpolator(
+                number_points, indices_1d, weights_1d)
+
+
+    def _data_interpolator(self, number_points, indices_1d, weights_1d):
 
         # We keep a running sum of the weights, if a point is excluded because it
         # contains no data (NaN) the weights will no longer add up to 1 - and we
@@ -146,22 +155,12 @@ class NdInterpolator():
         # invalid.
         output_shape = self.output_shape(number_points)
         weights_sum = numpy.zeros(output_shape)
-
-        if self.data_is_periodic:
-            interp_val = numpy.zeros(output_shape,dtype=numpy.complex64)
-        else:
-            interp_val = numpy.zeros(output_shape,dtype=numpy.float64)
+        interp_val = numpy.zeros(output_shape,dtype=numpy.float64)
 
         for intp_indices_nd, intp_weight_nd in _next_point(
                 self.interp_ndims, indices_1d, weights_1d):
             # Loop over all interpolation points one at a time.
-            if self.data_is_periodic:
-                to_rad = numpy.pi * 2 / self.data_period
-                val = numpy.exp(1j * self.get_data(
-                    intp_indices_nd, self.interp_coord_dim_indices)
-                                * to_rad)
-            else:
-                val = self.get_data(intp_indices_nd,
+            val = self.get_data(intp_indices_nd,
                                 self.interp_coord_dim_indices)
 
             mask = numpy.all(numpy.isfinite(val),
@@ -174,17 +173,49 @@ class NdInterpolator():
                 intp_weight_nd[self.output_indexing_broadcast(mask)] \
                 * val[self.output_indexing_full(mask)]
 
-        interp_val = numpy.where(
+        return numpy.where(
             weights_sum > 0.5, interp_val / weights_sum, numpy.nan)
 
-        if self.data_is_periodic:
-            to_data_units =  self.data_period / numpy.pi / 2
-            interp_val = wrapped_difference(
-                delta=numpy.angle(interp_val) * to_data_units,
+    def _periodic_data_interpolator(self,number_points, indices_1d, weights_1d):
+        # We keep a running sum of the weights, if a point is excluded because it
+        # contains no data (NaN) the weights will no longer add up to 1 - and we
+        # reschale to account for the missing value. This is an easy way to account
+        # for interpolation near missing points. Note that if the contribution of
+        # missing weights ( 1-weights_sum) exceeds 0.5 - we consider the point
+        # invalid.
+        output_shape = self.output_shape(number_points)
+        weights_sum = numpy.zeros(output_shape)
+
+        interp_val = numpy.zeros(output_shape, dtype=numpy.complex64)
+        for intp_indices_nd, intp_weight_nd in _next_point(
+                self.interp_ndims, indices_1d, weights_1d):
+            # Loop over all interpolation points one at a time.
+            to_rad = numpy.pi * 2 / self.data_period
+            val = numpy.exp(1j * self.get_data(
+                intp_indices_nd, self.interp_coord_dim_indices)
+                            * to_rad)
+
+            mask = numpy.all(numpy.isfinite(val),
+                             axis=self.output_passive_coord_dim_indices)
+
+            weights_sum[self.output_indexing_full(mask)] += \
+                intp_weight_nd[self.output_indexing_broadcast(mask)]
+
+            interp_val[self.output_indexing_full(mask)] += \
+                intp_weight_nd[self.output_indexing_broadcast(mask)] \
+                * val[self.output_indexing_full(mask)]
+
+
+        interp_val = numpy.angle(
+            numpy.where(
+                weights_sum > 0.5, interp_val / weights_sum, numpy.nan)
+        ) * self.data_period / numpy.pi / 2
+
+        return wrapped_difference(
+                delta=interp_val,
                 period=self.data_period,
                 discont=self.data_period)
 
-        return interp_val
 
 
 def _next_point(recursion_depth,

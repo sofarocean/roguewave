@@ -126,7 +126,7 @@ def worker(arg) -> Dict[str, float]:
             add_offset = get_attr_netcdf(ds.variables[variable].attrs,
                                          'add_offset', 0)
 
-            def get_data(indices):
+            def get_data(indices, _dummy):
                 value = ds[variable][
                     ..., DataArray(indices[0]), DataArray(indices[1])].values
                 value = numpy.squeeze(value)

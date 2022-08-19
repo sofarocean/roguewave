@@ -5,7 +5,6 @@ from xarray import Dataset, DataArray
 from roguewave.interpolate.dataarray import interpolate_track_data_arrray
 from roguewave.interpolate.dataframe import interpolate_dataframe_time
 from roguewave.interpolate.geometry import Geometry, convert_to_track_set
-#from roguewave.interpolate.points import interpolate_points_nd
 from roguewave.interpolate.nd_interp import NdInterpolator
 
 
@@ -35,6 +34,7 @@ def interpolate_dataset_grid(
         return_data_set = interpolate_dataset_along_axis(
             coordinate_value, _data_set,coordinate_name
         )
+    return return_data_set
 
 
 def interpolate_dataset_along_axis(

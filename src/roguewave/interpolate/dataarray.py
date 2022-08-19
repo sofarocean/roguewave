@@ -2,8 +2,7 @@ from typing import Dict, Tuple
 import numpy
 from xarray import DataArray
 
-from roguewave.interpolate.points import interpolate_points_nd
-
+from roguewave.interpolate.nd_interp import NdInterpolator
 
 
 def interpolate_track_data_arrray(data_array: DataArray,
@@ -107,13 +106,20 @@ def interpolate_track_data_arrray(data_array: DataArray,
         coordinates.append((coordinate_name,
                             data_array[coordinate_name].values))
 
-    interpolated_values = interpolate_points_nd(
-        coordinates,
-        tracks,
-        periodic_coordinates,
-        lambda y: data_array[tuple( [DataArray(x) for x in y] )].values,
-        period_data=period_data,
-        discont=discont)
+    def _get_data( indices,_dummy ):
+        return data_array[tuple([DataArray(x) for x in indices])].values
+
+    interpolator = NdInterpolator(
+        get_data=_get_data,
+        data_coordinates=coordinates,
+        data_shape=data_array.shape,
+        interp_coord_names=list(tracks.keys()),
+        interp_index_coord_name=independent_variable,
+        data_periodic_coordinates=periodic_coordinates,
+        data_period=period_data,
+        data_discont=discont
+    )
+    interpolated_values = interpolator.interpolate(tracks)
 
     return DataArray(
         interpolated_values,

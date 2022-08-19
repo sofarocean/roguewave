@@ -59,7 +59,7 @@ def colocate_model_spotter(
 
     for spotter_id in list(spotters.keys()):
         # If only one value - pop because we cannot interpolate on 1 value.
-        if spotters[spotter_id].shape[0] == 1:
+        if spotters[spotter_id].shape[0] <= 2:
             spotters.pop(spotter_id)
 
     data =  extract_from_remote_dataset( spotters, variable,

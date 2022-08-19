@@ -57,6 +57,11 @@ def colocate_model_spotter(
                                   time_slice.end_time,
                                   convert_to_sofar_model_names=True)
 
+    for spotter_id in list(spotters.keys()):
+        # If only one value - pop because we cannot interpolate on 1 value.
+        if spotters[spotter_id].shape[0] == 1:
+            spotters.pop(spotter_id)
+
     data =  extract_from_remote_dataset( spotters, variable,
                             time_slice,model_name,slice_remotely=slice_remotely,
                                 parallel=parallel, cache_name=cache_name  )

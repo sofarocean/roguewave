@@ -37,7 +37,10 @@ from functools import cache
 from roguewave.tools.time import to_datetime_utc, to_datetime64
 from roguewave.interpolate.geometry import TrackSet
 from xarray import DataArray, Dataset, concat
+from multiprocessing.pool import ThreadPool
+from tqdm import tqdm
 
+MAXIMUM_NUMBER_OF_WORKERS = 10
 
 class RestartFile(Sequence):
     _start_record = 2
@@ -47,13 +50,15 @@ class RestartFile(Sequence):
                  meta_data:MetaData,
                  resource:Resource,
                  depth:LinearIndexedGridData=None,
-                 return_freq_energy_density=True):
+                 return_freq_energy_density=True,
+                 parallel=True):
 
         self._grid = grid
         self._meta_data = meta_data
         self.resource = resource
         self._dtype = numpy.dtype("float32").newbyteorder(meta_data.byte_order)
         self._convert = return_freq_energy_density
+        self.parallel = parallel
 
         if depth is None:
             _depth = numpy.inf \
@@ -539,10 +544,15 @@ class RestartFile(Sequence):
 
 
 class RestartFileStack:
-    def __init__(self, restart_files: Sequence[RestartFile]):
+    def __init__(self, restart_files: Sequence[RestartFile],parallel = True):
         self._restart_files = restart_files
         self._grid = restart_files[0]._grid
         self._time = to_datetime_utc([ x.time for x in restart_files ])
+        self.parallel = parallel
+
+        # To make the progress bar work we need to store progress across
+        # calls somewhere.
+        self._progres = {"position":0, "total":None, "leave":True}
 
     @property
     def frequency(self) -> numpy.ndarray:
@@ -649,19 +659,64 @@ class RestartFileStack:
         if isinstance(time_index,(int,numpy.int32,numpy.int64)):
             time_index = [time_index]
 
-        if isinstance(time_index,slice):
-            time = self.time[time_index]
-            time_index = list(range(*time_index.indices(len(self))))
-            data = [self._restart_files[it][linear_index] for it in time_index]
+        fancy_index = not isinstance(time_index,slice)
+        if fancy_index:
+            _input = list(zip( time_index,linear_index ))
         else:
-            time = [self.time[it] for it in time_index]
-            data = [self._restart_files[it][ilin] for it,ilin
-                    in zip(time_index,linear_index)]
+            time_index = list(range(*time_index.indices(len(self))))
+            _input = [ (it, linear_index) for it in time_index]
+
+        def _worker( arg ):
+            return self._restart_files[arg[0]][arg[1]]
+
+        self._init_progress_bar(len(_input))
+        if self.parallel and len(_input) > 1:
+            with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
+                data = list(
+                    tqdm(
+                        pool.imap(_worker, _input),
+                        total=self._progres['total'],
+                        initial=self._progres['position'],
+                        leave=self._progres['leave']
+                    )
+                )
+        else:
+            disable_progress_bar = False
+            if len(_input) == 1:
+                disable_progress_bar = True
+
+            data = list(
+                tqdm(
+                    map(_worker, _input),
+                    total=self._progres['total'],
+                    disable=disable_progress_bar,
+                    initial=self._progres['position'],
+                    leave = self._progres['leave']
+                )
+            )
+        self._update_progress_bar(len(_input))
 
         data = concat( data , dim='time',  )
-        data.coords['time'] = to_datetime64(time)
+        data.coords['time'] = to_datetime64([self.time[it] for it in time_index])
         return data
 
+    def _init_progress_bar(self, total):
+        if self._progres['total'] is None:
+            self._progres['total'] = total
+            self._progres['position'] = 0
+            self._progres['leave'] = True
+        else:
+            if total + self._progres['position'] == self._progres['total']:
+                self._progres['leave'] = True
+            else:
+                self._progres['leave'] = False
+
+    def _update_progress_bar(self,number):
+        self._progres['position'] += number
+
+        if self._progres['position'] == self._progres['total']:
+            self._progres['total'] = None
+            self._progres['position'] = 0
 
     def interpolate(self,latitude:Union[numpy.ndarray,float],
                         longitude:Union[numpy.ndarray,float],
@@ -686,13 +741,7 @@ class RestartFileStack:
                   "longitude":numpy.atleast_1d(longitude),
                   }
 
-        coordinates = [("time",to_datetime64(self.time)),
-                        ("latitude",self.latitude),
-                       ("longitude",self.longitude),
-                       ]
-
         periodic_coordinates = {"longitude":360}
-
 
         def _get_data(  indices , idims):
             time_index = indices[0]
@@ -706,12 +755,15 @@ class RestartFileStack:
             mask = index >= 0
 
             output[  mask,:,:] = numpy.squeeze(
-                self.__getitem__((time_index[mask],index[mask]))['variance_density'])
+                self.__getitem__(
+                    (time_index[mask],index[mask]))['variance_density']
+            )
             output[ ~mask,:,:] =numpy.nan
             return output
 
         data_shape = [ len(self.time), len(self.latitude), len(self.longitude),
                        self.number_of_frequencies,self.number_of_directions]
+
         data_coordinates = (
             ('time',to_datetime64(self.time)),
             ('latitude', self.latitude),
@@ -730,7 +782,10 @@ class RestartFileStack:
             data_period=None,
             data_discont=None
         )
+
+        self._init_progress_bar(len(latitude)*8)
         dataset = interpolator.interpolate(points)
+
         return Dataset(
             data_vars={
                 "variance_density": (
@@ -747,9 +802,9 @@ class RestartFileStack:
             })
 
     def interpolate_tracks(self,tracks:TrackSet
-                          ) -> Mapping[str,DataArray]:
-        out = {}
-        for _id,track in tracks.tracks.items():
-            out[_id] = self.interpolate(track.latitude,
-                                          track.longitude,track.time)
-        return out
+                          ) -> Mapping[str,Dataset]:
+        return {
+            _id:self.interpolate(x.latitude,x.longitude,x.time)
+                                             for _id,x in tracks.tracks.items()
+        }
+

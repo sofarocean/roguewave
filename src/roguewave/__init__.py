@@ -54,6 +54,7 @@ from .modeldata.modelinformation import model_timebase, model_valid_time, \
 from roguewave.modeldata.extract import extract_from_remote_dataset
 from roguewave.colocate.bulk import colocate_model_spotter, \
     colocated_tracks_as_dataset
+from roguewave.colocate.spectra import colocate_model_spotter_spectra
 from roguewave.modeldata.keygeneration import generate_uris
 
 

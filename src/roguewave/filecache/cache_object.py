@@ -130,6 +130,7 @@ class FileCache:
         self._cache_misses = 0
         self._cache_hits = 0
         self._cache_evictions = 0
+        self.disable_progress_bar = False
 
         # initialize the cache.
         self._entries = {}  # the key/value pair cache
@@ -482,7 +483,9 @@ class FileCache:
             _ = _download_from_resources(
                 cache_misses,
                 self.resources,
-                parallel_download=self.parallel)
+                parallel_download=self.parallel,
+                disable_progress_bar=self.disable_progress_bar
+            )
 
             for cache_miss in cache_misses:
                 self._add_to_cache(cache_miss.filename,
@@ -504,7 +507,9 @@ class FileCache:
 
         # See if we need to do any cache eviction because the cache has become
         # to big.
-        self._cache_eviction()
+        if not len(cache_misses) == 0:
+            self._cache_eviction()
+
         return filepaths
 
     def _cache_eviction(self) -> bool:
@@ -578,6 +583,7 @@ class FileCache:
 def _download_from_resources(cache_misses: List[CacheMiss],
                              resources: List[RemoteResource],
                              parallel_download=False,
+                             disable_progress_bar = False,
                              ) -> List[bool]:
     """
     Wrapper function to download multiple uris from the resource(s).
@@ -621,7 +627,7 @@ def _download_from_resources(cache_misses: List[CacheMiss],
                              f'{cache_miss.uri}')
 
     # Download the requested objects.
-    if parallel_download:
+    if parallel_download and len(cache_misses) > 1:
         with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
             output = list(
                 tqdm(
@@ -630,10 +636,13 @@ def _download_from_resources(cache_misses: List[CacheMiss],
                 )
             )
     else:
+        if len(cache_misses) == 1:
+            disable_progress_bar = True
+
         output = list(
             tqdm(
                 map(_worker, cache_misses),
-                total=len(cache_misses)
+                total=len(cache_misses),disable=disable_progress_bar
             )
         )
     return output

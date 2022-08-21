@@ -13,7 +13,7 @@ def interpolate_dataset_grid(
         data_set: Dataset,
         periodic_data: Mapping[str, Tuple[int, int]] = None,
         longitude_variable_in_dataset: str = 'longitude',
-):
+) -> Dataset:
     if periodic_data is None:
         periodic_data = {}
         if longitude_variable_in_dataset in data_set:
@@ -43,7 +43,7 @@ def interpolate_dataset_along_axis(
         coordinate_name: str = 'time',
         periodic_data: Mapping[str, Tuple[int, int]] = None,
         periodic_coordinates: Dict = None,
-):
+) -> Dataset:
     if periodic_data is None:
         periodic_data = {'longitude':(360,180)}
         for variable in data_set:
@@ -59,7 +59,9 @@ def interpolate_dataset_along_axis(
     return_data_set = Dataset()
 
     for variable in data_set:
-
+        if coordinate_name not in list(data_set[variable].coords):
+            return_data_set[variable] = data_set[variable]
+            continue
 
         coordinate_names = [str(x) for x in data_set[variable].dims]
         data_coordinates = [ (name,data_set[variable].coords[name].values)
@@ -69,7 +71,7 @@ def interpolate_dataset_along_axis(
         if variable in periodic_data:
             period_data, discont_data = periodic_data[variable]
 
-        dimensions = list(data_set.dims)
+        dimensions = list(data_set[variable].dims)
 
         def get_data(indices,idims):
             index = [slice(None)] * len(dimensions)
@@ -94,7 +96,7 @@ def interpolate_dataset_along_axis(
         return_data_set[variable] = DataArray(
             data=data_accessing.interpolate(points),
             coords=coor,
-            dims=data_set.dims
+            dims=data_set[variable].dims
         )
 
     return return_data_set

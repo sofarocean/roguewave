@@ -11,8 +11,6 @@ import numpy
 from .wavespectrum import WaveSpectrum
 from typing import List, Union
 from datetime import datetime
-from xarray import Dataset
-
 
 
 class WaveSpectrum1D(WaveSpectrum):

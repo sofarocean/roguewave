@@ -11,18 +11,17 @@ Routines that can be used to save and load data.
 
 Functions:
 
-
-
 How To Use This Module
 ======================
 (See the individual functions for details.)
 
-
-
 """
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
 from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
-from roguewave.metoceandata import WaveBulkData, WindData, SSTData,BarometricPressure
+from roguewave.wavespectra.dataset_spectrum import WaveFrequencySpectrum1D, \
+    WaveFrequencySpectrum2D
+from roguewave.metoceandata import WaveBulkData, WindData, \
+    SSTData,BarometricPressure
 from pandas import DataFrame, read_json
 from typing import Union, Dict, List
 from datetime import datetime
@@ -31,6 +30,8 @@ import json
 import os
 import numpy
 import base64
+from io import BytesIO
+from xarray import Dataset,DataArray, open_dataset
 
 
 _UNION = Union[
@@ -68,6 +69,17 @@ def _b64_decode_numpy(data):
     array = numpy.frombuffer(decoded_bytes,dtype=dtype)
     return numpy.reshape(array,data['shape'])
 
+def _b64_encode_dataset(val:Dataset,name)->dict:
+    net_cdf = val.to_netcdf(engine='scipy')
+    data = base64.b64encode(net_cdf)
+    return {"__class__":name, "data":{"data":data.decode('utf8')}}
+
+def _b64_decode_dataset(data):
+    decoded_bytes = base64.b64decode(bytes(data['data'],encoding='utf-8'))
+    with BytesIO(decoded_bytes) as fp:
+        dataset = open_dataset(fp,engine='scipy')
+    return dataset
+
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, numpy.ndarray):
@@ -80,6 +92,12 @@ class NumpyEncoder(json.JSONEncoder):
             return int(obj)
         elif isinstance(obj, numpy.float64):
             return float(obj)
+        elif isinstance(obj,Dataset):
+            return _b64_encode_dataset(obj,"Dataset")
+        elif isinstance(obj,WaveFrequencySpectrum1D):
+            return _b64_encode_dataset(obj.dataset,"WaveFrequencySpectrum1D")
+        elif isinstance(obj,WaveFrequencySpectrum2D):
+            return _b64_encode_dataset(obj.dataset,"WaveFrequencySpectrum2D")
         elif isinstance(obj, datetime):
             return {'__class__':'datetime', 'data':datetime.isoformat(obj)}
         elif isinstance(obj,DataFrame):
@@ -123,6 +141,14 @@ def object_hook(dictionary:dict):
             return WaveSpectrum1D(**dictionary['data'])
         elif dictionary['__class__'] == 'WaveSpectrum2D':
             return WaveSpectrum2D(**dictionary['data'])
+        elif dictionary['__class__'] == 'Dataset':
+            return _b64_decode_dataset(dictionary['data'])
+        elif dictionary['__class__'] == 'WaveFrequencySpectrum1D':
+            return WaveFrequencySpectrum1D(
+                _b64_decode_dataset(dictionary['data']))
+        elif dictionary['__class__'] == 'WaveFrequencySpectrum2D':
+            return WaveFrequencySpectrum2D(
+                _b64_decode_dataset(dictionary['data']))
         elif dictionary['__class__'] == 'ndarray':
             return _b64_decode_numpy(dictionary['data'])
         elif dictionary['__class__'] == 'datetime':

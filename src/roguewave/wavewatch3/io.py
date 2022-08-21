@@ -41,6 +41,8 @@ from roguewave.wavewatch3.restart_file import RestartFile, RestartFileStack
 from roguewave.wavewatch3.restart_file_metadata import read_header
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
+from typing import Union
+from xarray import Dataset,DataArray
 
 
 def open_restart_file( restart_file, model_definition_file) -> RestartFile:
@@ -74,8 +76,6 @@ def open_restart_file_stack( uris, model_definition_file,
                                                 cache,cache_name)
     grid, depth, mask = read_model_definition(model_definition_resource)
 
-    first = True
-    meta_data = None
     for uri in uris:
         restart_file_resource = create_resource(uri,'rb',cache,cache_name)
         meta_data = read_header(restart_file_resource)
@@ -136,7 +136,7 @@ def reassemble_restart_file_from_parts( target_file,
         resource.write(source_restart_file.tail_bytes())
 
 
-def write_restart_file(spectra:numpy.ndarray,
+def write_restart_file(spectra:Union[Dataset,numpy.ndarray,DataArray],
                        target_file,
                        parent_restart_file:RestartFile,
                        spectra_are_frequence_energy_density=True
@@ -157,6 +157,11 @@ def write_restart_file(spectra:numpy.ndarray,
         and no transformation is applied.
     :return: None
     """
+    if isinstance(spectra,Dataset):
+        spectra = spectra['variance_density'].values
+    elif isinstance(spectra,DataArray):
+        spectra = spectra.values
+
 
     dtype = numpy.dtype('float32') #
     dtype = dtype.newbyteorder(parent_restart_file._meta_data.byte_order)
@@ -193,7 +198,7 @@ def write_restart_file(spectra:numpy.ndarray,
 
 
 def write_partial_restart_file(
-        spectra: numpy.ndarray,
+        spectra: Union[Dataset,numpy.ndarray,DataArray],
         target_file: str,
         parent_restart_file: RestartFile,
         s: slice,
@@ -223,6 +228,10 @@ def write_partial_restart_file(
         and no transformation is applied.
     :return:
     """
+    if isinstance(spectra,Dataset):
+        spectra = spectra['variance_density'].values
+    elif isinstance(spectra,DataArray):
+        spectra = spectra.values
 
     dtype = numpy.dtype('float32')  #
     dtype = dtype.newbyteorder(parent_restart_file._meta_data.byte_order)

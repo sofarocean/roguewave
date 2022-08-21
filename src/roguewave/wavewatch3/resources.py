@@ -31,6 +31,7 @@ How To Use This Module
     write binary ('wb').
 """
 from multiprocessing.pool import ThreadPool
+from multiprocessing import Lock
 from typing import Union, Sequence, List, Literal
 from io import BytesIO
 from boto3 import resource
@@ -249,6 +250,8 @@ class S3Resource(Resource):
     as if it was a regular stream (supports read, write, seek, tell). Obviously
     less performant than local IO.
     """
+    boto3_client_lock = Lock()
+
     def __init__(self, resource_location, mode:Literal['rb','wb']='rb',
                  cache:bool=False, cache_name: str = None):
         """
@@ -262,7 +265,10 @@ class S3Resource(Resource):
             resource_location.replace('s3://', '').split('/', maxsplit=1)
         self._key = key
         self._bucket = bucket
-        self.resource_handle = resource('s3')
+
+        # Creation is not thread safe. Ensure only one thread is creating.
+        with self.boto3_client_lock:
+            self.resource_handle = resource('s3')
         self._position = 0
         self._write_buffer = BytesIO()
         self._bytes_written = False

@@ -30,15 +30,16 @@ from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, \
     jacobian_wavenumber_to_radial_frequency
 from roguewave.wavewatch3.restart_file_metadata import MetaData
-from typing import Sequence, Union, Tuple, Mapping
+from typing import Sequence, Union, Tuple, Mapping,MutableMapping
 from roguewave.interpolate.nd_interp import NdInterpolator
 from datetime import datetime
 from functools import cache
 from roguewave.tools.time import to_datetime_utc, to_datetime64
 from roguewave.interpolate.geometry import TrackSet
-from xarray import DataArray, Dataset, concat
+from xarray import Dataset, concat
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
+from roguewave.wavespectra.dataset_spectrum import WaveFrequencySpectrum2D
 
 MAXIMUM_NUMBER_OF_WORKERS = 10
 
@@ -321,7 +322,7 @@ class RestartFile(Sequence):
 
     def interpolate_in_space(self,
                              latitude:Union[numpy.ndarray,float],
-                             longitude:Union[numpy.ndarray,float]) -> numpy.ndarray:
+                             longitude:Union[numpy.ndarray,float]) -> Dataset:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -339,9 +340,6 @@ class RestartFile(Sequence):
         points = {"latitude":numpy.atleast_1d(latitude),
                   "longitude":numpy.atleast_1d(longitude)}
 
-        coordinates = [("latitude",self.latitude),
-                       ("longitude",self.longitude)]
-
         periodic_coordinates = {"longitude":360}
 
         def _get_data(  indices, _dummy ):
@@ -352,7 +350,8 @@ class RestartFile(Sequence):
                                      self.number_of_frequencies,
                                      self.number_of_directions ) )
             mask = index >= 0
-            output[ mask,:,:] = self.__getitem__(index[mask])
+            output[ mask,:,:] = \
+                self.__getitem__(index[mask])['variance_density'].values
             output[~mask,:,:] =numpy.nan
             return output
 
@@ -376,8 +375,8 @@ class RestartFile(Sequence):
             data_period=None,
             data_discont=None
         )
-
-        return interpolator.interpolate(points)
+        return self._create_dataset( interpolator.interpolate(points),
+                                     numpy.arange(len(latitude)) )
 
     def to_wavenumber_action_density(
             self, s:Union[slice, numpy.ndarray, Sequence] ) -> numpy.array:
@@ -397,7 +396,7 @@ class RestartFile(Sequence):
 
     def to_frequency_energy_density(
             self, s:Union[slice, numpy.ndarray, Sequence]
-                                    ) -> numpy.array:
+                                    ) -> numpy.ndarray:
 
         """
         Factor that when multiplied with wavenumber action density spectra at
@@ -513,7 +512,7 @@ class RestartFile(Sequence):
         toggle = not self._convert
         if toggle:
             self.set_return_freq_energy_density()
-        spectra = self[index]
+        spectra = self['variance_density'][index].values
         if toggle:
             self.set_return_k_action_density()
 
@@ -541,6 +540,32 @@ class RestartFile(Sequence):
         return self.number_of_tail_bytes() + self.number_of_header_bytes() + \
                self.number_of_spatial_points * \
                self.number_of_spectral_points * self._dtype.itemsize
+
+    def linear_indices(self,indices:Union[slice,numpy.ndarray,Sequence]):
+        return numpy.arange(self.number_of_spatial_points)[indices]
+
+    def _create_dataset(self, variance_density,
+                        linear_indices: Union[slice,numpy.ndarray,Sequence]):
+
+        coords = self.coordinates(linear_indices)
+        return Dataset(
+            data_vars={
+                "variance_density": (
+                    ('point_index','frequency','direction'),variance_density),
+                "longitude": (
+                    ('point_index'),coords[1] ),
+                "latitude": (
+                    ('point_index'),coords[0]),
+                "linear_index": (
+                    ('point_index'),linear_indices),
+                "time": self.time
+            },
+            coords={
+                "point index": numpy.arange(0,len(linear_indices) ),
+                'frequency':self.frequency,
+                'direction':self.direction
+            })
+
 
 
 class RestartFileStack:
@@ -646,7 +671,7 @@ class RestartFileStack:
     def __len__(self):
         return len(self._restart_files)
 
-    def __getitem__(self, nargs):
+    def __getitem__(self, nargs) -> WaveFrequencySpectrum2D:
         if len(nargs) == 2:
             time_index, linear_index = nargs
         elif len(nargs) == 3:
@@ -698,7 +723,7 @@ class RestartFileStack:
 
         data = concat( data , dim='time',  )
         data.coords['time'] = to_datetime64([self.time[it] for it in time_index])
-        return data
+        return WaveFrequencySpectrum2D(data)
 
     def _init_progress_bar(self, total):
         if self._progres['total'] is None:
@@ -721,7 +746,7 @@ class RestartFileStack:
     def interpolate(self,latitude:Union[numpy.ndarray,float],
                         longitude:Union[numpy.ndarray,float],
                         time:Union[numpy.ndarray,numpy.datetime64,datetime]
-                    ) -> Dataset:
+                    ) -> WaveFrequencySpectrum2D:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -786,7 +811,7 @@ class RestartFileStack:
         self._init_progress_bar(len(latitude)*8)
         dataset = interpolator.interpolate(points)
 
-        return Dataset(
+        return WaveFrequencySpectrum2D(Dataset(
             data_vars={
                 "variance_density": (
                     ('time','frequency','direction'),dataset ),
@@ -799,10 +824,10 @@ class RestartFileStack:
                 'time':time,
                 'frequency':self.frequency,
                 'direction':self.direction
-            })
+            }))
 
     def interpolate_tracks(self,tracks:TrackSet
-                          ) -> Mapping[str,Dataset]:
+                          ) -> MutableMapping[str,WaveFrequencySpectrum2D]:
         return {
             _id:self.interpolate(x.latitude,x.longitude,x.time)
                                              for _id,x in tracks.tracks.items()

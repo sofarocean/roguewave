@@ -29,6 +29,7 @@ from pysofar.spotter import Spotter, SofarApi
 from roguewave import logger
 from roguewave.tools.time import datetime_to_iso_time_string, to_datetime_utc
 from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
+from roguewave.wavespectra.dataset_spectrum import WaveFrequencySpectrum1D
 from roguewave.metoceandata import WaveBulkData, as_dataframe, WindData, \
     SSTData, MetoceanData, BarometricPressure
 from typing import Dict, List, Union, TypedDict, Tuple, Sequence

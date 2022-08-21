@@ -1,84 +1,7 @@
-from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
-from roguewave.wavespectra.wavespectrum import WaveSpectrum
-from roguewave.wavespectra.estimators import spec1d_from_spec2d
-from roguewave.wavespectra.parametric import pierson_moskowitz_frequency
-from roguewave.wavespectra.estimators import convert_to_1d_spectrum
 from datetime import datetime, timezone, timedelta
-from pandas import DataFrame, Timestamp
-from typing import Union, overload, List, Dict, Tuple, TypedDict
+from pandas import DataFrame
+from typing import Union, List, Tuple, TypedDict
 import numpy
-
-
-@overload
-def is_sea_spectrum(spectrum: WaveSpectrum, coefficient=1.0) -> bool: ...
-
-
-@overload
-def is_sea_spectrum(spectrum: List[WaveSpectrum], coefficient=1.0) -> List[
-    bool]: ...
-
-
-@overload
-def is_swell_spectrum(spectrum: WaveSpectrum, coefficient=1.0) -> bool: ...
-
-
-@overload
-def is_swell_spectrum(spectrum: List[WaveSpectrum], coefficient=1.0) -> List[
-    bool]: ...
-
-
-def is_sea_spectrum(spectrum: Union[WaveSpectrum, List[WaveSpectrum]],
-                    coefficient=1.0) -> Union[bool, list[bool]]:
-    """
-    Identify whether or not it is a sea partion. Use 1D method for 2D
-    spectra in section 3 of:
-
-    Portilla, J., Ocampo-Torres, F. J., & Monbaliu, J. (2009).
-    Spectral partitioning and identification of wind sea and swell.
-    Journal of atmospheric and oceanic technology, 26(1), 107-122.
-
-    :return: boolean indicting it is sea
-    """
-
-    if not isinstance(spectrum, list):
-        spectra = [spectrum]
-        return_list = False
-    else:
-        spectra = spectrum
-        return_list = True
-
-    spectra = convert_to_1d_spectrum(spectra)
-
-    output = []
-    for _spectrum in spectra:
-        peak_index = _spectrum.peak_index()
-        peak_frequency = _spectrum.frequency[peak_index]
-
-        output.append(coefficient * pierson_moskowitz_frequency(
-            peak_frequency, peak_frequency) <= _spectrum.variance_density[
-                          peak_index])
-
-    if not return_list:
-        return output[0]
-    else:
-        return output
-
-
-def is_swell_spectrum(spectrum: Union[WaveSpectrum, List[WaveSpectrum]],
-                      coefficient=1.0) -> Union[bool, list[bool]]:
-    """
-    Identify whether or not it is a sea partion. Use 1D method for 2D
-    spectra in section 3 of:
-
-    Portilla, J., Ocampo-Torres, F. J., & Monbaliu, J. (2009).
-    Spectral partitioning and identification of wind sea and swell.
-    Journal of atmospheric and oceanic technology, 26(1), 107-122.
-
-    :return: boolean indicting it is sea
-    """
-
-    return not is_sea_spectrum(spectrum, coefficient=coefficient)
-
 
 def get_overlapped_section(model_time: numpy.ndarray,
                            model_variable: numpy.ndarray,
@@ -229,9 +152,9 @@ def match(model_fields: List[DataFrame],
             # Find the minimum lag between model and observation
             #
             lag = find_model_lag(
-                model['timestamp'],
+                model['time'],
                 [model['hm0'], model['tm01'], model['mean_direction']],
-                obs['timestamp'],
+                obs['time'],
                 [obs['hm0'], obs['tm01'], obs['mean_direction']],
                 time_buffer,
                 wrapping_angle=[None, None, 360]
@@ -247,9 +170,9 @@ def match(model_fields: List[DataFrame],
             # corrected for potential lag
             for variable, wrapping_angle in zip(variables, wrapping_angles):
                 time_utc, model_value, observed_value = get_overlapped_section(
-                    model['timestamp'] - lag,
+                    model['time'] - lag,
                     model[variable],
-                    obs['timestamp'],
+                    obs['time'],
                     obs[variable],
                     time_buffer=time_buffer,
                     wrapping_angle=wrapping_angle)

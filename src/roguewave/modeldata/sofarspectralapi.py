@@ -12,11 +12,13 @@ import json
 from pysofar import SofarConnection
 from pysofar.wavefleet_exceptions import QueryError
 from functools import cached_property
-from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
+from roguewave.wavespectra import FrequencyDirectionSpectrum, \
+    create_2d_spectrum
 import typing
 import netCDF4
 import numpy
 from typing import List, overload, Union, Dict
+from roguewave.tools.time import to_datetime64
 
 
 def get_token():
@@ -94,13 +96,13 @@ class SofarSpectralAPI(SofarConnection):
 
 
 @overload
-def load_sofar_spectral_file(filename: str)->List[WaveSpectrum2D]: ...
+def load_sofar_spectral_file(filename: str)->FrequencyDirectionSpectrum: ...
 
 @overload
-def load_sofar_spectral_file(filename: List[str])->List[List[WaveSpectrum2D]]: ...
+def load_sofar_spectral_file(filename: List[str])->List[FrequencyDirectionSpectrum]: ...
 
 @overload
-def load_sofar_spectral_file(filename: Dict[str,str])->Dict[str,List[WaveSpectrum2D]]: ...
+def load_sofar_spectral_file(filename: Dict[str,str])->Dict[str,FrequencyDirectionSpectrum]: ...
 
 def load_sofar_spectral_file(
         filename: Union[str, List[str], Dict[str, str]]):
@@ -124,20 +126,21 @@ def load_sofar_spectral_file(
                 numpy.squeeze(
                     dataset.variables['frequency_direction_spectrum'][ii, :, :])
 
-            if dataset.variables['frequency_direction_spectrum'].dimensions[1] == 'directions':
+            if dataset.variables[
+                'frequency_direction_spectrum'].dimensions[1] == 'directions':
                 variance_density = variance_density.transpose()
 
             spectra.append(
-                WaveSpectrum2D(
+                create_2d_spectrum(
                     frequency=frequencies,
-                    varianceDensity=variance_density,
-                    timestamp=unixepochtime,
+                    variance_density=variance_density,
+                    time=to_datetime64(unixepochtime),
                     latitude=latitude,
                     longitude=longitude,
-                    directions=directions
+                    direction=directions,
                 )
             )
-        return spectra
+        return FrequencyDirectionSpectrum.concat_from_list(spectra)
     elif isinstance(filename,dict):
         out = {}
         for key in filename:

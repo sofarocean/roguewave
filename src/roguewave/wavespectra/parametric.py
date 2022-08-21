@@ -4,8 +4,10 @@ import typing
 PHILLIPS_CONSTANT = 0.0081
 GRAVITATIONAL_CONSTANT = 9.81
 
-def pierson_moskowitz_frequency(frequency: typing.Union[numpy.ndarray, float],
-                                peak_frequency: float, alpha=PHILLIPS_CONSTANT, g=GRAVITATIONAL_CONSTANT):
+def pierson_moskowitz_frequency(frequency,
+                                peak_frequency,
+                                alpha=PHILLIPS_CONSTANT,
+                                g=GRAVITATIONAL_CONSTANT):
     """
     Pierson Moskowitz variance-density spectrum with frequency in Hz as
     dependant variable. See e.g. Holthuijsen "Waves in Oceanic Water."

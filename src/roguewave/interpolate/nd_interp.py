@@ -173,8 +173,9 @@ class NdInterpolator():
                 intp_weight_nd[self.output_indexing_broadcast(mask)] \
                 * val[self.output_indexing_full(mask)]
 
-        return numpy.where(
-            weights_sum > 0.5, interp_val / weights_sum, numpy.nan)
+        with numpy.errstate(invalid='ignore', divide='ignore'):
+            return numpy.where(
+                weights_sum > 0.5, interp_val / weights_sum, numpy.nan)
 
     def _periodic_data_interpolator(self,number_points, indices_1d, weights_1d):
         # We keep a running sum of the weights, if a point is excluded because it

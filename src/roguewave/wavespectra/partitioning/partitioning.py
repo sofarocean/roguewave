@@ -26,11 +26,10 @@ How To Use This Module
 2.
 """
 
-from roguewave.wavespectra.spectrum2D import WaveSpectrum2D, \
-    empty_spectrum2D_like
+from roguewave.wavespectra import FrequencyDirectionSpectrum
 import numpy
 import numba.typed
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple
 import numba
 from scipy.ndimage import maximum_filter, generate_binary_structure
 
@@ -255,7 +254,7 @@ def find_label_closest_partition(label,
     return indices[numpy.argmin(distance)]
 
 
-def filter_for_low_energy(partitions: Dict[int, WaveSpectrum2D],
+def filter_for_low_energy(partitions: Dict[int, FrequencyDirectionSpectrum],
                           proximity: Dict[int, List[int]],
                           peak_indices: Dict[int, Tuple[int, int]],
                           total_energy,
@@ -327,8 +326,8 @@ def filter_for_low_energy(partitions: Dict[int, WaveSpectrum2D],
 def merge_partitions(
         source_label,
         target_label,
-        partitions: Dict[int, WaveSpectrum2D],
-        proximity: Dict[int, List[int]]) -> WaveSpectrum2D:
+        partitions: Dict[int, FrequencyDirectionSpectrum],
+        proximity: Dict[int, List[int]]) -> None:
     """
     Merge one partition into another partition. (**Has side-effects**)
     :param source_index: source index of the partition to merge in the list
@@ -386,8 +385,8 @@ def merge_partitions(
     return None
 
 
-def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
-        Tuple[Dict[int, WaveSpectrum2D], Dict[
+def partition_spectrum(spectrum: FrequencyDirectionSpectrum, config=None) -> \
+        Tuple[Dict[int, FrequencyDirectionSpectrum], Dict[
             int, List[int]]]:
     """
     Create partitioned spectra from a given 2D wavespectrum
@@ -402,7 +401,7 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
     config = default_partition_config | (config if config else {})
 
     # Make sure there are no NaN (undifined) values
-    density = spectrum.variance_density.copy()
+    density = spectrum.spectral_values.values
     density[numpy.isnan(density)] = 0.0
 
     # Get partition descriptions using floodfill. This returns an array that
@@ -437,32 +436,34 @@ def partition_spectrum(spectrum: WaveSpectrum2D, config=None) -> \
 
 
 def partition_marker_array(
-        partitions: Dict[int, WaveSpectrum2D]) -> numpy.ndarray:
+        partitions: Dict[int, FrequencyDirectionSpectrum]) -> numpy.ndarray:
     a_label = list(partitions.keys())[0]
     marker_array = numpy.zeros(
-        partitions[a_label].variance_density.shape) + numpy.nan
+        partitions[a_label].spectral_values.shape) + numpy.nan
     for label, partition in partitions.items():
-        mask = ~partition.variance_density.mask
+        mask = ~partition.spectral_values.mask
         marker_array[mask] = label
     return marker_array
 
 
 def sum_partitions(
-        partitions: Dict[int, WaveSpectrum2D]) -> WaveSpectrum2D:
+        partitions: Dict[int,FrequencyDirectionSpectrum]) \
+        -> FrequencyDirectionSpectrum:
     key = list(partitions.keys())[0]
-    sum_spec = empty_spectrum2D_like(partitions[key])
+    sum_spec = partitions[key].copy(deep=True)
+    sum_spec['variance_density'] *= 0
     for _, spec in partitions.items():
         sum_spec = spec + sum_spec
     return sum_spec
 
 
-def is_neighbour(partition_1: WaveSpectrum2D,
-                 partition_2: WaveSpectrum2D) -> int:
-    footprint = generate_binary_structure(partition_2.variance_density.ndim, 2)
+def is_neighbour(partition_1:FrequencyDirectionSpectrum,
+                 partition_2: FrequencyDirectionSpectrum) -> int:
+    footprint = generate_binary_structure(partition_2.spectral_values.ndim, 2)
 
-    mask_1 = maximum_filter(partition_1.variance_density.filled(0),
+    mask_1 = maximum_filter(partition_1.spectral_values.filled(0),
                             footprint=footprint,
                             mode='wrap')
-    mask_2 = partition_2.variance_density.filled(0)
+    mask_2 = partition_2.spectral_values.filled(0)
 
     return numpy.nansum(mask_1 * mask_2)

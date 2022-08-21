@@ -2,14 +2,12 @@ import numpy
 from datetime import timedelta
 from typing import List, Union, Dict, overload
 from pandas import DataFrame
-from roguewave import WaveSpectrum2D
-from roguewave.wavespectra import logger
-from roguewave.wavespectra.spectrum2D import empty_spectrum2D_like
-from roguewave.wavespectra.wavespectrum import WaveSpectrum, \
-    extract_bulk_parameter
+from roguewave import logger
+
+from roguewave.wavespectra import (
+    FrequencyDirectionSpectrum, WaveSpectrum)
 from .partitioning import is_neighbour, default_partition_config, \
     partition_spectrum
-from .classifiers import is_sea_spectrum
 from multiprocessing import cpu_count, get_context
 
 DEFAULT_CONFIG_PARTITION_SPECTRA = {
@@ -31,7 +29,7 @@ class Node():
     def __init__(self,
                  spectrum_index: int,
                  correlation_with_parent: float,
-                 spectrum: Union[WaveSpectrum2D, None]):
+                 spectrum: Union[FrequencyDirectionSpectrum, None]):
 
         self.indices = [spectrum_index]
         self.spectra = [spectrum]
@@ -87,7 +85,7 @@ class Node():
 
     @property
     def duration(self):
-        delta = self.spectra[-1].timestamp - self.spectra[0].timestamp
+        delta = self.spectra[-1].time - self.spectra[0].time
         if self.parent is None:
             return delta
 
@@ -124,7 +122,7 @@ class Node():
         child.parent = None
 
     def merge(self, indices: List[int],
-              spectra: List[WaveSpectrum2D]):
+              spectra: List[FrequencyDirectionSpectrum]):
         if not len(indices):
             return
 
@@ -187,13 +185,15 @@ class Node():
             jj = jj + 1
 
 
-def correlate(source: WaveSpectrum2D, target: WaveSpectrum2D):
-    source = source.variance_density.filled(0).flatten()
-    target = target.variance_density.filled(0).flatten()
+def correlate(source: FrequencyDirectionSpectrum,
+              target: FrequencyDirectionSpectrum):
+    source = source.spectral_values.values
+    target = target.spectral_values.values
     return numpy.nansum(source * target)
 
 
-def correlate_spectra_with_nodes(source_spectra: List[WaveSpectrum2D],
+def correlate_spectra_with_nodes(source_spectra:
+                        List[FrequencyDirectionSpectrum],
                                  nodes: List[Node]) -> numpy.array:
     correlations = numpy.zeros((len(source_spectra), len(nodes)))
 
@@ -201,15 +201,15 @@ def correlate_spectra_with_nodes(source_spectra: List[WaveSpectrum2D],
         for i_node, target_node in enumerate(nodes):
             correlations[i_spec, i_node] = correlate(source_spectrum,
                                                      target_node.spectra[-1])
-
     return correlations
 
 
 def create_graph(
-        partitions_list: List[Dict[int, WaveSpectrum2D]],
+        partitions_list: List[Dict[int, FrequencyDirectionSpectrum]],
         min_duration):
     label = list(partitions_list[0].keys())[0]
-    empty = empty_spectrum2D_like(partitions_list[0][label])
+    empty = partitions_list[0][label].copy(deep=True)
+    empty['variance_density'] = 0 * empty['variance_density']
     root = Node(-1, 0, empty)
     for label, spectrum in partitions_list[0].items():
         root.add_child(Node(0, 1, spectrum))
@@ -277,7 +277,7 @@ def branch_prune(root: Node, min_duration: timedelta) -> bool:
 
 
 def wave_fields_from(root: Node, primary_field=None) -> List[
-    List[WaveSpectrum2D]]:
+    List[FrequencyDirectionSpectrum]]:
     """
     Create different swell/sea fields based on a given connectivity tree.
 
@@ -318,7 +318,8 @@ def wave_fields_from(root: Node, primary_field=None) -> List[
     return fields
 
 
-def are_different_fields( spec1:WaveSpectrum2D,spec2:WaveSpectrum2D,config ):
+def are_different_fields( spec1:FrequencyDirectionSpectrum,
+                          spec2:FrequencyDirectionSpectrum,config ):
     def ramp( value, min, max ):
         if value < min:
             return 0
@@ -340,9 +341,10 @@ def are_different_fields( spec1:WaveSpectrum2D,spec2:WaveSpectrum2D,config ):
     > 1
 
 
-def filter_field(field: List[WaveSpectrum2D], min_duration: timedelta,
+def filter_field(field: List[FrequencyDirectionSpectrum],
+                 min_duration: timedelta,
                  config):
-    new_fields = [[]]  # type: List[List[WaveSpectrum2D]]
+    new_fields = [[]]  # type: List[List[FrequencyDirectionSpectrum]]
     current_field = 0
     for index, spec in enumerate(field):
         if index == 0:
@@ -361,7 +363,7 @@ def filter_field(field: List[WaveSpectrum2D], min_duration: timedelta,
 
     to_drop = []
     for index, new_field in enumerate(new_fields):
-        if new_field[-1].timestamp - new_field[0].timestamp < min_duration:
+        if new_field[-1].time - new_field[0].time < min_duration:
             to_drop.append(index)
 
     for index in sorted(to_drop, reverse=True):
@@ -369,22 +371,30 @@ def filter_field(field: List[WaveSpectrum2D], min_duration: timedelta,
     return new_fields
 
 
-def filter_fields(fields: List[List[WaveSpectrum2D]], min_duration: timedelta,
-                  config):
+def filter_fields(fields: List[List[FrequencyDirectionSpectrum]],
+                  min_duration: timedelta,config):
     new_fields = []
     for field in fields:
         new_fields += filter_field(field, min_duration, config)
     return new_fields
 
 
-def bulk_parameters_partitions(partitions: List[List[WaveSpectrum2D]]) -> List[
-    DataFrame]:
+def extract_bulk_parameter(parameter, spectra: WaveSpectrum):
+    temp = getattr(spectra, parameter)
+    if callable(temp):
+        output = temp()
+    else:
+        output = temp
+    return output
+
+
+def bulk_parameters_partitions(
+        partitions: List[FrequencyDirectionSpectrum]) -> List[DataFrame]:
     bulk = []
     for label, partition in enumerate(partitions):
         df = DataFrame()
         for variable in WaveSpectrum.bulk_properties:
             df[variable] = extract_bulk_parameter(variable, partition)
-        df['sea'] = numpy.array(is_sea_spectrum(partition))
         bulk.append(df)
     return bulk
 
@@ -393,10 +403,10 @@ def worker(spectrum):
     return partition_spectrum(spectrum)
 
 
-def partition_spectra(spectra2D: List[WaveSpectrum2D],
+def partition_spectra(spectra2D: List[FrequencyDirectionSpectrum],
                       minimum_duration: timedelta,
                       config=None, indent='') -> List[
-    List[WaveSpectrum2D]]:
+    List[FrequencyDirectionSpectrum]]:
     if config:
         for key in config:
             assert key in DEFAULT_CONFIG_PARTITION_SPECTRA, f"{key} is not a valid configuration entry"
@@ -446,19 +456,20 @@ def partition_spectra(spectra2D: List[WaveSpectrum2D],
 # -----------------------------------------------------------------------------
 @overload
 def get_bulk_partitions_from_spectral_partitions(
-        spectral_partitions: Dict[str, List[List[WaveSpectrum2D]]]
+        spectral_partitions: Dict[str, List[List[FrequencyDirectionSpectrum]]]
 ) -> Dict[str, List[DataFrame]]: ...
 
 
 @overload
 def get_bulk_partitions_from_spectral_partitions(
-        spectral_partitions: List[List[WaveSpectrum2D]]
+        spectral_partitions: List[List[FrequencyDirectionSpectrum]]
 ) -> List[DataFrame]: ...
 
 
 def get_bulk_partitions_from_spectral_partitions(
-        spectral_partitions: Union[Dict[str, List[List[WaveSpectrum2D]]], List[
-            List[WaveSpectrum2D]]]) -> Union[Dict[
+        spectral_partitions: Union[Dict[str, List[List[
+            FrequencyDirectionSpectrum]]], List[
+            List[FrequencyDirectionSpectrum]]]) -> Union[Dict[
                                                  str, List[DataFrame]], List[
                                                  DataFrame]]:
     if isinstance(spectral_partitions, dict):
@@ -475,11 +486,13 @@ def get_bulk_partitions_from_spectral_partitions(
 
 
 def get_spectral_partitions_from_2dspectra(
-        spectra: Union[Dict[str, List[WaveSpectrum2D]], List[WaveSpectrum2D]],
+        spectra: Union[Dict[str, List[FrequencyDirectionSpectrum]],
+                       List[FrequencyDirectionSpectrum]],
         minimum_duration: timedelta,
         config=None,
         verbose=False) -> Union[
-    Dict[str, List[List[WaveSpectrum2D]]], List[List[WaveSpectrum2D]]]:
+    Dict[str, List[List[FrequencyDirectionSpectrum]]], List[List[
+        FrequencyDirectionSpectrum]]]:
     #
 
     if isinstance(spectra, dict):

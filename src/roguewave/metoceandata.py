@@ -24,26 +24,26 @@ SOFAR_STANDARD_NAMES_WAVE_BULK = {
 class MetoceanData():
     latitude: float = numpy.nan
     longitude: float = numpy.nan
-    timestamp: datetime = datetime(2022, 1, 1, tzinfo=timezone.utc)
+    time: datetime = datetime(2022, 1, 1, tzinfo=timezone.utc)
 
-    _timestamp: datetime = field(init=False, repr=False)
+    _time: datetime = field(init=False, repr=False)
 
     @property
-    def timestamp(self) -> datetime:
-        return self._timestamp
+    def time(self) -> datetime:
+        return self._time
 
-    @timestamp.setter
-    def timestamp(self, time):
+    @time.setter
+    def time(self, time):
         if isinstance(time, property):
             # Honestly not sure what is going on- but if we initialze
-            # timestamp with the default value of None a "property" object
+            # time with the default value of None a "property" object
             # gets passed instead of just "None". This catches that and
             # makes sure it all works. Bit of an edge case, should not
             # happen if initialized with value. This seems to be due to
             # the wave the dataclass and getters and setters interact and
             # the magic involved to make it work.
             time = time.fdel
-        self._timestamp = to_datetime_utc(time)
+        self._time = to_datetime_utc(time)
 
     def _convert(self, data,standard_sofar_names:bool=True ):
         if not standard_sofar_names:
@@ -61,7 +61,7 @@ class MetoceanData():
         return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "timestamp": self.timestamp
+            "time": self.time
             }, standard_sofar_names)
 
 @dataclass
@@ -80,7 +80,7 @@ class WaveBulkData(MetoceanData):
         return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "timestamp": self.timestamp,
+            "time": self.time,
             "significant_waveheight": self.significant_waveheight,
             "peak_period": self.peak_period,
             "mean_period": self.mean_period,
@@ -100,7 +100,7 @@ class SSTData(MetoceanData):
         return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "timestamp": self.timestamp,
+            "time": self.time,
             "degrees": self.degrees,
         },standard_sofar_names)
 

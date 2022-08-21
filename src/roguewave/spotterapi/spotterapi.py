@@ -28,8 +28,8 @@ from multiprocessing.pool import ThreadPool
 from pysofar.spotter import Spotter, SofarApi
 from roguewave import logger
 from roguewave.tools.time import datetime_to_iso_time_string, to_datetime_utc
-from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
-from roguewave.wavespectra.dataset_spectrum import WaveFrequencySpectrum1D
+from roguewave.wavespectra  import FrequencySpectrum, create_1d_spectrum
+
 from roguewave.metoceandata import WaveBulkData, as_dataframe, WindData, \
     SSTData, MetoceanData, BarometricPressure
 from typing import Dict, List, Union, TypedDict, Tuple, Sequence
@@ -38,6 +38,7 @@ from pandas import DataFrame
 from .helper_functions import _get_sofar_api, get_spotter_ids
 import numpy
 import roguewave.spotterapi.spotter_cache as spotter_cache
+from xarray import Dataset, concat
 
 # 2) Constants & Private Variables
 # =============================================================================
@@ -81,7 +82,7 @@ def get_spectrum(
         session: SofarApi = None,
         parallel_download=True,
         cache: bool = True
-) -> Dict[str, List[WaveSpectrum1D]]:
+) -> Dict[str, FrequencySpectrum]:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
     interval
@@ -109,7 +110,7 @@ def get_spectrum(
                         is a FileCache with a maximum of 2GB by default.
 
     :return: Data as a dictornary with spotter_id's as keys, and for each
-    corresponding value a List that for each returned timestamp contains a
+    corresponding value a List that for each returned time contains a
     WaveSpectrum1D object.
 
     """
@@ -211,9 +212,10 @@ def get_data(
         session: SofarApi = None,
         parallel_download=True,
         bulk_data_as_dataframe=True,
+        spectral_data_as_dataset_spectrum=True,
         cache=True,
         convert_to_sofar_model_names=False
-) -> Dict[str, Dict[str, Union[list[WaveSpectrum1D],
+) -> Dict[str, Dict[str, Union[FrequencySpectrum,
                                list[WaveBulkData], DataFrame]]]:
     """
     Gets the requested data for the spotter(s) in the given interval
@@ -313,6 +315,12 @@ def get_data(
         #
         # Did we get any data for this spotter
         if spotter_data is not None:
+            if 'frequencyData' in spotter_data:
+                if isinstance(spotter_data['frequencyData'],List):
+                    # This will be deprecated in a future version.
+                    spotter_data['frequencyData'] = \
+                        FrequencySpectrum.concat_from_list(
+                            spotter_data['frequencyData'])
             data[spotter_id] = spotter_data
 
     return data
@@ -424,7 +432,7 @@ def _download_data(
         bulk_data_as_dataframe: bool = True,
         limit: int = None,
         convert_to_sofar_model_names=False) -> \
-        Dict[str, Union[List[WaveSpectrum1D], List[WaveBulkData]]]:
+        Dict[str, Union[List[FrequencySpectrum], List[WaveBulkData]]]:
     """
     Function that downloads data from the API for the requested Spotter
     It abstracts away the limitation that the API can only return a maximum
@@ -485,7 +493,7 @@ def _download_data(
 
         try:
             # Try to get the next batch of data
-            _next, number_of_items_returned, max_timestamp = \
+            _next, number_of_items_returned, max_time = \
                 _get_next_page(spotter, variables_to_include,
                                _start_date, end_date, local_limit)
 
@@ -506,10 +514,10 @@ def _download_data(
             # , we are done...
             break
         else:
-            # ... else we update the startdate to be the timestamp of the last
+            # ... else we update the startdate to be the time of the last
             # known entry we received plus a second, and use this as the new
             # start.
-            _start_date = max_timestamp + timedelta(seconds=1)
+            _start_date = max_time + timedelta(seconds=1)
 
     # Postprocessing
     if len(data) < 1:
@@ -519,10 +527,12 @@ def _download_data(
             # Convert bulk data to a dataframe if desired
             for key in data:
                 if key == 'frequencyData':
-                    # We cannot convert the list of wavespectra to a dataframe.
-                    continue
-                data[key] = as_dataframe(data[key],convert_to_sofar_model_names)
-
+                    # Concatenate all the spectral dataset along time dimension
+                    # and return a wave frequency spectrum object
+                    data[key] = FrequencySpectrum.concat_from_list(data[key])
+                else:
+                    data[key] = as_dataframe(
+                        data[key],convert_to_sofar_model_names)
     return data
 
 
@@ -535,7 +545,7 @@ def _get_next_page(
         start_date: Union[datetime, str, int, float] = None,
         end_date: Union[datetime, str, int, float] = None,
         limit: int = MAX_LOCAL_LIMIT,
-) -> Tuple[Dict[str, Union[List[WaveSpectrum1D],
+) -> Tuple[Dict[str, Union[List[Dataset],
                            List[WaveBulkData]]], int, datetime]:
     """
     Function that downloads the page of Data from the Spotter API that lie
@@ -544,7 +554,7 @@ def _get_next_page(
 
     idiosyncrasies to handle:
     - Wavefleet sometimes returns multiple instances of the same record (same
-      timestamp). These are filtered through a all to _unique. This should
+      time). These are filtered through a all to _unique. This should
       be fixed in the future.
     - Some entries are broken (None for entries).
     - Not all Spotters will have (all) data for the given timerange.
@@ -597,7 +607,7 @@ def _get_next_page(
 
     out = {}
     max_num_items = 0
-    max_timestamp = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    max_time = datetime(1970, 1, 1, tzinfo=timezone.utc)
     #
     # Loop over all possible variables
     for var_name, include_variable in variables_to_include.items():
@@ -635,10 +645,15 @@ def _get_next_page(
             # Filter for doubles.
             out[var_name] = _unique_filter(out[var_name])
 
-            if out[var_name][-1].timestamp > max_timestamp:
-                max_timestamp = out[var_name][-1].timestamp
+            # get the new max time. Our object can be a FrequencySpectrum or
+            # a metocean data object here. The latter returns a scalar date-
+            # time object, the former returns a length 1 data-array of
+            # datetime64. To ensure we get a datetime - we call the datetime
+            # conversion and request output as a scalar.
+            if to_datetime_utc(out[var_name][-1].time,True) > max_time:
+                max_time = out[var_name][-1].time
 
-    return out, max_num_items, max_timestamp
+    return out, max_num_items, max_time
 
 
 # -----------------------------------------------------------------------------
@@ -712,9 +727,15 @@ def _search(start_date: Union[datetime, str],
             # ensure results are unique
             spotters[spotter_id][key] = _unique_filter(
                 spotters[spotter_id][key])
+
             if bulk_data_as_dataframe and (not key == 'frequencyData'):
                 spotters[spotter_id][key] = as_dataframe(
                     spotters[spotter_id][key])
+
+            if key == 'frequencyData':
+                spotters[spotter_id][key] = FrequencySpectrum.concat_from_list(
+                    spotters[spotter_id][key]
+                )
     return spotters
 
 
@@ -731,11 +752,15 @@ def _unique_filter(data):
     :return:
     """
 
-    # Get timestamps
-    timestamps = numpy.array([x.timestamp.timestamp() for x in data])
+    # Get time
+    if isinstance(data[0],FrequencySpectrum ):
+        time = numpy.array(
+            [to_datetime_utc(x['time'].values[0]).timestamp() for x in data])
+    else:
+        time= numpy.array([x.time.timestamp() for x in data])
 
-    # Get indices of unique timestamps
-    _, unique_indices = numpy.unique(timestamps, return_index=True)
+    # Get indices of unique times
+    _, unique_indices = numpy.unique(time, return_index=True)
 
     # Return only unique indices
     return [data[index] for index in unique_indices]
@@ -744,7 +769,7 @@ def _unique_filter(data):
 # -----------------------------------------------------------------------------
 
 
-def _none_filter(data: List[Union[WaveSpectrum1D, WaveBulkData]]):
+def _none_filter(data: Dict):
     """
     Filter for the occasional occurance of bad data returned from wavefleet.
     :param data:
@@ -763,10 +788,10 @@ def _none_filter(data: List[Union[WaveSpectrum1D, WaveBulkData]]):
 # -----------------------------------------------------------------------------
 
 
-def _get_class(key, data) -> Union[MetoceanData, WaveSpectrum1D]:
+def _get_class(key, data) -> Union[MetoceanData, FrequencySpectrum]:
     if key == 'waves':
         return WaveBulkData(
-            timestamp=data['timestamp'],
+            time=data['timestamp'],
             latitude=data['latitude'],
             longitude=data['longitude'],
             significant_waveheight=data['significantWaveHeight'],
@@ -779,7 +804,17 @@ def _get_class(key, data) -> Union[MetoceanData, WaveSpectrum1D]:
             peak_frequency=1.0 / data['peakPeriod']
         )
     elif key == 'frequencyData':
-        return WaveSpectrum1D(**data)
+        return create_1d_spectrum(
+            frequency=numpy.array(data['frequency']),
+            variance_density=numpy.array(data['varianceDensity']),
+            time=to_datetime_utc(data['timestamp']),
+            latitude=numpy.array(data['latitude']),
+            longitude=numpy.array(data['longitude']),
+            a1=numpy.array(data['a1']),
+            b1=numpy.array(data['b1']),
+            a2=numpy.array(data['a2']),
+            b2=numpy.array(data['b2'])
+            )
     elif key == 'wind':
         return WindData(**data)
     elif key == 'surfaceTemp':

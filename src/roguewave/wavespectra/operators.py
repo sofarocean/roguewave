@@ -1,13 +1,12 @@
 import numpy
 from typing import List
-from .spectrum1D import WaveSpectrum1D
-from .spectrum2D import WaveSpectrum2D
+from roguewave.wavespectra import FrequencyDirectionSpectrum,FrequencySpectrum
 from datetime import timedelta
 
-def spectrum1D_time_filter(spectra: List[WaveSpectrum1D],
+def spectrum1D_time_filter(spectra: List[FrequencySpectrum],
                          window: numpy.ndarray = None,
                          maximum_time_delta: timedelta = None) -> List[
-    WaveSpectrum1D]:
+    FrequencySpectrum]:
     number_of_spectra = len(spectra)
 
     if not window:
@@ -26,11 +25,11 @@ def spectrum1D_time_filter(spectra: List[WaveSpectrum1D],
 
     for ii in range(0, window_midpoint):
         spectra.insert(0, first)
-        spectra[0].timestamp = spectra[1].timestamp - maximum_time_delta
+        spectra[0].time = spectra[1].time - maximum_time_delta
 
     for ii in range(window_midpoint + 1, window_length):
         spectra.append(last)
-        spectra[-1].timestamp = spectra[-1].timestamp + maximum_time_delta
+        spectra[-1].time = spectra[-1].time + maximum_time_delta
 
     output = []
     for index in range(0, number_of_spectra):
@@ -38,7 +37,7 @@ def spectrum1D_time_filter(spectra: List[WaveSpectrum1D],
         iend = index + window_length
 
         timedeltas = numpy.array([
-            next.timestamp - cur.timestamp for cur, next in
+            next.time - cur.time for cur, next in
             zip(spectra[istart: iend - 1], spectra[istart + 1: iend])
         ])
 
@@ -58,10 +57,10 @@ def spectrum1D_time_filter(spectra: List[WaveSpectrum1D],
         b2 = sum(w * spectrum.b2 * spectra[index].e for w, spectrum in
                  zip(window, spectra[istart: iend])) / e
 
-        output.append(WaveSpectrum1D(
+        output.append(FrequencySpectrum(
             frequency=raw_spectrum.frequency,
             varianceDensity=e,
-            timestamp=raw_spectrum.timestamp,
+            timestamp=raw_spectrum.time,
             latitude=raw_spectrum.latitude,
             longitude=raw_spectrum.longitude,
             a1=a1, b1=b1,
@@ -70,10 +69,10 @@ def spectrum1D_time_filter(spectra: List[WaveSpectrum1D],
     return spectra
 
 
-def spectrum2D_time_filter(spectra: List[WaveSpectrum2D],
+def spectrum2D_time_filter(spectra: List[FrequencyDirectionSpectrum],
                          window: numpy.ndarray = None,
                          maximum_time_delta: timedelta = None) -> List[
-    WaveSpectrum2D]:
+    FrequencyDirectionSpectrum]:
     number_of_spectra = len(spectra)
 
     if not window:
@@ -92,11 +91,11 @@ def spectrum2D_time_filter(spectra: List[WaveSpectrum2D],
 
     for ii in range(0, window_midpoint):
         spectra.insert(0, first)
-        spectra[0].timestamp = spectra[1].timestamp - maximum_time_delta
+        spectra[0].time = spectra[1].time - maximum_time_delta
 
     for ii in range(window_midpoint + 1, window_length):
         spectra.append(last)
-        spectra[-1].timestamp = spectra[-1].timestamp + maximum_time_delta
+        spectra[-1].time = spectra[-1].time + maximum_time_delta
 
     output = []
     for index in range(0, number_of_spectra):
@@ -104,7 +103,7 @@ def spectrum2D_time_filter(spectra: List[WaveSpectrum2D],
         iend = index + window_length
 
         timedeltas = numpy.array([
-            next.timestamp - cur.timestamp for cur, next in
+            next.time - cur.time for cur, next in
             zip(spectra[istart: iend - 1], spectra[istart + 1: iend])
         ])
 
@@ -117,7 +116,7 @@ def spectrum2D_time_filter(spectra: List[WaveSpectrum2D],
                 zip(window, spectra[istart: iend]))
 
         output.append(
-            WaveSpectrum2D(
+            FrequencyDirectionSpectrum(
                 frequency=raw_spectrum.frequency,
                 varianceDensity=variance_density,
                 timestamp=raw_spectrum.timestamp,

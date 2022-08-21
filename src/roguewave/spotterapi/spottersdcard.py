@@ -1,11 +1,10 @@
-from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
-import typing
+from roguewave.wavespectra import FrequencySpectrum, create_1d_spectrum
 from datetime import datetime
 from pandas import read_csv, to_numeric
 import numpy
 import os
 
-def get_spectrum_from_parser_output(path: str)->typing.List[WaveSpectrum1D]:
+def get_spectrum_from_parser_output(path: str)->FrequencySpectrum:
     """
 
     :param path: Path that contains the output from the spotter parser.
@@ -43,13 +42,16 @@ def get_spectrum_from_parser_output(path: str)->typing.List[WaveSpectrum1D]:
     spectra = []
     for index in range(0,number_of_spectra):
         spectra.append(
-            WaveSpectrum1D(frequency=data['Szz']['frequencies'],
-                           varianceDensity=data['Szz']['values'][index,:],
-                           timestamp=data['Szz']['time'][index], latitude=None,
-                           longitude=None, a1=data['a1']['values'][index,:],
-                           b1=data['b1']['values'][index,:],
-                           a2=data['a2']['values'][index,:],
-                           b2=data['b2']['values'][index,:]
-                           )
+            create_1d_spectrum(
+                frequency=data['Szz']['frequencies'],
+                variance_density=data['Szz']['values'][index,:],
+                time=data['Szz']['time'][index],
+                latitude=None,
+                longitude=None,
+                a1=data['a1']['values'][index,:],
+                b1=data['b1']['values'][index,:],
+                a2=data['a2']['values'][index,:],
+                b2=data['b2']['values'][index,:]
+            )
         )
-    return spectra
+    return FrequencySpectrum.concat_from_list(spectra)

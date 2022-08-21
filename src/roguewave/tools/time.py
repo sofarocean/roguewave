@@ -6,6 +6,7 @@ Authors: Pieter Bart Smit
 """
 
 from datetime import datetime, timezone
+from xarray import DataArray
 import numpy
 from typing import Union, List, Tuple
 from numpy import datetime64
@@ -13,7 +14,15 @@ from numpy import datetime64
 scalar_input_types = Union[float, int, datetime, str, datetime64]
 input_types = Union[scalar_input_types,List[scalar_input_types],numpy.ndarray]
 
-def to_datetime_utc(time: input_types) -> Union[datetime, List[datetime]]:
+def to_datetime_utc(time: input_types,to_scalar=False
+                    ) -> Union[datetime, List[datetime]]:
+    datetimes = _to_datetime_utc(time)
+    if to_scalar and not isinstance(datetimes,datetime):
+        return datetimes[0]
+    else:
+        return datetimes
+
+def _to_datetime_utc(time: input_types) -> Union[datetime, List[datetime]]:
     if time is None:
         return None
 
@@ -35,6 +44,10 @@ def to_datetime_utc(time: input_types) -> Union[datetime, List[datetime]]:
         return time
 
     elif isinstance(time,List) or isinstance(time,numpy.ndarray):
+        return [ to_datetime_utc(x) for x in time ]
+
+    elif isinstance(time,DataArray):
+        time = time['time'].values
         return [ to_datetime_utc(x) for x in time ]
 
     else:

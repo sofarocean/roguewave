@@ -16,10 +16,8 @@ How To Use This Module
 (See the individual functions for details.)
 
 """
-from roguewave.wavespectra.spectrum1D import WaveSpectrum1D
-from roguewave.wavespectra.spectrum2D import WaveSpectrum2D
-from roguewave.wavespectra.dataset_spectrum import WaveFrequencySpectrum1D, \
-    WaveFrequencySpectrum2D
+from roguewave.wavespectra import FrequencySpectrum, \
+    FrequencyDirectionSpectrum, create_1d_spectrum
 from roguewave.metoceandata import WaveBulkData, WindData, \
     SSTData,BarometricPressure
 from pandas import DataFrame, read_json
@@ -31,24 +29,21 @@ import os
 import numpy
 import base64
 from io import BytesIO
-from xarray import Dataset,DataArray, open_dataset
+from xarray import Dataset, open_dataset
 
 
 _UNION = Union[
-    WaveSpectrum1D,
-    WaveSpectrum2D,
-    List[WaveSpectrum1D],
-    List[WaveSpectrum2D],
-    Dict[str, List[WaveSpectrum1D]],
-    Dict[str, List[WaveSpectrum2D]],
-    Dict[str, List[List[WaveSpectrum2D]]],
-    List[List[WaveSpectrum2D]],
+    FrequencySpectrum,
+    FrequencyDirectionSpectrum,
+    List[FrequencySpectrum],
+    Dict[str, List[FrequencyDirectionSpectrum]],
+    Dict[str, List[FrequencySpectrum]],
+    List[List[FrequencyDirectionSpectrum]],
     List[List[DataFrame]],
     Dict[int,List[DataFrame]],
     Dict[str,List[WaveBulkData]],
     Dict[str,DataFrame]
 ]
-
 
 def _b64_encode_numpy(val:numpy.ndarray)->dict:
     if val.dtype == numpy.float64:
@@ -94,18 +89,14 @@ class NumpyEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj,Dataset):
             return _b64_encode_dataset(obj,"Dataset")
-        elif isinstance(obj,WaveFrequencySpectrum1D):
-            return _b64_encode_dataset(obj.dataset,"WaveFrequencySpectrum1D")
-        elif isinstance(obj,WaveFrequencySpectrum2D):
-            return _b64_encode_dataset(obj.dataset,"WaveFrequencySpectrum2D")
+        elif isinstance(obj,FrequencySpectrum):
+            return _b64_encode_dataset(obj.dataset,"FrequencySpectrum")
+        elif isinstance(obj,FrequencyDirectionSpectrum):
+            return _b64_encode_dataset(obj.dataset,"FrequencyDirectionSpectrum")
         elif isinstance(obj, datetime):
             return {'__class__':'datetime', 'data':datetime.isoformat(obj)}
         elif isinstance(obj,DataFrame):
             return {'__class__':'DataFrame', 'data': obj.to_json(date_unit='s')}
-        elif isinstance(obj, WaveSpectrum1D):
-            return {'__class__': 'WaveSpectrum1D', 'data':obj._create_wave_spectrum_input()}
-        elif isinstance(obj, WaveSpectrum2D):
-            return {'__class__': 'WaveSpectrum2D', 'data':obj._create_wave_spectrum_input()}
         elif isinstance(obj, WaveBulkData):
             return {'__class__': 'WaveBulkData', 'data':obj.as_dict()}
         elif isinstance(obj, WindData):
@@ -138,16 +129,25 @@ def object_hook(dictionary:dict):
                 df.index = [ x.tz_localize('utc') for x in df.index]
             return df
         elif dictionary['__class__'] == 'WaveSpectrum1D':
-            return WaveSpectrum1D(**dictionary['data'])
-        elif dictionary['__class__'] == 'WaveSpectrum2D':
-            return WaveSpectrum2D(**dictionary['data'])
+            data = dictionary['data']
+            return create_1d_spectrum(
+                frequency=data['frequency'],
+                variance_density=data['varianceDensity'],
+                time=data['timestamp'],
+                latitude=data['latitude'],
+                longitude=data['longitude'],
+                a1=data['a1'],
+                b1=data['b1'],
+                a2=data['a2'],
+                b2=data['b2']
+            )
         elif dictionary['__class__'] == 'Dataset':
             return _b64_decode_dataset(dictionary['data'])
-        elif dictionary['__class__'] == 'WaveFrequencySpectrum1D':
-            return WaveFrequencySpectrum1D(
+        elif dictionary['__class__'] == 'FrequencySpectrum':
+            return FrequencySpectrum(
                 _b64_decode_dataset(dictionary['data']))
-        elif dictionary['__class__'] == 'WaveFrequencySpectrum2D':
-            return WaveFrequencySpectrum2D(
+        elif dictionary['__class__'] == 'FrequencyDirectionSpectrum':
+            return FrequencyDirectionSpectrum(
                 _b64_decode_dataset(dictionary['data']))
         elif dictionary['__class__'] == 'ndarray':
             return _b64_decode_numpy(dictionary['data'])

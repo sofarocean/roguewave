@@ -6,6 +6,7 @@ from roguewave.tools.time import to_datetime64, to_datetime_utc
 from datetime import datetime
 from roguewave.interpolate.general import interpolate_periodic
 from numbers import Number
+from xarray import Dataset
 
 class _Geometry:
     pass
@@ -126,6 +127,17 @@ class Track(_Geometry):
             for latitude,longitude,time in zip( spotter['latitude'].values,
                                                 spotter['longitude'].values,
                                                 spotter.index.values):
+                points.append(SpaceTimePoint(
+                    time=time,
+                    latitude=latitude,
+                    longitude=longitude,
+                    id=spotter_id
+                    )
+                )
+        elif hasattr(spotter, 'dataset'):
+            for latitude,longitude,time in zip( spotter.dataset['latitude'].values,
+                                                spotter.dataset['longitude'].values,
+                                                spotter.dataset['time'].values):
                 points.append(SpaceTimePoint(
                     time=time,
                     latitude=latitude,

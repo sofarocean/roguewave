@@ -30,7 +30,7 @@ from roguewave.wavetheory.lineardispersion import \
     inverse_intrinsic_dispersion_relation, \
     jacobian_wavenumber_to_radial_frequency
 from roguewave.wavewatch3.restart_file_metadata import MetaData
-from typing import Sequence, Union, Tuple, Mapping,MutableMapping
+from typing import Sequence, Union, Tuple, Dict
 from roguewave.interpolate.nd_interp import NdInterpolator
 from datetime import datetime
 from functools import cache
@@ -39,7 +39,7 @@ from roguewave.interpolate.geometry import TrackSet
 from xarray import Dataset, concat
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
-from roguewave.wavespectra.dataset_spectrum import WaveFrequencySpectrum2D
+from roguewave.wavespectra import FrequencyDirectionSpectrum
 
 MAXIMUM_NUMBER_OF_WORKERS = 10
 
@@ -671,7 +671,7 @@ class RestartFileStack:
     def __len__(self):
         return len(self._restart_files)
 
-    def __getitem__(self, nargs) -> WaveFrequencySpectrum2D:
+    def __getitem__(self, nargs) -> FrequencyDirectionSpectrum:
         if len(nargs) == 2:
             time_index, linear_index = nargs
         elif len(nargs) == 3:
@@ -723,7 +723,7 @@ class RestartFileStack:
 
         data = concat( data , dim='time',  )
         data.coords['time'] = to_datetime64([self.time[it] for it in time_index])
-        return WaveFrequencySpectrum2D(data)
+        return FrequencyDirectionSpectrum(data)
 
     def _init_progress_bar(self, total):
         if self._progres['total'] is None:
@@ -746,7 +746,7 @@ class RestartFileStack:
     def interpolate(self,latitude:Union[numpy.ndarray,float],
                         longitude:Union[numpy.ndarray,float],
                         time:Union[numpy.ndarray,numpy.datetime64,datetime]
-                    ) -> WaveFrequencySpectrum2D:
+                    ) -> FrequencyDirectionSpectrum:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -811,7 +811,7 @@ class RestartFileStack:
         self._init_progress_bar(len(latitude)*8)
         dataset = interpolator.interpolate(points)
 
-        return WaveFrequencySpectrum2D(Dataset(
+        return FrequencyDirectionSpectrum(Dataset(
             data_vars={
                 "variance_density": (
                     ('time','frequency','direction'),dataset ),
@@ -827,7 +827,7 @@ class RestartFileStack:
             }))
 
     def interpolate_tracks(self,tracks:TrackSet
-                          ) -> MutableMapping[str,WaveFrequencySpectrum2D]:
+                          ) -> Dict[str, FrequencyDirectionSpectrum]:
         return {
             _id:self.interpolate(x.latitude,x.longitude,x.time)
                                              for _id,x in tracks.tracks.items()

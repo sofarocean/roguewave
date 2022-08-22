@@ -1,4 +1,4 @@
-from typing import Dict, Sequence, Tuple
+from typing import Dict, Sequence, Tuple, Union
 from roguewave.spotterapi import get_spectrum
 from roguewave.modeldata.open_remote_restart_files import \
     open_remote_restart_file
@@ -6,6 +6,7 @@ from roguewave.modeldata.timebase import TimeSlice
 from roguewave.interpolate.geometry import TrackSet
 from roguewave.tools.time import to_datetime64
 from roguewave import FrequencyDirectionSpectrum
+from xarray import Dataset, concat
 
 
 # =============================================================================
@@ -17,10 +18,17 @@ def colocate_model_spotter_spectra(
         model_definition: str,
         cache: bool = True,
         cache_name: str = None,
-        spectral_domain: str = 'native',
-        timebase: str = 'native',
-) -> Tuple[Dict[str,FrequencyDirectionSpectrum],
-           Dict[str,FrequencyDirectionSpectrum]]:
+        spectral_domain: str = 'model',
+        timebase: str = 'model',
+        return_as_dataset = True
+) -> Union[ Tuple[FrequencyDirectionSpectrum,FrequencyDirectionSpectrum]
+           ,Tuple[Dict[str,FrequencyDirectionSpectrum],
+                  Dict[str,FrequencyDirectionSpectrum]]]:
+
+    if return_as_dataset:
+        if (not timebase == 'model') and (len(spotter_ids) > 1):
+            raise ValueError('Cannot return as an xarray dataset if the '
+                             'time base is native or spotter')
 
     stack = open_remote_restart_file(variable, time_slice, model_name,
                                      model_definition, cache_name=cache_name,
@@ -50,6 +58,7 @@ def colocate_model_spotter_spectra(
                 }
             )
         spotters[spotter_id] = spotter_data
+
     print('Get model data along spotter tracks:')
     model = stack.interpolate_tracks(trackset)
     if spectral_domain == 'spotter':
@@ -58,4 +67,14 @@ def colocate_model_spotter_spectra(
                     'frequency': spotters['spotter_id']['frequency'],
                      'direction': spotters['spotter_id']['direction']
                 })
+
+    if return_as_dataset:
+        m = concat( [x.dataset for x in model.values()],'spotter_id')
+        model = m.assign_coords(spotter_id=spotter_ids)
+        model = FrequencyDirectionSpectrum(model)
+
+        s = concat( [x.dataset for x in spotters.values()],'spotter_id')
+        spotters = s.assign_coords(spotter_id=spotter_ids)
+        spotters = FrequencyDirectionSpectrum(spotters)
+
     return model, spotters

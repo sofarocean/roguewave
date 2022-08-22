@@ -177,18 +177,13 @@ def interpolate_at_points(
     return return_data_set
 
 
-def tracks_as_dataset(time, drifter_tracks: Mapping[str, DataFrame],
-                      subkey=None):
+def tracks_as_dataset(time, drifter_tracks: Mapping[str, DataFrame])->DataArray:
     tracks = {}
     for track_id, track in drifter_tracks.items():
-        if subkey is not None:
-            _track = track[subkey]
-        else:
-            _track = track
-        variables = list(_track.columns)
+        variables = list(track.columns)
 
         tracks[track_id] = DataArray(
-            interpolate_dataframe_time(_track, time),
+            interpolate_dataframe_time(track, time),
             coords={'time': time, 'variables': variables},
             dims=['time', 'variables'],
             name=track_id,

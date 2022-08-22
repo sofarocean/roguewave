@@ -1,5 +1,6 @@
 from typing import Mapping, Sequence, Union, Tuple
 from pandas import DataFrame
+from xarray import Dataset, DataArray
 
 from roguewave.spotterapi.spotterapi import get_bulk_wave_data
 from roguewave.interpolate.dataset import tracks_as_dataset
@@ -16,9 +17,11 @@ def colocate_model_spotter(
         model_name: str,
         cache_name: str = None,
         parallel: bool=True,
-        timebase:str = 'native',
-        slice_remotely=False
-) -> Tuple[Mapping[str,DataFrame],Mapping[str,DataFrame]]:
+        timebase:str = 'model',
+        slice_remotely=False,
+        return_as_dataset = True
+) -> Union[Tuple[Mapping[str,DataFrame],Mapping[str,DataFrame]],
+     Tuple[DataArray,DataArray]]:
     """
     Colocate spoter output and modek data
     :param variable: name of the variable of interest. Can be a list in which
@@ -50,6 +53,10 @@ def colocate_model_spotter(
     #     model_name=model_name,
     #     cache_name=cache_name
     # )
+    if return_as_dataset:
+        if (not timebase == 'model') and (len(spotter_ids) > 1):
+            raise ValueError('Cannot return as an xarray dataset if the '
+                             'time base is native or spotter')
 
     spotters = get_bulk_wave_data(spotter_ids, time_slice.start_time,
                                   time_slice.end_time,
@@ -63,10 +70,12 @@ def colocate_model_spotter(
     model =  extract_from_remote_dataset( spotters, variable,
                             time_slice,model_name,slice_remotely=slice_remotely,
                                 parallel=parallel, cache_name=cache_name  )
-    out = {}
+
+    model_time = None
     for spotter_id in spotters:
         s = spotters[spotter_id] # type: DataFrame
         m = model[spotter_id] # type: DataFrame
+        model_time = m.index.values
         if timebase.lower() == 'native':
             pass
         elif timebase.lower() == 'observed' or timebase.lower() == 'spotter':
@@ -80,13 +89,25 @@ def colocate_model_spotter(
         model[spotter_id] = m
         spotters[spotter_id] = s
 
-    return model, spotters
+    if return_as_dataset:
+        return tracks_as_dataset(model_time,model),\
+               tracks_as_dataset(model_time,spotters)
+    else:
+        return model, spotters
 
 
-def colocated_tracks_as_dataset(colocated_data):
-     keys = list(colocated_data.keys())
-     time = colocated_data[keys[0]]['model'].index.values
+def colocated_tracks_as_dataset(*args) -> Tuple[DataArray,DataArray]:
+     if len(args) == 1:
+         """
+         for convinience if passing immediately from the track interpolation
+         """
+         model, spotter = args[0]
+     else:
+         model, spotter = args
 
-     model_data = tracks_as_dataset(time, colocated_data, 'model')
-     drifter_data = tracks_as_dataset(time, colocated_data, 'spotter')
-     return drifter_data, model_data
+     keys = list(model.keys())
+     time = model[keys[0]].index.values
+     model = tracks_as_dataset(time, model)
+     spotter = tracks_as_dataset(time, spotter)
+     return spotter, model
+

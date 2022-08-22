@@ -816,10 +816,19 @@ def _get_class(key, data) -> Union[MetoceanData, FrequencySpectrum]:
             b2=numpy.array(data['b2'])
             )
     elif key == 'wind':
+        data = data.copy()
+        data['time'] = data['timestamp']
+        data.pop('timestamp')
         return WindData(**data)
     elif key == 'surfaceTemp':
+        data = data.copy()
+        data['time'] = data['timestamp']
+        data.pop('timestamp')
         return SSTData(**data)
     elif key == 'barometerData':
+        data = data.copy()
+        data['time'] = data['timestamp']
+        data.pop('timestamp')
         return BarometricPressure(**data)
     else:
         raise Exception('Unknown variable')

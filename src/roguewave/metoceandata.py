@@ -156,6 +156,9 @@ def as_dataframe(bulk_wave_properties:List[MetoceanData],
     if standard_sofar_names:
         df.set_index('time', inplace=True)
     else:
-        df.set_index('timestamp', inplace=True)
+        if 'timestamp' in df:
+            df.set_index('timestamp', inplace=True)
+        else:
+            df.set_index('time', inplace=True)
 
     return df

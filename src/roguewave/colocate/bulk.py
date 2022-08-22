@@ -44,6 +44,9 @@ def colocate_model_spotter(
                   at their own valid times
         - spotter: model data will be interpolated to spotter reporting time
         - model: Spotter data will be interpolated to model time
+    :param return_as_dataset: Instead of a dictornary return everything as one
+        xarray dataset ("Pandas on steroids"), where spotter_id is one of the
+        dimensions of the datastructure (a "column" if you will)
     :return:
     """
 

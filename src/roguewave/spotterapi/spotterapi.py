@@ -517,7 +517,7 @@ def _download_data(
             # ... else we update the startdate to be the time of the last
             # known entry we received plus a second, and use this as the new
             # start.
-            _start_date = max_time + timedelta(seconds=1)
+            _start_date = to_datetime_utc(max_time,to_scalar=True) + timedelta(seconds=1)
 
     # Postprocessing
     if len(data) < 1:

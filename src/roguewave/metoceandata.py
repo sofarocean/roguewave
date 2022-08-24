@@ -114,7 +114,7 @@ class WindData(MetoceanData):
         return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "timestamp": self.timestamp,
+            "timestamp": self.time,
             "speed": self.speed,
             "direction": self.direction,
             "seasurfaceId": self.seasurfaceId
@@ -131,7 +131,7 @@ class BarometricPressure(MetoceanData):
         return self._convert({
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "timestamp": self.timestamp,
+            "timestamp": self.time,
             "units": self.units,
             "unit_type": self.unit_type,
             "data_type_name": self.data_type_name,

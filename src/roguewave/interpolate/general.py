@@ -23,7 +23,7 @@ def interpolate_periodic(
     :return:
     """
 
-    indices =  enclosing_points_1d( xp, x, period=x_period,regular_xp=True )
+    indices =  enclosing_points_1d( xp, x, period=x_period,regular_xp=False )
 
     delta_x  = wrapped_difference(
         x - xp[indices[0, :]], period=x_period)

@@ -198,9 +198,120 @@ def get_bulk_wave_data(
 
 
 # -----------------------------------------------------------------------------
-
-
 def get_data(
+        spotter_ids: Union[str, List[str]],
+        start_date: Union[datetime, int, float, str] = None,
+        end_date: Union[datetime, int, float, str] = None,
+        include_frequency_data=False,
+        include_waves=True,
+        include_wind=False,
+        include_barometer_data=False,
+        include_surface_temp_data=False,
+        session: SofarApi = None,
+        parallel_download=True,
+        bulk_data_as_dataframe=True,
+        spectral_data_as_dataset_spectrum=True,
+        cache=True,
+        convert_to_sofar_model_names=False
+) -> Dict[str, Dict[str, Union[FrequencySpectrum,
+                               list[WaveBulkData], DataFrame]]]:
+    """
+    Gets the requested data for the spotter(s) in the given interval
+
+    :param spotter_ids: Can be either 1) a List of spotter_ids or 2) a single
+    Spotter_id.
+
+    :param start_date: ISO 8601 formatted date string, epoch or datetime.
+                       If not included defaults to beginning of spotters
+                       history
+
+    :param end_date:   ISO 8601 formatted date string, epoch or datetime.
+                       If not included defaults to end of spotter history
+
+    :param include_frequency_data: set to True to return spectral data
+        (if available)
+
+    :param include_waves: set to True to return wave data (if available)
+
+    :param include_wind: set to True to return wind data (if available)
+
+    :param include_surface_temp_data: set to True to return SST data
+        (if available)
+
+    :param include_barometer_data: set to True to return barometer data
+        (if available)
+
+    :param session:    Active SofarApi session. If none is provided one will be
+                       created automatically. This requires that an API key is
+                       set in the environment.
+
+    :param parallel_download: Use multiple requests to the Api to speed up
+                       retrieving data. Only useful for large requests.
+
+    :param bulk_data_as_dataframe: return bulk data as a dataframe per Spotter
+                       instead of a list of BulkWaveVariable objects. Defaults
+                       to yes- only set to false for dev purposes.
+
+    :param cache: Cache requests. If True, returned data will be stored in
+                        a file Cache on disk, and repeated calls with the
+                        same arguments will use locally cached data. The cache
+                        is a FileCache with a maximum of 2GB by default.
+
+    :return: Data as a dictornary with spotter_id's as keys, and for each
+    corresponding value a dataframe containing the output.
+
+    To Note; this function now fetches each of the variables seperately -
+        instead of doing one fetch; this is a clutch fix to the issue that
+        data for different variables have different timestamps. As a consequence
+        getting 100 data points for frequency data may cover 5 days -whereas
+        the same number of points only cover a day for SST data. Since we
+        only get 100 data points per request- and have to advance to the next
+        date ourselves-  this complicates matters tremendously.
+    """
+
+    variables_to_include = VariablesToInclude(
+        waves=include_waves,
+        wind=include_wind,
+        surfaceTemp=include_surface_temp_data,
+        frequencyData=include_frequency_data,
+        barometerData=include_barometer_data,
+    )
+    out = {}
+    for variable,to_include in variables_to_include.items():
+        if to_include:
+            print(
+                f"Getting spotter data: retrieving {variable}")
+            dummy = VariablesToInclude(
+                frequencyData=False,
+                wind=False,
+                waves=False,
+                surfaceTemp=False,
+                barometerData=False)
+            dummy[variable] = to_include
+
+            temp = _get_data(
+                spotter_ids,
+                start_date,
+                end_date,
+                dummy['frequencyData'],
+                dummy['waves'],
+                dummy['wind'],
+                dummy['barometerData'],
+                dummy['surfaceTemp'],
+                session,
+                parallel_download,
+                bulk_data_as_dataframe,
+                spectral_data_as_dataset_spectrum,
+                cache,
+                convert_to_sofar_model_names
+            )
+            for spotter_id in temp:
+                if spotter_id not in out:
+                    out[spotter_id] = {}
+                out[spotter_id][variable] = temp[spotter_id][variable]
+    return out
+
+def _get_data(
         spotter_ids: Union[str, List[str]],
         start_date: Union[datetime, int, float, str] = None,
         end_date: Union[datetime, int, float, str] = None,
@@ -278,7 +389,6 @@ def get_data(
     if not isinstance(spotter_ids, list):
         spotter_ids = [spotter_ids]
 
-    print(f"Get spotter data: retrieving data for {len(spotter_ids)} Spotters")
     if cache and end_date < datetime.now(tz=timezone.utc):
         # Use the cache _only_ for requests that concern the past. In real-time
         # things may change.
@@ -299,6 +409,8 @@ def get_data(
         def worker(_spotter_id):
             return _download_data(_spotter_id, session, variables_to_include,
                                   start_date, end_date, bulk_data_as_dataframe,
+                                  limit=None,
+                                  convert_to_sofar_model_names=
                                   convert_to_sofar_model_names)
 
         if parallel_download:
@@ -651,7 +763,7 @@ def _get_next_page(
             # datetime64. To ensure we get a datetime - we call the datetime
             # conversion and request output as a scalar.
             if to_datetime_utc(out[var_name][-1].time,True) > max_time:
-                max_time = out[var_name][-1].time
+                max_time = to_datetime_utc(out[var_name][-1].time, True)
 
     return out, max_num_items, max_time
 

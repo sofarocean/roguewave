@@ -336,7 +336,8 @@ class RestartFile(Sequence):
                 number_of_frequencies,
                 number_of_directions)
         """
-
+        latitude = numpy.atleast_1d(latitude)
+        longitude = numpy.atleast_1d(longitude)
         points = {"latitude":numpy.atleast_1d(latitude),
                   "longitude":numpy.atleast_1d(longitude)}
 
@@ -370,7 +371,7 @@ class RestartFile(Sequence):
             data_coordinates=data_coordinates,
             data_shape=data_shape,
             interp_coord_names=list(points.keys()),
-            interp_index_coord_name='time',
+            interp_index_coord_name='latitude',
             data_periodic_coordinates=periodic_coordinates,
             data_period=None,
             data_discont=None

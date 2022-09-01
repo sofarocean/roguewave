@@ -367,7 +367,7 @@ def read_model_definition(
     latitude = numpy.linspace(
         data['latitude_start'],
         data['latitude_start'] + data['latitude_stepsize']
-        * data['nlat'], data['nlat'] + 1,
+        * data['nlat'], data['nlat'],
         endpoint=True
     )
 
@@ -375,7 +375,7 @@ def read_model_definition(
         data['longitude_start'],
         data['longitude_start'] + data['longitude_stepsize']
         * data['nlon'], data['nlon'],
-        endpoint=True
+        endpoint=False
     )
     grid = Grid(number_of_spatial_points=data['num_sea'],
                 frequencies=data['frequency_hertz'],

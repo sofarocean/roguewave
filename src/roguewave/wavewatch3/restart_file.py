@@ -513,7 +513,7 @@ class RestartFile(Sequence):
         toggle = not self._convert
         if toggle:
             self.set_return_freq_energy_density()
-        spectra = self['variance_density'][index].values
+        spectra = self[index]['variance_density'].values
         if toggle:
             self.set_return_k_action_density()
 

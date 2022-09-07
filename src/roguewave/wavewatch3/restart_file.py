@@ -722,7 +722,7 @@ class RestartFileStack:
             )
         self._update_progress_bar(len(_input))
 
-        data = concat( data , dim='time',  )
+        data = concat( data , dim='time')
         data.coords['time'] = to_datetime64([self.time[it] for it in time_index])
         return FrequencyDirectionSpectrum(data)
 

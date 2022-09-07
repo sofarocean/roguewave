@@ -222,7 +222,7 @@ class TrackSet(_Geometry):
     def from_cluster(cls,cluster:Cluster,
                          time: numpy.ndarray) -> "TrackSet":
         tracks = {}
-        for _id, point in cluster.points:
+        for _id, point in cluster.points.items():
             track_points = [
                 SpaceTimePoint.from_spatial_point(point,t) for t in time ]
             tracks[point.id] = Track( points=track_points, id=point.id)

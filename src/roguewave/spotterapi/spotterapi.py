@@ -621,8 +621,17 @@ def _download_data(
             else:
                 data[key] = _next[key]
 
+        #
+        # HACK WARNING: currently the API returns exactly half the number of
+        # samples requested for surfaceTemp. So we need to half the checking
+        # limit as well.
+        if variables_to_include['surfaceTemp']:
+            actual_limit = local_limit/2
+        else:
+            actual_limit = local_limit
+
         # If we did not receive all data we requested...
-        if number_of_items_returned < local_limit:
+        if number_of_items_returned < actual_limit:
             # , we are done...
             break
         else:

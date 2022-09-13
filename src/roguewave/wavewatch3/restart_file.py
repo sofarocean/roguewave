@@ -393,7 +393,7 @@ class RestartFile(Sequence):
         To note, we add the trailing 1 to make it easy to use broadcasting (
             the Jacobian is constant in directional space).
         """
-        return 1 / self.to_frequency_energy_density(s)[:,:,None]
+        return 1 / self.to_frequency_energy_density(s)
 
     def to_frequency_energy_density(
             self, s:Union[slice, numpy.ndarray, Sequence]

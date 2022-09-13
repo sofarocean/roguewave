@@ -184,7 +184,7 @@ def write_restart_file(spectra:Union[Dataset,numpy.ndarray,DataArray],
     if spectra_are_frequence_energy_density:
         conversion_factor = \
             parent_restart_file.to_wavenumber_action_density(slice(None, None, None))
-        spectra[:,:,:] = spectra[:,:,:] * conversion_factor[ :,:,None]
+        spectra[:,:,:] = spectra[:,:,:] * conversion_factor
 
 
     with create_resource(target_file,'wb') as file:

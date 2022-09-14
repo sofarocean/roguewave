@@ -256,7 +256,7 @@ def write_partial_restart_file(
     if spectra_are_frequence_energy_density:
         spectra[:, :, :] = spectra[:, :, :] * \
                            parent_restart_file.to_wavenumber_action_density(
-                               slice(start, stop, step))[:, :, None]
+                               slice(start, stop, step))
 
     with create_resource(target_file,'wb') as file:
         location = parent_restart_file.resource.resource_location.encode('utf-8')

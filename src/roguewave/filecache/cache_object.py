@@ -413,6 +413,8 @@ class FileCache:
                     if not valid_entry:
                         # remove the locally stored entry if not valid
                         os.remove(filepath)
+                    else:
+                        valid_entry = True
                 else:
                     # Defaults to True if no validation directive is given
                     valid_entry = True

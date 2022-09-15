@@ -539,26 +539,26 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
     def a1(self) -> DataArray:
         return self._directionally_integrate(
             self[_NAME_E] * numpy.cos(self.radian_direction)
-        )
+        ) / self.e
 
     @property
     def b1(self) -> DataArray:
         return self._directionally_integrate(
             self[_NAME_E] * numpy.sin(self.radian_direction)
-        )
+        )/ self.e
 
     @property
     def a2(self) -> DataArray:
         return self._directionally_integrate(
             self[_NAME_E] * numpy.cos(2 * self.radian_direction)
-        )
+        )/ self.e
 
     @property
     def b2(self) -> DataArray:
         return self._directionally_integrate(
             self[_NAME_E] * numpy.sin(
                 2 * self.radian_direction)
-        )
+        )/ self.e
 
     @property
     def direction(self) -> DataArray:

@@ -363,12 +363,12 @@ class WaveSpectrum(DatasetWrapper):
         index = self.peak_index(fmin, fmax)
         return self._mean_direction(
             self.a1.isel(**{_NAME_F: index}),
-            self.a1.isel(**{_NAME_F: index}))
+            self.b1.isel(**{_NAME_F: index}))
 
     def peak_directional_spread(self, fmin=0, fmax=numpy.inf) -> DataArray:
         index = self.peak_index(fmin, fmax)
         a1 = self.a1.isel(**{_NAME_F: index})
-        b1 = self.a1.isel(**{_NAME_F: index})
+        b1 = self.b1.isel(**{_NAME_F: index})
         return self._spread(a1, b1)
 
     @staticmethod

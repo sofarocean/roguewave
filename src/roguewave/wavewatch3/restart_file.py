@@ -23,56 +23,49 @@ How To Use This Module
 """
 
 import numpy
+from numpy.typing import ArrayLike, NDArray
 from roguewave.wavewatch3.resources import Resource
-from roguewave.wavewatch3.model_definition import Grid, \
-    LinearIndexedGridData
-from roguewave.wavetheory.lineardispersion import \
-    inverse_intrinsic_dispersion_relation, \
-    jacobian_wavenumber_to_radial_frequency
+from roguewave.wavewatch3.model_definition import Grid
+from roguewave.wavetheory.lineardispersion import (
+    inverse_intrinsic_dispersion_relation,
+    jacobian_wavenumber_to_radial_frequency,
+)
 from roguewave.wavewatch3.restart_file_metadata import MetaData
-from typing import Sequence, Union, Tuple, Dict
+from typing import Sequence, Union, Tuple
 from roguewave.interpolate.nd_interp import NdInterpolator
 from datetime import datetime
 from functools import cache
-from roguewave.tools.time import to_datetime_utc, to_datetime64
-from roguewave.interpolate.geometry import TrackSet
-from xarray import Dataset, concat
-from multiprocessing.pool import ThreadPool
-from tqdm import tqdm
+from roguewave.tools.time import to_datetime64
+from xarray import Dataset, DataArray
 from roguewave.wavespectra import FrequencyDirectionSpectrum
 
 MAXIMUM_NUMBER_OF_WORKERS = 10
 
+
 class RestartFile(Sequence):
     _start_record = 2
 
-    def __init__(self,
-                 grid:Grid,
-                 meta_data:MetaData,
-                 resource:Resource,
-                 depth:LinearIndexedGridData=None,
-                 return_freq_energy_density=True,
-                 parallel=True):
+    def __init__(
+        self,
+        grid: Grid,
+        meta_data: MetaData,
+        resource: Resource,
+        depth: numpy.ndarray = None,
+        parallel=True,
+    ):
 
         self._grid = grid
         self._meta_data = meta_data
         self.resource = resource
         self._dtype = numpy.dtype("float32").newbyteorder(meta_data.byte_order)
-        self._convert = return_freq_energy_density
         self.parallel = parallel
 
         if depth is None:
-            _depth = numpy.inf \
-                * numpy.ones((self.number_of_spatial_points,),dtype='float32')
-            self._depth = LinearIndexedGridData(_depth,grid)
+            self._depth = numpy.inf * numpy.ones(
+                (self.number_of_spatial_points,), dtype="float32"
+            )
         else:
             self._depth = depth
-
-    def set_return_freq_energy_density(self):
-        self._convert = True
-
-    def set_return_k_action_density(self):
-        self._convert = False
 
     @property
     def frequency(self) -> numpy.ndarray:
@@ -87,7 +80,7 @@ class RestartFile(Sequence):
         :return: 1D numpy array of directions
         """
         return self._grid.directions
-    
+
     @property
     def latitude(self) -> numpy.ndarray:
         """
@@ -102,9 +95,9 @@ class RestartFile(Sequence):
         """
         return self._grid.longitude
 
-    def coordinates(self, index:Union[slice,int,numpy.ndarray]
-                    )->Tuple[Union[float,numpy.ndarray ],
-                             Union[float,numpy.ndarray ]]:
+    def coordinates(
+        self, index: Union[slice, int, ArrayLike]
+    ) -> Tuple[Union[float, numpy.ndarray], Union[float, numpy.ndarray]]:
         """
         Return the latitude and longitude as a function of the linear index.
         :param index: linear index
@@ -127,7 +120,7 @@ class RestartFile(Sequence):
         :return: number of frequencies
         """
         return len(self.frequency)
-    
+
     @property
     def number_of_latitudes(self) -> int:
         """
@@ -173,7 +166,7 @@ class RestartFile(Sequence):
         """
         return self.number_of_spatial_points
 
-    def _sliced_index(self,s:slice) -> numpy.ndarray:
+    def _sliced_index(self, s: Union[slice, int]) -> numpy.ndarray:
         """
         Get wavenumber action density spectra at sliced indices.
         :param s: slice
@@ -183,48 +176,48 @@ class RestartFile(Sequence):
                 number_of_frequencies,
                 number_of_directions)
         """
-        if isinstance(s, (int,numpy.int32,numpy.int64)):
+        if issubclass(type(s), int):
             s = slice(s, s + 1, 1)
 
-        elif not isinstance( s, slice ):
-            raise ValueError(f'Cannot use type {type(s)} as a spatial index.'
-                             f' Use a slice or int instead.')
+        elif not isinstance(s, slice):
+            raise ValueError(
+                f"Cannot use type {type(s)} as a spatial index."
+                f" Use a slice or int instead."
+            )
 
-        start,stop,step = s.indices(self.number_of_spatial_points)
+        start, stop, step = s.indices(self.number_of_spatial_points)
         start = start + self._start_record
         stop = stop + self._start_record
         if step != 1:
             # We cannot use contiguous IO in this case, recast as a fancy index
-            indices = numpy.arange( start, stop, step=step )
+            indices = numpy.arange(start, stop, step=step)
             return self._fancy_index(indices)
 
-        byte_slice = slice( self._byte_index(start),
-                            self._byte_index(stop),1
-                            )
+        byte_slice = slice(self._byte_index(start), self._byte_index(stop), 1)
 
         # Read raw data, cast as numpy array,
-        number_of_spatial_points = stop-start
+        number_of_spatial_points = stop - start
         if number_of_spatial_points == self.number_of_spatial_points:
             # If we read all data we just call the read function. This makes
             # little difference for a local file- but for an aws object this
             # allows us to use the much more efficient get_object.
-            self.resource.seek( self._byte_index(self._start_record) )
+            self.resource.seek(self._byte_index(self._start_record))
             data = self.resource.read()
         else:
             data = self.resource.read_range(byte_slice)[0]
-        data = numpy.frombuffer(data, dtype=self._dtype,
-            count=self.number_of_spectral_points*number_of_spatial_points)
-
-        return numpy.reshape(
-            data , (
-                stop - start,
-                self.number_of_frequencies,
-                self.number_of_directions
-            )
+        data = numpy.frombuffer(
+            data,
+            dtype=self._dtype,
+            count=self.number_of_spectral_points * number_of_spatial_points,
         )
 
-    def __getitem__(self, s:Union[slice,numpy.ndarray,Sequence,int]
-                    ) -> Dataset:
+        return numpy.reshape(
+            data, (stop - start, self.number_of_frequencies, self.number_of_directions)
+        )
+
+    def __getitem__(
+        self, s: Union[slice, ArrayLike, int]
+    ) -> FrequencyDirectionSpectrum:
         """
         Dunder method for the Sequence protocol. If obj is an instance of
         RestartFile, this allows us to use `obj[10:13]` to get spectra with
@@ -247,37 +240,34 @@ class RestartFile(Sequence):
         else:
             data = self._sliced_index(s)
 
-        if self._convert:
-            # Are we using raw wavenumbers or frequency spectra
-            jacobian = self.to_frequency_energy_density(s)
-            data = data * jacobian
+        data = data * self.to_frequency_energy_density(s)
 
-        if isinstance(s,slice):
+        if isinstance(s, slice):
             s = list(range(*s.indices(self.number_of_spatial_points)))
-        elif isinstance(s,(int,numpy.int32,numpy.int64)):
+        elif isinstance(s, (int, numpy.int32, numpy.int64)):
             s = [s]
 
         coords = self.coordinates(s)
-        return Dataset(
-            data_vars={
-                "variance_density": (
-                    ('point_index','frequency','direction'),data ),
-                "longitude": (
-                    ('point_index'),coords[1] ),
-                "latitude": (
-                    ('point_index'), coords[0]),
-                "linear_index": (
-                    ('point_index'), s),
-            },
-            coords={
-                "point index": numpy.arange(0,len(s) ),
-                'frequency':self.frequency,
-                'direction':self.direction
-            })
+        return FrequencyDirectionSpectrum(
+            Dataset(
+                data_vars={
+                    "variance_density": (
+                        ("linear_index", "frequency", "direction"),
+                        data,
+                    ),
+                    "longitude": (("linear_index"), coords[1]),
+                    "latitude": (("linear_index"), coords[0]),
+                    "time": to_datetime64(self.time),
+                },
+                coords={
+                    "linear_index": s,
+                    "frequency": self.frequency,
+                    "direction": self.direction,
+                },
+            )
+        )
 
-
-    def _fancy_index(self, indices:Union[Sequence,numpy.ndarray]
-                     ) -> numpy.ndarray:
+    def _fancy_index(self, indices: Union[Sequence, numpy.ndarray]) -> numpy.ndarray:
         """
         Get wavenumber action density spectra at given indices.
         :param indices: linear indices we want spectra from (Sequence or numpy
@@ -289,11 +279,13 @@ class RestartFile(Sequence):
                 number_of_directions)
         """
         if isinstance(indices, Sequence):
-            indices = numpy.array(indices,dtype='int32')
+            indices = numpy.array(indices, dtype="int32")
 
         indices = indices + self._start_record
-        slices = [ slice(self._byte_index(index),self._byte_index(index+1),1)
-                   for index in indices ]
+        slices = [
+            slice(self._byte_index(index), self._byte_index(index + 1), 1)
+            for index in indices
+        ]
 
         data_for_slices = self.resource.read_range(slices)
         out = []
@@ -301,15 +293,12 @@ class RestartFile(Sequence):
             data = numpy.frombuffer(data, dtype=self._dtype)
             out.append(
                 numpy.reshape(
-                    data , (
-                        self.number_of_frequencies,
-                        self.number_of_directions
-                    )
+                    data, (self.number_of_frequencies, self.number_of_directions)
                 )
             )
         return numpy.array(out)
 
-    def _byte_index(self,index) -> int:
+    def _byte_index(self, index) -> int:
         """
         Get a byte index of a requested record. Record sizes are always
         number_of_spectral_points * 4 bytes. Note that the first
@@ -320,9 +309,11 @@ class RestartFile(Sequence):
         """
         return index * self._meta_data.record_size_bytes
 
-    def interpolate_in_space(self,
-                             latitude:Union[numpy.ndarray,float],
-                             longitude:Union[numpy.ndarray,float]) -> Dataset:
+    def interpolate_in_space(
+        self,
+        latitude: Union[ArrayLike, float],
+        longitude: Union[ArrayLike, float],
+    ) -> FrequencyDirectionSpectrum:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -338,32 +329,39 @@ class RestartFile(Sequence):
         """
         latitude = numpy.atleast_1d(latitude)
         longitude = numpy.atleast_1d(longitude)
-        points = {"latitude":numpy.atleast_1d(latitude),
-                  "longitude":numpy.atleast_1d(longitude)}
+        points = {
+            "latitude": numpy.atleast_1d(latitude),
+            "longitude": numpy.atleast_1d(longitude),
+        }
 
-        periodic_coordinates = {"longitude":360}
+        periodic_coordinates = {"longitude": 360}
 
-        def _get_data(  indices, _dummy ):
-            index = self._grid.index(latitude_index=indices[0],
-                                     longitude_index=indices[1])
+        def _get_data(indices, _dummy):
+            index = self._grid.index(
+                latitude_index=indices[0], longitude_index=indices[1]
+            )
 
-            output = numpy.zeros( (len(index),
-                                     self.number_of_frequencies,
-                                     self.number_of_directions ) )
+            output = numpy.zeros(
+                (len(index), self.number_of_frequencies, self.number_of_directions)
+            )
             mask = index >= 0
-            output[ mask,:,:] = \
-                self.__getitem__(index[mask])['variance_density'].values
-            output[~mask,:,:] =numpy.nan
+            output[mask, :, :] = self.__getitem__(index[mask])[
+                "variance_density"
+            ].values
+            output[~mask, :, :] = numpy.nan
             return output
 
-
-        data_shape = [ len(self.latitude), len(self.longitude),
-                       self.number_of_frequencies,self.number_of_directions]
+        data_shape = [
+            len(self.latitude),
+            len(self.longitude),
+            self.number_of_frequencies,
+            self.number_of_directions,
+        ]
         data_coordinates = (
-            ('latitude', self.latitude),
-            ('longitude', self.longitude),
-            ('frequency',self.frequency),
-            ('direction', self.direction)
+            ("latitude", self.latitude),
+            ("longitude", self.longitude),
+            ("frequency", self.frequency),
+            ("direction", self.direction),
         )
 
         interpolator = NdInterpolator(
@@ -371,16 +369,33 @@ class RestartFile(Sequence):
             data_coordinates=data_coordinates,
             data_shape=data_shape,
             interp_coord_names=list(points.keys()),
-            interp_index_coord_name='latitude',
+            interp_index_coord_name="latitude",
             data_periodic_coordinates=periodic_coordinates,
             data_period=None,
-            data_discont=None
+            data_discont=None,
         )
-        return self._create_dataset( interpolator.interpolate(points),
-                                     numpy.arange(len(latitude)) )
+
+        return FrequencyDirectionSpectrum(
+            Dataset(
+                data_vars={
+                    "variance_density": (
+                        ("points", "frequency", "direction"),
+                        interpolator.interpolate(points),
+                    ),
+                    "longitude": (("points"), points["longitude"]),
+                    "latitude": (("points"), points["latitude"]),
+                    "time": self.time,
+                },
+                coords={
+                    "frequency": self.frequency,
+                    "direction": self.direction,
+                },
+            )
+        )
 
     def to_wavenumber_action_density(
-            self, s:Union[slice, numpy.ndarray, Sequence] ) -> numpy.array:
+        self, s: Union[slice, NDArray, Sequence]
+    ) -> numpy.array:
         """
         Factor that when multiplied with frequency energy density spectra at
         the givem indices converts them to action wavenumber spectra. E.g:
@@ -396,8 +411,8 @@ class RestartFile(Sequence):
         return 1 / self.to_frequency_energy_density(s)
 
     def to_frequency_energy_density(
-            self, s:Union[slice, numpy.ndarray, Sequence]
-                                    ) -> numpy.ndarray:
+        self, s: Union[slice, numpy.ndarray, Sequence]
+    ) -> numpy.ndarray:
 
         """
         Factor that when multiplied with wavenumber action density spectra at
@@ -436,13 +451,13 @@ class RestartFile(Sequence):
 
         # Calculate the various (Jacobian) factors
         jac_k_to_w = jacobian_wavenumber_to_radial_frequency(k, depth)
-        jac_omega_f = 2*numpy.pi
-        jac_rad_to_deg = numpy.pi/180
+        jac_omega_f = 2 * numpy.pi
+        jac_rad_to_deg = numpy.pi / 180
         action_to_energy = w
 
         # Return the result
         factor = action_to_energy * jac_rad_to_deg * jac_omega_f * jac_k_to_w
-        return factor[:,:,None]
+        return factor[:, :, None]
 
     @cache
     def header_bytes(self) -> bytes:
@@ -456,8 +471,7 @@ class RestartFile(Sequence):
 
         :return: raw bytes of the header.
         """
-        s = slice(self._byte_index(0),
-                  self._byte_index(self._start_record),1)
+        s = slice(self._byte_index(0), self._byte_index(self._start_record), 1)
         return self.resource.read_range(s)[0]
 
     @cache
@@ -476,16 +490,16 @@ class RestartFile(Sequence):
 
         :return: raw bytes of the tail.
         """
-        self.resource.seek(self._byte_index(self._start_record
-                                            + self.number_of_spatial_points))
+        self.resource.seek(
+            self._byte_index(self._start_record + self.number_of_spatial_points)
+        )
         return self.resource.read()
 
-    def variance(self, latitude_slice:slice, longitude_slice:slice
-                 ) -> numpy.ndarray:
+    def variance(self, latitude_slice: slice, longitude_slice: slice) -> DataArray:
         """
         Calculate the variance at sliced indices for latitudes and longitudes.
         Returns a 2d array with constant latitudes along rows and
-        constant longitudes along colunns
+        constant longitudes along columns
 
         :param latitude_slice: latitude index range as slice
         :param longitude_slice: longitude index range as slice
@@ -494,343 +508,40 @@ class RestartFile(Sequence):
         index = self._grid.index(
             latitude_index=latitude_slice,
             longitude_index=longitude_slice,
-            valid_only=True)
+            valid_only=True,
+        )
 
-        linear_indexed_variance = self.variance_linear_index(index)
-        return self._grid.project( lon_slice=longitude_slice,
-                                   lat_slice=latitude_slice,
-                                   var=linear_indexed_variance)
+        return self._grid.project(
+            lon_slice=longitude_slice, lat_slice=latitude_slice, var=self[index].m0()
+        )
 
-    def variance_linear_index(self, index) -> numpy.ndarray:
-        """
-        Calculate the variance at linear indices. Returns a 1d of variances
-        at requested indices
-
-        :param latitude_slice: latitude index range as slice
-        :param longitude_slice: longitude index range as slice
-        :return:
-        """
-        toggle = not self._convert
-        if toggle:
-            self.set_return_freq_energy_density()
-        spectra = self[index]['variance_density'].values
-        if toggle:
-            self.set_return_k_action_density()
-
-        delta_f = self._grid.frequency_step()[None,:,None]
-        delta_dir = self._grid.direction_step()[None,None,:]
-        return numpy.sum( delta_f*delta_dir*spectra,axis=(1,2) )
-
-
+    @property
     def number_of_header_bytes(self) -> int:
         """
         :return: length of the header in bytes.
         """
         return len(self.header_bytes())
 
+    @property
     def number_of_tail_bytes(self) -> int:
         """
         :return: length of the tail in bytes.
         """
         return len(self.tail_bytes())
 
-    def size_in_bytes(self):
+    @property
+    def size_in_bytes(self) -> int:
         """
         :return: Total size in bytes of a restart file.
         """
-        return self.number_of_tail_bytes() + self.number_of_header_bytes() + \
-               self.number_of_spatial_points * \
-               self.number_of_spectral_points * self._dtype.itemsize
-
-    def linear_indices(self,indices:Union[slice,numpy.ndarray,Sequence]):
-        return numpy.arange(self.number_of_spatial_points)[indices]
-
-    def _create_dataset(self, variance_density,
-                        linear_indices: Union[slice,numpy.ndarray,Sequence]):
-
-        coords = self.coordinates(linear_indices)
-        return Dataset(
-            data_vars={
-                "variance_density": (
-                    ('point_index','frequency','direction'),variance_density),
-                "longitude": (
-                    ('point_index'),coords[1] ),
-                "latitude": (
-                    ('point_index'),coords[0]),
-                "linear_index": (
-                    ('point_index'),linear_indices),
-                "time": self.time
-            },
-            coords={
-                "point index": numpy.arange(0,len(linear_indices) ),
-                'frequency':self.frequency,
-                'direction':self.direction
-            })
-
-
-
-class RestartFileStack:
-    def __init__(self, restart_files: Sequence[RestartFile],parallel = True):
-        self._restart_files = restart_files
-        self._grid = restart_files[0]._grid
-        self._time = to_datetime_utc([ x.time for x in restart_files ])
-        self.parallel = parallel
-
-        # To make the progress bar work we need to store progress across
-        # calls somewhere.
-        self._progres = {"position":0, "total":None, "leave":True}
-
-    @property
-    def frequency(self) -> numpy.ndarray:
-        """
-        :return: 1D numpy array of frequencies
-        """
-        return self._grid.frequencies
-
-    @property
-    def direction(self) -> numpy.ndarray:
-        """
-        :return: 1D numpy array of directions
-        """
-        return self._grid.directions
-
-    @property
-    def latitude(self) -> numpy.ndarray:
-        """
-        :return: 1D numpy array of latitudes.
-        """
-        return self._grid.latitude
-
-    @property
-    def longitude(self) -> numpy.ndarray:
-        """
-        :return: 1D numpy array of longitudes.
-        """
-        return self._grid.longitude
-
-    def coordinates(self, index: Union[slice, int, numpy.ndarray]
-                    ) -> Tuple[Union[float, numpy.ndarray],
-                               Union[float, numpy.ndarray]]:
-        """
-        Return the latitude and longitude as a function of the linear index.
-        :param index: linear index
-        :return:  ( latitude(s), longitude(s)
-        """
-        ilon = self._grid.longitude_index(index)
-        ilat = self._grid.latitude_index(index)
-        return self.latitude[ilat], self.longitude[ilon]
-
-    @property
-    def number_of_directions(self) -> int:
-        """
-        :return: number of directions
-        """
-        return len(self.direction)
-
-    @property
-    def number_of_frequencies(self) -> int:
-        """
-        :return: number of frequencies
-        """
-        return len(self.frequency)
-
-    @property
-    def number_of_latitudes(self) -> int:
-        """
-        :return: number of latitudes.
-        """
-        return len(self.latitude)
-
-    @property
-    def number_of_longitudes(self) -> int:
-        """
-        :return: number of longitudes.
-        """
-        return len(self.longitude)
-
-    @property
-    def number_of_spatial_points(self) -> int:
-        """
-        :return: Number of spatial points in the restart file. This only counts
-            the number of sea points and is *not* equal to
-            self.number_of_latitudes * self.number_of_longitudes
-            Also referred to as "NSEA" in wavewatch III.
-        """
-        return self._grid.number_of_spatial_points
-
-    @property
-    def number_of_spectral_points(self) -> int:
-        """
-        :return: number of spectral points.
-        """
-        return self.number_of_frequencies * self.number_of_directions
-
-    @property
-    def time(self) -> Sequence[datetime]:
-        return self._time
-
-    def __len__(self):
-        return len(self._restart_files)
-
-    def __getitem__(self, nargs) -> FrequencyDirectionSpectrum:
-        if len(nargs) == 2:
-            time_index, linear_index = nargs
-        elif len(nargs) == 3:
-            time_index, lat_index, lon_index = nargs
-            linear_index = self._grid.index(lat_index,
-                                            lon_index,valid_only=True)
-        else:
-            raise ValueError('unexpected number of indices')
-
-        if isinstance(time_index,(int,numpy.int32,numpy.int64)):
-            time_index = [time_index]
-
-        fancy_index = not isinstance(time_index,slice)
-        if fancy_index:
-            _input = list(zip( time_index,linear_index ))
-        else:
-            time_index = list(range(*time_index.indices(len(self))))
-            _input = [ (it, linear_index) for it in time_index]
-
-        def _worker( arg ):
-            return self._restart_files[arg[0]][arg[1]]
-
-        self._init_progress_bar(len(_input))
-        if self.parallel and len(_input) > 1:
-            with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
-                data = list(
-                    tqdm(
-                        pool.imap(_worker, _input),
-                        total=self._progres['total'],
-                        initial=self._progres['position'],
-                        leave=self._progres['leave']
-                    )
-                )
-        else:
-            disable_progress_bar = False
-            if len(_input) == 1:
-                disable_progress_bar = True
-
-            data = list(
-                tqdm(
-                    map(_worker, _input),
-                    total=self._progres['total'],
-                    disable=disable_progress_bar,
-                    initial=self._progres['position'],
-                    leave = self._progres['leave']
-                )
-            )
-        self._update_progress_bar(len(_input))
-
-        data = concat( data , dim='time')
-        data.coords['time'] = to_datetime64([self.time[it] for it in time_index])
-        return FrequencyDirectionSpectrum(data)
-
-    def _init_progress_bar(self, total):
-        if self._progres['total'] is None:
-            self._progres['total'] = total
-            self._progres['position'] = 0
-            self._progres['leave'] = True
-        else:
-            if total + self._progres['position'] == self._progres['total']:
-                self._progres['leave'] = True
-            else:
-                self._progres['leave'] = False
-
-    def _update_progress_bar(self,number):
-        self._progres['position'] += number
-
-        if self._progres['position'] == self._progres['total']:
-            self._progres['total'] = None
-            self._progres['position'] = 0
-
-    def interpolate(self,latitude:Union[numpy.ndarray,float],
-                        longitude:Union[numpy.ndarray,float],
-                        time:Union[numpy.ndarray,numpy.datetime64,datetime]
-                    ) -> FrequencyDirectionSpectrum:
-        """
-        Extract interpolated spectra at given latitudes and longitudes.
-        Input can be either a single latitude and longitude pair, or a
-        numpy array of latitudes and longitudes.
-
-        :param latitude: latitudes to get interpolated spectra
-        :param longitude: longitudes to get interpolated spectra
-        :return: Interpolated spectra. Returned data is of  type float32 and
-        has the shape:
-                (len(indices),
-                number_of_frequencies,
-                number_of_directions)
-        """
-        time = to_datetime64(time)
-        points = {"time":numpy.atleast_1d(time),
-                  "latitude":numpy.atleast_1d(latitude),
-                  "longitude":numpy.atleast_1d(longitude),
-                  }
-
-        periodic_coordinates = {"longitude":360}
-
-        def _get_data(  indices , idims):
-            time_index = indices[0]
-            index = self._grid.index(latitude_index=indices[1],
-                                     longitude_index=indices[2])
-
-            output = numpy.zeros( (
-                len(index),
-                self.number_of_frequencies,
-                self.number_of_directions ) )
-            mask = index >= 0
-
-            output[  mask,:,:] = numpy.squeeze(
-                self.__getitem__(
-                    (time_index[mask],index[mask]))['variance_density']
-            )
-            output[ ~mask,:,:] =numpy.nan
-            return output
-
-        data_shape = [ len(self.time), len(self.latitude), len(self.longitude),
-                       self.number_of_frequencies,self.number_of_directions]
-
-        data_coordinates = (
-            ('time',to_datetime64(self.time)),
-            ('latitude', self.latitude),
-            ('longitude', self.longitude),
-            ('frequency',self.frequency),
-            ('direction', self.direction)
+        return (
+            self.number_of_tail_bytes
+            + self.number_of_header_bytes
+            + self.number_of_spatial_points
+            * self.number_of_spectral_points
+            * self._dtype.itemsize
         )
 
-        interpolator = NdInterpolator(
-            get_data=_get_data,
-            data_coordinates=data_coordinates,
-            data_shape=data_shape,
-            interp_coord_names=list(points.keys()),
-            interp_index_coord_name='time',
-            data_periodic_coordinates=periodic_coordinates,
-            data_period=None,
-            data_discont=None
-        )
-
-        self._init_progress_bar(len(latitude)*8)
-        dataset = interpolator.interpolate(points)
-
-        return FrequencyDirectionSpectrum(Dataset(
-            data_vars={
-                "variance_density": (
-                    ('time','frequency','direction'),dataset ),
-                "longitude": (
-                    ('time'),longitude ),
-                "latitude": (
-                    ('time'),latitude),
-            },
-            coords={
-                'time':time,
-                'frequency':self.frequency,
-                'direction':self.direction
-            }))
-
-    def interpolate_tracks(self,tracks:TrackSet
-                          ) -> Dict[str, FrequencyDirectionSpectrum]:
-        return {
-            _id:self.interpolate(x.latitude,x.longitude,x.time)
-                                             for _id,x in tracks.tracks.items()
-        }
-
+    @property
+    def linear_indices(self):
+        return numpy.arange(self.number_of_spatial_points)

@@ -29,13 +29,17 @@ Pieter Smit, Aug, 2022
 """
 
 import numpy
-from roguewave.wavewatch3.fortran_types import FortranInt, FortranFloat, \
-    FortranCharacter
+from roguewave.wavewatch3.fortran_types import (
+    FortranInt,
+    FortranFloat,
+    FortranCharacter,
+)
 from roguewave.wavewatch3.resources import Resource
 from io import BytesIO
 from dataclasses import dataclass
 from typing import Union, Tuple, Sequence, Literal
 from roguewave.tools.math import wrapped_difference
+from xarray import DataArray
 
 
 @dataclass()
@@ -50,20 +54,22 @@ class Grid:
     Purpose:
     We need this information for reading restart files.
     """
+
     number_of_spatial_points: int  # number of spatial "sea" points
     frequencies: numpy.ndarray
     directions: numpy.ndarray
     latitude: numpy.ndarray  # 1D array of model latitudes
-    longitude: numpy.ndarray # 1D array of model longitudes
+    longitude: numpy.ndarray  # 1D array of model longitudes
     _to_linear_index: numpy.ndarray  # mapping of [ilon,ilat] => linear index
     _to_point_index: numpy.ndarray  # mapping of linear index => [ilon,ilat]
 
     @property
     def _growth_factor(self):
-        return self.frequencies[1]/self.frequencies[0]
+        return self.frequencies[1] / self.frequencies[0]
 
-    def longitude_index(self, linear_index:Union[slice,Sequence,numpy.ndarray]
-                        )->numpy.ndarray:
+    def longitude_index(
+        self, linear_index: Union[slice, Sequence, numpy.ndarray]
+    ) -> numpy.ndarray:
         """
         :param linear_index: linear 1d index
         :return: longitude 1d index
@@ -71,18 +77,21 @@ class Grid:
 
         return self._to_point_index[0, linear_index]
 
-    def latitude_index(self, linear_index:Union[slice,Sequence,numpy.ndarray]
-                        )->numpy.ndarray:
+    def latitude_index(
+        self, linear_index: Union[slice, Sequence, numpy.ndarray]
+    ) -> numpy.ndarray:
         """
         :param linear_index: linear 1d index
         :return: latitude 1d index
         """
         return self._to_point_index[1, linear_index]
 
-    def index(self,
-              latitude_index:Union[slice,Sequence,numpy.ndarray],
-              longitude_index:Union[slice,Sequence,numpy.ndarray],
-              valid_only=False):
+    def index(
+        self,
+        latitude_index: Union[slice, Sequence, numpy.ndarray],
+        longitude_index: Union[slice, Sequence, numpy.ndarray],
+        valid_only=False,
+    ):
         """
         get the linear index of the array
         :param latitude_index:
@@ -91,22 +100,27 @@ class Grid:
         """
         indices = self._to_linear_index[latitude_index, longitude_index]
         if valid_only:
-            indices = indices[indices>=0]
+            indices = indices[indices >= 0]
         return indices
 
     def direction_step(self):
         return wrapped_difference(
-            numpy.diff(self.directions,append=self.directions[0]),period=360
+            numpy.diff(self.directions, append=self.directions[0]), period=360
         )
 
     def frequency_step(self):
-        delta = numpy.diff(self.frequencies,
-                       prepend=self.frequencies[0]/self._growth_factor,
-                       append=self.frequencies[-1]*self._growth_factor
+        delta = numpy.diff(
+            self.frequencies,
+            prepend=self.frequencies[0] / self._growth_factor,
+            append=self.frequencies[-1] * self._growth_factor,
         )
         return (delta[0:-1] + delta[1:]) / 2
 
-    def extract(self, s: slice, var: numpy.ndarray):
+    def extract(
+        self,
+        s: Union[slice, Sequence, numpy.ndarray],
+        var: Union[numpy.ndarray, DataArray],
+    ) -> DataArray:
         """
         Extract linear indexed data (with indices indicated by the slice) from
         a 2D array (lat,lon)
@@ -114,10 +128,23 @@ class Grid:
         :param var: 2D ndarray
         :return: 1D ndarray of length slice.stop-slice.start
         """
-        return var[self.latitude_index(s), self.longitude_index(s)]
+        if isinstance(var, DataArray):
+            return var[
+                DataArray(self.latitude_index(s), dims="points"),
+                DataArray(self.longitude_index(s), dims="points"),
+            ]
+        else:
+            return DataArray(
+                data=var[self.latitude_index(s), self.longitude_index(s)], dims="points"
+            )
 
-    def project(self, lon_slice: slice, lat_slice: slice,
-                var: numpy.ndarray, except_val=numpy.nan):
+    def project(
+        self,
+        lon_slice: slice,
+        lat_slice: slice,
+        var: Union[numpy.ndarray, DataArray],
+        except_val=numpy.nan,
+    ) -> DataArray:
         """
         Project linear indexed data onto a 2d array (lat ,lon).
 
@@ -139,10 +166,24 @@ class Grid:
         # this will not work for stepsizes != 1
         out = numpy.zeros((nlat, nlon), dtype=var.dtype) + except_val
         out[ilat, ilon] = var[ind]
-        return out
 
-    def set_linear_data(self, lon_slice: slice, lat_slice: slice,
-                        linear_data: numpy.ndarray, data: numpy.ndarray):
+        return DataArray(
+            data=out,
+            coords={
+                "latitude": self.latitude[lat_slice],
+                "longitude": self.longitude[lon_slice],
+            },
+            dims=("latitude", "longitude"),
+            name="variance",
+        )
+
+    def set_linear_data(
+        self,
+        lon_slice: Union[slice, Sequence, numpy.ndarray],
+        lat_slice: Union[slice, Sequence, numpy.ndarray],
+        linear_data: Union[numpy.ndarray, DataArray],
+        data: Union[numpy.ndarray, DataArray],
+    ):
         """
         Update data stored in a linear array with data from a 2d array.
         :param lon_slice: longitude indices
@@ -152,64 +193,14 @@ class Grid:
         :return:
         """
 
-        ind = self._to_linear_index[lat_slice, lon_slice]
-        ind = ind[ind >= 0]
-        ilon = self.longitude_index(ind)
-        ilat = self.latitude_index(ind)
-        linear_data[ind] = data[ilat, ilon]
+        ind = self.index(lat_slice, lon_slice, valid_only=True)
+        linear_data[ind] = self.extract(ind, data)
         return linear_data
 
 
-class LinearIndexedGridData:
-    """
-    A simple class to interact with data that is stored in a packed linear
-    fasion in wavewatch. Wavewatch uses a 2d grid (lat,lon) but stores spatial
-    point in a 1d indexed array- where _only_ ocean/sea/lake points are
-    included. To refer back to the original 2d tuple we therefore need a trans-
-    lation array relating index -> ilat,ilon and ilat,ilon -> index. Note that
-    for the second mapping not all points are defined (if ilat,ilon is a land
-    point).
-
-    Usage- to get data from the array we instantiate the object:
-
-    linear_indexed_data = LinearIndexedGridData( ... )
-
-    and subsequently use linear_indexed_data[linear_index] to get data from
-    a linear index, or linear_indexed_data[ilat,ilon] to retrieve it from a
-    specific lat lon. Assignment works similarly.
-    """
-    def __init__(self, linear_indexed_data: numpy.ndarray, grid: Grid):
-        """
-        :param linear_indexed_data: Data stored in packed linear fashion
-        :param grid: the associated grid object
-        """
-        self._linear_indexed_data = linear_indexed_data
-        self._grid = grid
-
-    def __getitem__(self, *item) -> numpy.ndarray:
-        if len(item) == 2:
-            item = [_to_slice(x) for x in item]
-            return self._grid.project(item[0], item[1],
-                                      self._linear_indexed_data)
-        elif isinstance(item[0], (Sequence, numpy.ndarray)):
-            return self._linear_indexed_data[item[0]]
-
-        else:
-            return self._linear_indexed_data[_to_slice(item[0])]
-
-    def __setitem__(self, *args):
-        if len(args) == 3:
-            item = [_to_slice(x) for x in args[:2]]
-            self._grid.set_linear_data(item[0], item[1],
-                                       self._linear_indexed_data, args[2])
-        else:
-            return self._linear_indexed_data[_to_slice(args[0])]
-
-
 def read_model_definition(
-        resource: Resource,
-        byte_order: Literal["<", ">", "="] = '<'
-) -> Tuple[Grid, LinearIndexedGridData, numpy.ndarray]:
+    resource: Resource, byte_order: Literal["<", ">", "="] = "<"
+) -> Tuple[Grid, numpy.ndarray, numpy.ndarray]:
 
     """
     Read a ww3 model definition file, see comments on top of this file for
@@ -220,6 +211,7 @@ def read_model_definition(
         little endian (<).
     :return: the grid, depth and the landmask.
     """
+
     def jump(stream, number, start):
         if start is None:
             _ = stream.read(number)
@@ -249,15 +241,13 @@ def read_model_definition(
     # provided, and this has to be known in advance. E.g. mulitple different
     # information types can (and are) stored as part of the same record.
     _sor = fort_int.unpack(stream, 1)[0]  # Fortran record opening
-    data['id'] = fort_char.unpack(stream, 35)  # Line 70
-    data['grid_name'] = fort_char.unpack(stream, 10)  # Line 70  # noqa: F841
-    data['nlon'] = fort_int.unpack(stream, 1)[0]  # Number of longitude points
-    data['nlat'] = fort_int.unpack(stream, 1)[0]  # Number of longitude points
-    data['num_sea'] = fort_int.unpack(stream, 1)[0]  # Number of sea points
-    data['num_dir'] = fort_int.unpack(stream, 1)[
-        0]  # Number of directional points
-    data['num_freq'] = fort_int.unpack(stream, 1)[
-        0]  # Number of wavenumber points
+    data["id"] = fort_char.unpack(stream, 35)  # Line 70
+    data["grid_name"] = fort_char.unpack(stream, 10)  # Line 70  # noqa: F841
+    data["nlon"] = fort_int.unpack(stream, 1)[0]  # Number of longitude points
+    data["nlat"] = fort_int.unpack(stream, 1)[0]  # Number of longitude points
+    data["num_sea"] = fort_int.unpack(stream, 1)[0]  # Number of sea points
+    data["num_dir"] = fort_int.unpack(stream, 1)[0]  # Number of directional points
+    data["num_freq"] = fort_int.unpack(stream, 1)[0]  # Number of wavenumber points
 
     # Number of input bound points (see w3odatd.ftn, line 219) and
     # Number of files for output bound data (see w3odatd.ftn, line 220)
@@ -274,49 +264,55 @@ def read_model_definition(
     # assert fort_int.unpack(stream,1)[0] == _sor
 
     # Enter the section for W3GDAT (line 582)
-    data["grid_type"], data["flagll"], data["iclose"] = \
-        fort_int.unpack(stream, None, unformatted_sequential=True)
-    (data["longitude_stepsize"], data["latitude_stepsize"],
-     data["longitude_start"], data["latitude_start"]) = \
-        fort_float.unpack(stream, None, unformatted_sequential=True)
+    data["grid_type"], data["flagll"], data["iclose"] = fort_int.unpack(
+        stream, None, unformatted_sequential=True
+    )
+    (
+        data["longitude_stepsize"],
+        data["latitude_stepsize"],
+        data["longitude_start"],
+        data["latitude_start"],
+    ) = fort_float.unpack(stream, None, unformatted_sequential=True)
 
     _sor = fort_int.unpack(stream, 1)[0]
     start_of_record_absolute = stream.tell()
-    dtype_float = numpy.dtype('float32').newbyteorder(byte_order)
-    dtype_int = numpy.dtype('int32').newbyteorder(byte_order)
+    dtype_float = numpy.dtype("float32").newbyteorder(byte_order)
+    dtype_int = numpy.dtype("int32").newbyteorder(byte_order)
 
     # First the bottom grid. The bottom grid is only stored on the
     # computational grid
-    data['bottom_datum'] = \
-        numpy.frombuffer(
-            stream.read(data['num_sea'] * 4),
-            count=data['num_sea'], dtype=dtype_float)
+    data["bottom_datum"] = numpy.frombuffer(
+        stream.read(data["num_sea"] * 4), count=data["num_sea"], dtype=dtype_float
+    )
 
     # Next the mask layer. The masked layer is stored everywhere. Note that it
     # is stored with latitude as the fast axis- here we retrieve as longitude
     # as the fast axis (transpose)
-    num_points = data['nlon'] * data['nlat']
-    data['mask'] = \
-        numpy.reshape(
-            numpy.frombuffer(stream.read(num_points * 4), dtype=dtype_int),
-            (data['nlon'], data['nlat'])
-        ).transpose()
+    num_points = data["nlon"] * data["nlat"]
+    data["mask"] = numpy.reshape(
+        numpy.frombuffer(stream.read(num_points * 4), dtype=dtype_int),
+        (data["nlon"], data["nlat"]),
+    ).transpose()
 
     # Next the mapping that relates ix,iy -> ns. Subtract 1 to account for 0
     # based indexing (vs 1 in Fortran). Note that it is stored with latitude as
     # the fast axis- here we retrieve as longitude as the fast axis (transpose)
-    data['to_linear_index'] = \
+    data["to_linear_index"] = (
         numpy.reshape(
             numpy.frombuffer(stream.read(num_points * 4), dtype=dtype_int),
-            (data['nlon'], data['nlat'])
-        ).transpose() - 1
+            (data["nlon"], data["nlat"]),
+        ).transpose()
+        - 1
+    )
 
-    num_points = data['num_sea']
-    data['to_point_index'] = \
+    num_points = data["num_sea"]
+    data["to_point_index"] = (
         numpy.reshape(
             numpy.frombuffer(stream.read(num_points * 8), dtype=dtype_int),
-            (2, num_points)
-        ) - 1
+            (2, num_points),
+        )
+        - 1
+    )
 
     # FROM: w3gdatmd.ftn line 160
     #      TRFLAG    Int.  Public   Flag for use of transparencies
@@ -325,7 +321,7 @@ def read_model_definition(
     #                                2: Obstructions at cell centers.
     #                                3: Like 1 with continuous ice.
     #                                4: Like 2 with continuous ice.
-    data['tr_flag'] = fort_int.unpack(stream, 1)[0]
+    data["tr_flag"] = fort_int.unpack(stream, 1)[0]
     _ = jump(stream, _sor, start_of_record_absolute)
     _eor = fort_int.unpack(stream, 1)[0]
     assert _sor == _eor
@@ -336,64 +332,69 @@ def read_model_definition(
 
     # Spectral parameters
     # For descriptions; see w3gdatmd.ftn
-    num_spec_points = data['num_freq'] * data['num_dir']
+    num_spec_points = data["num_freq"] * data["num_dir"]
 
     # I do not fully understand why arrays we ignore are larger.. but we
     # ignore them
-    byte_size_full = (num_spec_points + data['num_dir']) * 4
+    byte_size_full = (num_spec_points + data["num_dir"]) * 4
 
     # ignore: "mapwn, mapth"
     _sor = fort_int.unpack(stream, 1)[0]
     _ = stream.read(byte_size_full * 2)
-    data['direction_step_size'] = fort_float.unpack(stream, 1)[0]
-    data['direction_degree'] = numpy.frombuffer(
-        stream.read(data['num_dir'] * 4), dtype=dtype_float
-    ) * 180 / numpy.pi
+    data["direction_step_size"] = fort_float.unpack(stream, 1)[0]
+    data["direction_degree"] = (
+        numpy.frombuffer(stream.read(data["num_dir"] * 4), dtype=dtype_float)
+        * 180
+        / numpy.pi
+    )
 
     # ignore: "stuff"
     _ = stream.read(byte_size_full * 5)
 
     #
-    data['freq_mult_fac'] = fort_float.unpack(stream, 1)[0]
-    data['start_frequency'] = fort_float.unpack(stream, 1)[0]
+    data["freq_mult_fac"] = fort_float.unpack(stream, 1)[0]
+    data["start_frequency"] = fort_float.unpack(stream, 1)[0]
 
     # Note they store an extra frequency before start, and at the end, I
-    # assume this is for convinience in calculating delta's- either way,
+    # assume this is for convenience in calculating delta's- either way,
     # ignored here.
-    data['frequency_hertz'] = (numpy.frombuffer(
-        stream.read(data['num_freq'] * 4 + 8), dtype=dtype_float
-    ) / numpy.pi / 2)[1:-1]
+    data["frequency_hertz"] = (
+        numpy.frombuffer(stream.read(data["num_freq"] * 4 + 8), dtype=dtype_float)
+        / numpy.pi
+        / 2
+    )[1:-1]
 
     latitude = numpy.linspace(
-        data['latitude_start'],
-        data['latitude_start'] + data['latitude_stepsize']
-        * data['nlat'], data['nlat'],
-        endpoint=True
+        data["latitude_start"],
+        data["latitude_start"] + data["latitude_stepsize"] * (data["nlat"] - 1),
+        data["nlat"],
+        endpoint=True,
     )
 
     longitude = numpy.linspace(
-        data['longitude_start'],
-        data['longitude_start'] + data['longitude_stepsize']
-        * data['nlon'], data['nlon'],
-        endpoint=False
+        data["longitude_start"],
+        data["longitude_start"] + data["longitude_stepsize"] * data["nlon"],
+        data["nlon"],
+        endpoint=False,
     )
-    grid = Grid(number_of_spatial_points=data['num_sea'],
-                frequencies=data['frequency_hertz'],
-                directions=data['direction_degree'],
-                latitude=latitude,
-                longitude=longitude,
-                _to_linear_index=data['to_linear_index'],
-                _to_point_index=data['to_point_index'])
+    grid = Grid(
+        number_of_spatial_points=data["num_sea"],
+        frequencies=data["frequency_hertz"],
+        directions=data["direction_degree"],
+        latitude=latitude,
+        longitude=longitude,
+        _to_linear_index=data["to_linear_index"],
+        _to_point_index=data["to_point_index"],
+    )
 
-    depth = LinearIndexedGridData(- data['bottom_datum'], grid)
+    depth = -data["bottom_datum"]
 
-    return grid, depth, data['mask']
+    return grid, depth, data["mask"]
 
 
 def _to_slice(val: Union[slice, int]) -> slice:
     if not isinstance(val, (slice, int)):
-        print(type(val), val)
-        raise ValueError('Only slice or int supported as index.')
+        raise ValueError("Only slice or int supported as index.")
 
     if isinstance(val, int):
         return slice(val, val + 1, 1)

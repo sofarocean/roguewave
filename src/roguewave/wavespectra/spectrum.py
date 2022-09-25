@@ -1,36 +1,44 @@
 import numpy
 from roguewave.interpolate.dataset import (
     interpolate_dataset_grid,
-    interpolate_dataset_along_axis
+    interpolate_dataset_along_axis,
 )
 from roguewave.tools.math import wrapped_difference
 from roguewave.tools.time import to_datetime64
-from roguewave.wavetheory.lineardispersion import \
-    inverse_intrinsic_dispersion_relation
+from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
 from roguewave.wavespectra.estimators import mem2
-from roguewave.wavespectra.parametric import pierson_moskowitz_frequency
 from typing import Iterator, Hashable, Iterable, TypeVar
 from xarray import Dataset, DataArray, concat
 from xarray.core.coordinates import DatasetCoordinates
 
-_NAME_F = 'frequency'
-_NAME_D = 'direction'
-_NAME_T = 'time'
-_NAME_E = 'variance_density'
-_NAME_a1 = 'a1'
-_NAME_b1 = 'b1'
-_NAME_a2 = 'a2'
-_NAME_b2 = 'b2'
-_NAME_LAT = 'latitude'
-_NAME_LON = 'longitude'
-_NAME_DEPTH = 'depth'
+_NAME_F = "frequency"
+_NAME_D = "direction"
+_NAME_T = "time"
+_NAME_E = "variance_density"
+_NAME_a1 = "a1"
+_NAME_b1 = "b1"
+_NAME_a2 = "a2"
+_NAME_b2 = "b2"
+_NAME_LAT = "latitude"
+_NAME_LON = "longitude"
+_NAME_DEPTH = "depth"
 _NAMES_2D = (_NAME_F, _NAME_D, _NAME_T, _NAME_E, _NAME_LAT, _NAME_LON)
-_NAMES_1D = (_NAME_F, _NAME_T, _NAME_E, _NAME_LAT, _NAME_LON,
-             _NAME_a1, _NAME_b1, _NAME_a2, _NAME_b2)
+_NAMES_1D = (
+    _NAME_F,
+    _NAME_T,
+    _NAME_E,
+    _NAME_LAT,
+    _NAME_LON,
+    _NAME_a1,
+    _NAME_b1,
+    _NAME_a2,
+    _NAME_b2,
+)
 
 _T = TypeVar("_T")
 
-class DatasetWrapper():
+
+class DatasetWrapper:
     """
     A class that wraps a dataset object and passes through some of its primary
     functionality (get/set etc.). Used here mostly to make explicit what parts
@@ -39,6 +47,7 @@ class DatasetWrapper():
     of the dataset object are needed we can simple operate directly on the
     dataset object itself.
     """
+
     def __init__(self, dataset: Dataset):
         self.dataset = dataset
 
@@ -48,20 +57,20 @@ class DatasetWrapper():
     def __setitem__(self, key, value) -> None:
         return self.dataset.__setitem__(key, value)
 
-    def __copy__(self:_T) -> _T:
+    def __copy__(self: _T) -> _T:
         cls = self.__class__
         return cls(self.dataset.copy())
 
     def __len__(self):
         return len(self.dataset)
 
-    def copy(self:_T, deep=True) -> _T:
+    def copy(self: _T, deep=True) -> _T:
         if deep:
             return self.__deepcopy__({})
         else:
             return self.__copy__()
 
-    def __deepcopy__(self:_T, memodict) -> _T:
+    def __deepcopy__(self: _T, memodict) -> _T:
         cls = self.__class__
         return cls(self.dataset.copy(deep=True))
 
@@ -78,7 +87,7 @@ class DatasetWrapper():
         return self.dataset.__iter__()
 
     @classmethod
-    def concat_from_list(cls: _T, _list: Iterable[_T], dim='time') -> _T:
+    def concat_from_list(cls: _T, _list: Iterable[_T], dim="time") -> _T:
         """
         Classmethod to aggregate a list of wavespectra and concatenate them
         into a single spectral object. For instance, from spotter observations
@@ -90,38 +99,49 @@ class DatasetWrapper():
             usually time.
         :return: Wavespectrum object.
         """
-        return cls(concat( [x.dataset for x in _list], dim=dim))
+        return cls(concat([x.dataset for x in _list], dim=dim))
 
 
 class WaveSpectrum(DatasetWrapper):
-    frequency_units = 'Hertz'
-    angular_units = 'Degrees'
-    spectral_density_units = 'm**2/Hertz'
-    angular_convention = 'Wave travel direction (going-to), ' \
-                         'measured anti-clockwise from East'
+    frequency_units = "Hertz"
+    angular_units = "Degrees"
+    spectral_density_units = "m**2/Hertz"
+    angular_convention = (
+        "Wave travel direction (going-to), " "measured anti-clockwise from East"
+    )
     bulk_properties = (
-        'm0', 'hm0', 'tm01', 'tm02', 'peak_period', 'peak_direction',
-        'peak_directional_spread', 'mean_direction', 'mean_directional_spread',
-        'peak_frequency',
-        'peak_wavenumber', 'latitude', 'longitude', 'time',
-        'is_sea_spectrum', 'is_swell_spectrum')
+        "m0",
+        "hm0",
+        "tm01",
+        "tm02",
+        "peak_period",
+        "peak_direction",
+        "peak_directional_spread",
+        "mean_direction",
+        "mean_directional_spread",
+        "peak_frequency",
+        "peak_wavenumber",
+        "latitude",
+        "longitude",
+        "time",
+        "is_sea_spectrum",
+        "is_swell_spectrum",
+    )
 
     def __init__(self, dataset: Dataset):
         super(WaveSpectrum, self).__init__(dataset)
 
-    def __add__(self:_T, other: _T) -> _T:
+    def __add__(self: _T, other: _T) -> _T:
         spectrum = self.copy(deep=True)
-        spectrum[_NAME_E] = (spectrum[_NAME_E] +
-                             other[_NAME_E])
+        spectrum[_NAME_E] = spectrum[_NAME_E] + other[_NAME_E]
         return spectrum
 
     def __sub__(self: _T, other: _T) -> _T:
         spectrum = self.copy(deep=True)
-        spectrum[_NAME_E] = (spectrum[_NAME_E] -
-                             other[_NAME_E])
+        spectrum[_NAME_E] = spectrum[_NAME_E] - other[_NAME_E]
         return spectrum
 
-    def __neg__(self:_T) -> _T:
+    def __neg__(self: _T) -> _T:
         """
         Negate self- that is -spectrum
         :return: spectrum with all spectral values taken to have the opposite
@@ -131,8 +151,7 @@ class WaveSpectrum(DatasetWrapper):
         spectrum[_NAME_E] = -spectrum[_NAME_E]
         return spectrum
 
-    def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf
-                         ) -> DataArray:
+    def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> DataArray:
         """
         Calculate a "frequency moment" over the given range. A frequency moment
         here refers to the integral:
@@ -169,7 +188,7 @@ class WaveSpectrum(DatasetWrapper):
         :return: Radian frequency
         """
         data_array = self[_NAME_F] * 2 * numpy.pi
-        data_array.name = 'radian_frequency'
+        data_array.name = "radian_frequency"
         return data_array
 
     @property
@@ -192,6 +211,13 @@ class WaveSpectrum(DatasetWrapper):
         :return: Time
         """
         return self[_NAME_T]
+
+    @property
+    def variance_density(self) -> DataArray:
+        """
+        :return: Time
+        """
+        return self[_NAME_E]
 
     @property
     def e(self) -> DataArray:
@@ -362,23 +388,22 @@ class WaveSpectrum(DatasetWrapper):
     def peak_direction(self, fmin=0, fmax=numpy.inf) -> DataArray:
         index = self.peak_index(fmin, fmax)
         return self._mean_direction(
-            self.a1.isel(**{_NAME_F: index}),
-            self.a1.isel(**{_NAME_F: index}))
+            self.a1.isel(**{_NAME_F: index}), self.b1.isel(**{_NAME_F: index})
+        )
 
     def peak_directional_spread(self, fmin=0, fmax=numpy.inf) -> DataArray:
         index = self.peak_index(fmin, fmax)
         a1 = self.a1.isel(**{_NAME_F: index})
-        b1 = self.a1.isel(**{_NAME_F: index})
+        b1 = self.b1.isel(**{_NAME_F: index})
         return self._spread(a1, b1)
 
     @staticmethod
-    def _mean_direction(a1:_T, b1:_T) -> _T:
+    def _mean_direction(a1: _T, b1: _T) -> _T:
         return numpy.arctan2(b1, a1) * 180 / numpy.pi
 
     @staticmethod
-    def _spread(a1:_T, b1:_T) -> _T:
-        return numpy.sqrt(
-            2 - 2 * numpy.sqrt(a1 ** 2 + b1 ** 2)) * 180 / numpy.pi
+    def _spread(a1: _T, b1: _T) -> _T:
+        return numpy.sqrt(2 - 2 * numpy.sqrt(a1**2 + b1**2)) * 180 / numpy.pi
 
     @property
     def mean_direction_per_frequency(self) -> DataArray:
@@ -391,12 +416,12 @@ class WaveSpectrum(DatasetWrapper):
     def _spectral_weighted(self, property: DataArray, fmin=0, fmax=numpy.inf):
         range = {_NAME_F: self._range(fmin, fmax)}
 
-        return numpy.trapz(property.isel(**range) * self.e.isel(**range),
-                           self.frequency[range]) / self.m0(fmin, fmax)
+        return numpy.trapz(
+            property.isel(**range) * self.e.isel(**range), self.frequency[range]
+        ) / self.m0(fmin, fmax)
 
     def mean_direction(self, fmin=0, fmax=numpy.inf):
-        return self._mean_direction(self.mean_a1(fmin, fmax),
-                                    self.mean_b1(fmin, fmax))
+        return self._mean_direction(self.mean_a1(fmin, fmax), self.mean_b1(fmin, fmax))
 
     def mean_directional_spread(self, fmin=0, fmax=numpy.inf):
         return self._spread(self.mean_a1(fmin, fmax), self.mean_b1(fmin, fmax))
@@ -422,8 +447,7 @@ class WaveSpectrum(DatasetWrapper):
 
     @property
     def wavenumber(self) -> DataArray:
-        return inverse_intrinsic_dispersion_relation(self.radian_frequency,
-                                                     self.depth)
+        return inverse_intrinsic_dispersion_relation(self.radian_frequency, self.depth)
 
     @property
     def wavelength(self) -> DataArray:
@@ -433,21 +457,22 @@ class WaveSpectrum(DatasetWrapper):
     def peak_wavenumber(self) -> DataArray:
         index = self.peak_index()
         return inverse_intrinsic_dispersion_relation(
-            self.radian_frequency[index], self.depth)
+            self.radian_frequency[index], self.depth
+        )
 
     def bulk_variables(self) -> Dataset:
         dataset = Dataset()
-        dataset['significant_waveheight'] = self.significant_waveheight
-        dataset['mean_period'] = self.mean_period
-        dataset['peak_period'] = self.peak_period()
-        dataset['peak_direction'] = self.peak_direction()
-        dataset['peak_directional_spread'] = self.peak_directional_spread()
-        dataset['mean_direction'] = self.mean_direction()
-        dataset['mean_directional_spread'] = self.mean_directional_spread()
-        dataset['peak_frequency'] = self.peak_frequency()
-        dataset['latitude'] = self.latitude
-        dataset['longitude'] = self.longitude
-        dataset['timestamp'] = self.time
+        dataset["significant_waveheight"] = self.significant_waveheight
+        dataset["mean_period"] = self.mean_period
+        dataset["peak_period"] = self.peak_period()
+        dataset["peak_direction"] = self.peak_direction()
+        dataset["peak_directional_spread"] = self.peak_directional_spread()
+        dataset["mean_direction"] = self.mean_direction()
+        dataset["mean_directional_spread"] = self.mean_directional_spread()
+        dataset["peak_frequency"] = self.peak_frequency()
+        dataset["latitude"] = self.latitude
+        dataset["longitude"] = self.longitude
+        dataset["timestamp"] = self.time
         return dataset
 
     @property
@@ -462,42 +487,18 @@ class WaveSpectrum(DatasetWrapper):
     def zero_crossing_period(self) -> DataArray:
         return self.tm02()
 
-    def interpolate(self:_T, coordinates) -> _T:
+    def interpolate(self: _T, coordinates) -> _T:
+        return self.__class__(interpolate_dataset_grid(coordinates, self.dataset))
+
+    def interpolate_frequency(self: _T, new_frequencies) -> _T:
         return self.__class__(
-            interpolate_dataset_grid(coordinates, self.dataset))
-
-    def interpolate_frequency(self:_T, new_frequencies) -> _T:
-        return self.__class__(interpolate_dataset_along_axis(
-            new_frequencies, self.dataset, coordinate_name='frequency'))
-
-    @property
-    def is_sea_spectrum(self) -> DataArray:
-        """
-        Identify whether or not it is a sea partion. Use 1D method for 2D
-        spectra in section 3 of:
-
-        Portilla, J., Ocampo-Torres, F. J., & Monbaliu, J. (2009).
-        Spectral partitioning and identification of wind sea and swell.
-        Journal of atmospheric and oceanic technology, 26(1), 107-122.
-
-        :return: boolean indicting it is sea
-        """
-        peak_index = self.peak_index()
-        peak_frequency = self.peak_frequency()
-
-        peak_level = \
-            self.e.isel(indexers={'frequency': peak_index.values})
-        pm_value = pierson_moskowitz_frequency(peak_frequency,
-                                               peak_frequency)
-        return peak_level == pm_value
-
-    @property
-    def is_swell_spectrum(self) -> DataArray:
-        return ~self.is_sea_spectrum
+            interpolate_dataset_along_axis(
+                new_frequencies, self.dataset, coordinate_name="frequency"
+            )
+        )
 
     def _range(self, fmin=0.0, fmax=numpy.inf) -> numpy.ndarray:
-        return ((self[_NAME_F].values >= fmin) &
-                (self[_NAME_F].values < fmax))
+        return (self[_NAME_F].values >= fmin) & (self[_NAME_F].values < fmax)
 
 
 class FrequencyDirectionSpectrum(WaveSpectrum):
@@ -505,27 +506,26 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
         super(FrequencyDirectionSpectrum, self).__init__(dataset)
         for name in _NAMES_2D:
             if name not in dataset and name not in dataset.coords:
-                raise ValueError(f'Required variable/coordinate {name} is'
-                                 f' not specified in the dataset')
+                raise ValueError(
+                    f"Required variable/coordinate {name} is"
+                    f" not specified in the dataset"
+                )
 
     def __len__(self):
         return int(numpy.prod(self.spectral_values.shape[:-2]))
 
     def direction_step(self) -> DataArray:
         difference = wrapped_difference(
-            numpy.diff(self.direction.values,
-                       append=self.direction[0]), period=360
+            numpy.diff(self.direction.values, append=self.direction[0]), period=360
         )
         return DataArray(
-            data=difference,
-            coords={_NAME_D: self.direction.values},
-            dims=[_NAME_D]
+            data=difference, coords={_NAME_D: self.direction.values}, dims=[_NAME_D]
         )
 
     @property
     def radian_direction(self) -> DataArray:
         data_array = self[_NAME_D] * numpy.pi / 180
-        data_array.name = 'radian_direction'
+        data_array.name = "radian_direction"
         return data_array
 
     def _directionally_integrate(self, data_array: DataArray) -> DataArray:
@@ -537,28 +537,39 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
 
     @property
     def a1(self) -> DataArray:
-        return self._directionally_integrate(
-            self[_NAME_E] * numpy.cos(self.radian_direction)
-        ) / self.e
+        return (
+            self._directionally_integrate(
+                self[_NAME_E] * numpy.cos(self.radian_direction)
+            )
+            / self.e
+        )
 
     @property
     def b1(self) -> DataArray:
-        return self._directionally_integrate(
-            self[_NAME_E] * numpy.sin(self.radian_direction)
-        )/ self.e
+        return (
+            self._directionally_integrate(
+                self[_NAME_E] * numpy.sin(self.radian_direction)
+            )
+            / self.e
+        )
 
     @property
     def a2(self) -> DataArray:
-        return self._directionally_integrate(
-            self[_NAME_E] * numpy.cos(2 * self.radian_direction)
-        )/ self.e
+        return (
+            self._directionally_integrate(
+                self[_NAME_E] * numpy.cos(2 * self.radian_direction)
+            )
+            / self.e
+        )
 
     @property
     def b2(self) -> DataArray:
-        return self._directionally_integrate(
-            self[_NAME_E] * numpy.sin(
-                2 * self.radian_direction)
-        )/ self.e
+        return (
+            self._directionally_integrate(
+                self[_NAME_E] * numpy.sin(2 * self.radian_direction)
+            )
+            / self.e
+        )
 
     @property
     def direction(self) -> DataArray:
@@ -574,7 +585,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
             self.a1.values,
             self.b1.values,
             self.a2.values,
-            self.b2.values
+            self.b2.values,
         )
 
     @property
@@ -587,18 +598,19 @@ class FrequencySpectrum(WaveSpectrum):
         super(FrequencySpectrum, self).__init__(dataset)
         for name in _NAMES_1D:
             if name not in dataset and name not in dataset.coords:
-                raise ValueError(f'Required variable/coordinate {name} is'
-                                 f' not specified in the dataset')
+                raise ValueError(
+                    f"Required variable/coordinate {name} is"
+                    f" not specified in the dataset"
+                )
 
     def __len__(self):
         return int(numpy.prod(self.spectral_values.shape[:-1]))
 
     def as_frequency_direction_spectrum(
-            self, number_of_directions, method='mem2'
+        self, number_of_directions, method="mem2"
     ) -> "FrequencyDirectionSpectrum":
 
-        direction = numpy.linspace(0, 360, number_of_directions,
-                                   endpoint=False)
+        direction = numpy.linspace(0, 360, number_of_directions, endpoint=False)
         radian_direction = direction * numpy.pi / 180
 
         input_dims = [str(x) for x in self.spectral_values.dims]
@@ -607,20 +619,24 @@ class FrequencySpectrum(WaveSpectrum):
 
         loop_elements = numpy.prod(input_shape[:-1])
         output_array = numpy.empty(
-            (loop_elements, self.number_of_frequencies, number_of_directions))
+            (loop_elements, self.number_of_frequencies, number_of_directions)
+        )
 
         for index in range(loop_elements):
             indices = numpy.unravel_index(index, input_shape[:-1])
-            indexers = {
-                dim: num for dim, num in zip(input_dims[:-1], indices)
-            }
-            output_array[index, :, :] = mem2(
-                radian_direction,
-                self.a1.isel(indexers).values,
-                self.b1.isel(indexers).values,
-                self.a2.isel(indexers).values,
-                self.b2.isel(indexers).values,
-            ) * numpy.pi / 180 * self.e.isel(indexers).values[:, None]
+            indexers = {dim: num for dim, num in zip(input_dims[:-1], indices)}
+            output_array[index, :, :] = (
+                mem2(
+                    radian_direction,
+                    self.a1.isel(indexers).values,
+                    self.b1.isel(indexers).values,
+                    self.a2.isel(indexers).values,
+                    self.b2.isel(indexers).values,
+                )
+                * numpy.pi
+                / 180
+                * self.e.isel(indexers).values[:, None]
+            )
         output_array = numpy.reshape(output_array, output_shape)
 
         return create_2d_spectrum(
@@ -630,34 +646,42 @@ class FrequencySpectrum(WaveSpectrum):
             time=self.time.values,
             latitude=self.latitude.values,
             longitude=self.longitude.values,
-            depth=self.depth.values
+            depth=self.depth.values,
         )
 
 
 def create_1d_spectrum(
-        frequency: numpy.ndarray,
-        variance_density: numpy.ndarray,
-        time,
-        latitude,
-        longitude,
-        a1=None,
-        b1=None,
-        a2=None,
-        b2=None,
-        depth=None) -> FrequencySpectrum:
+    frequency: numpy.ndarray,
+    variance_density: numpy.ndarray,
+    time,
+    latitude,
+    longitude,
+    a1=None,
+    b1=None,
+    a2=None,
+    b2=None,
+    depth=None,
+) -> FrequencySpectrum:
     time = to_datetime64(numpy.atleast_1d(time))
     latitude = numpy.atleast_1d(latitude)
     longitude = numpy.atleast_1d(longitude)
     if depth is None:
         depth = numpy.zeros(len(time)) + numpy.inf
 
-    if a1 is None: a1 = numpy.nan + numpy.ones_like(variance_density)
-    if b1 is None: b1 = numpy.nan + numpy.ones_like(variance_density)
-    if a2 is None: a2 = numpy.nan + numpy.ones_like(variance_density)
-    if b2 is None: b2 = numpy.nan + numpy.ones_like(variance_density)
+    if a1 is None:
+        a1 = numpy.nan + numpy.ones_like(variance_density)
+    if b1 is None:
+        b1 = numpy.nan + numpy.ones_like(variance_density)
+    if a2 is None:
+        a2 = numpy.nan + numpy.ones_like(variance_density)
+    if b2 is None:
+        b2 = numpy.nan + numpy.ones_like(variance_density)
 
     if variance_density.ndim == 1:
-        variance_density = variance_density[None, :, ]
+        variance_density = variance_density[
+            None,
+            :,
+        ]
         a1 = a1[None, :]
         b1 = b1[None, :]
         a2 = a2[None, :]
@@ -673,20 +697,22 @@ def create_1d_spectrum(
                 _NAME_b2: ((_NAME_T, _NAME_F), b2),
                 _NAME_LAT: ((_NAME_T,), latitude),
                 _NAME_LON: ((_NAME_T,), longitude),
-                _NAME_DEPTH: ((_NAME_T,), depth)
+                _NAME_DEPTH: ((_NAME_T,), depth),
             },
-            coords={_NAME_T: to_datetime64(time), _NAME_F: frequency}
+            coords={_NAME_T: to_datetime64(time), _NAME_F: frequency},
         )
     )
 
 
-def create_2d_spectrum(frequency: numpy.ndarray,
-                       direction: numpy.ndarray,
-                       variance_density: numpy.ndarray,
-                       time,
-                       latitude,
-                       longitude,
-                       depth=None) -> FrequencyDirectionSpectrum:
+def create_2d_spectrum(
+    frequency: numpy.ndarray,
+    direction: numpy.ndarray,
+    variance_density: numpy.ndarray,
+    time,
+    latitude,
+    longitude,
+    depth=None,
+) -> FrequencyDirectionSpectrum:
     time = numpy.atleast_1d(time)
     latitude = numpy.atleast_1d(latitude)
     longitude = numpy.atleast_1d(longitude)
@@ -698,14 +724,11 @@ def create_2d_spectrum(frequency: numpy.ndarray,
 
     dataset = Dataset(
         data_vars={
-            _NAME_E: (
-                (_NAME_T, _NAME_F, _NAME_D), variance_density),
+            _NAME_E: ((_NAME_T, _NAME_F, _NAME_D), variance_density),
             _NAME_LAT: ((_NAME_T,), latitude),
             _NAME_LON: ((_NAME_T,), longitude),
-            _NAME_DEPTH: ((_NAME_T,), depth)
+            _NAME_DEPTH: ((_NAME_T,), depth),
         },
-        coords={_NAME_T: to_datetime64(time),
-                _NAME_F: frequency,
-                _NAME_D: direction}
+        coords={_NAME_T: to_datetime64(time), _NAME_F: frequency, _NAME_D: direction},
     )
     return FrequencyDirectionSpectrum(dataset)

@@ -33,19 +33,20 @@ How To Use This Module
    write_partial_restart_file or reassemble_restart_file_from_parts
 """
 
-
 import numpy
 from roguewave.wavewatch3.model_definition import read_model_definition
 from roguewave.wavewatch3.resources import create_resource
-from roguewave.wavewatch3.restart_file import RestartFile, RestartFileStack
+from roguewave.wavewatch3.restart_file import RestartFile
+from roguewave.wavewatch3 import RestartFileTimeStack
 from roguewave.wavewatch3.restart_file_metadata import read_header
+from roguewave import FrequencyDirectionSpectrum
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 from typing import Union
-from xarray import Dataset,DataArray
+from xarray import Dataset, DataArray
 
 
-def open_restart_file( restart_file, model_definition_file) -> RestartFile:
+def open_restart_file(restart_file: str, model_definition_file: str) -> RestartFile:
     """
     Open a restart file locally or remote and return a restart file object.
 
@@ -61,8 +62,10 @@ def open_restart_file( restart_file, model_definition_file) -> RestartFile:
     grid, depth, mask = read_model_definition(model_definition_resource)
     return RestartFile(grid, meta_data, restart_file_resource, depth)
 
-def open_restart_file_stack( uris, model_definition_file,
-                             cache=False,cache_name=None) -> RestartFileStack:
+
+def open_restart_file_stack(
+    uris, model_definition_file, cache=False, cache_name=None
+) -> RestartFileTimeStack:
     """
     Open a restart file locally or remote and return a restart file object.
 
@@ -72,23 +75,20 @@ def open_restart_file_stack( uris, model_definition_file,
     :return: A restart file object
     """
     restart_files = []
-    model_definition_resource = create_resource(model_definition_file,'rb',
-                                                cache,cache_name)
+    model_definition_resource = create_resource(
+        model_definition_file, "rb", cache, cache_name
+    )
     grid, depth, mask = read_model_definition(model_definition_resource)
 
     for uri in uris:
-        restart_file_resource = create_resource(uri,'rb',cache,cache_name)
+        restart_file_resource = create_resource(uri, "rb", cache, cache_name)
         meta_data = read_header(restart_file_resource)
-        restart_files.append(
-            RestartFile(grid, meta_data, restart_file_resource, depth)
-        )
+        restart_files.append(RestartFile(grid, meta_data, restart_file_resource, depth))
 
-    return RestartFileStack(restart_files)
+    return RestartFileTimeStack(restart_files)
 
 
-def reassemble_restart_file_from_parts( target_file,
-                                        locations,
-                                        source_restart_file):
+def reassemble_restart_file_from_parts(target_file, locations, source_restart_file):
     """
     Reassemble a valid restart file from partial restart files and write the
     result to the target file. This is used as part of a reduce operation to
@@ -107,40 +107,36 @@ def reassemble_restart_file_from_parts( target_file,
     data = []
 
     def _worker(location):
-        partial_spectra_reader = _PartialRestartFileReader(location,
-                                                           source_restart_file)
+        partial_spectra_reader = _PartialRestartFileReader(
+            location, source_restart_file
+        )
         return partial_spectra_reader.start, partial_spectra_reader.spectra()
 
     with ThreadPool(processes=10) as pool:
-        data = list(
-            tqdm(
-                pool.imap(_worker, locations),
-                total=len(locations)
-            )
-        )
-
+        data = list(tqdm(pool.imap(_worker, locations), total=len(locations)))
 
     # note that file is a Resource Object here.
-    with create_resource(target_file,'wb') as resource:
+    with create_resource(target_file, "wb") as resource:
         # Write the header
         resource.write(source_restart_file.header_bytes())
 
         # Write the partial spectra sorted by start index of the spectra
         for i_start, partial_spectra in tqdm(
-                sorted(data, key=lambda x: x[0]),total=len(data)):
-
+            sorted(data, key=lambda x: x[0]), total=len(data)
+        ):
             # Write to file
-            resource.write(partial_spectra.tobytes('C'))
+            resource.write(partial_spectra.tobytes("C"))
 
         # write the tail
         resource.write(source_restart_file.tail_bytes())
 
 
-def write_restart_file(spectra:Union[Dataset,numpy.ndarray,DataArray],
-                       target_file,
-                       parent_restart_file:RestartFile,
-                       spectra_are_frequence_energy_density=True
-                       ):
+def write_restart_file(
+    spectra: Union[Dataset, numpy.ndarray, DataArray, FrequencyDirectionSpectrum],
+    target_file: str,
+    parent_restart_file: RestartFile,
+    spectra_are_frequence_energy_density=True,
+) -> None:
     """
     Create a resource file from the given spectra at the target location. The
     target can be a local file or a s3 uri.
@@ -157,40 +153,45 @@ def write_restart_file(spectra:Union[Dataset,numpy.ndarray,DataArray],
         and no transformation is applied.
     :return: None
     """
-    if isinstance(spectra,Dataset):
-        spectra = spectra['variance_density'].values
-    elif isinstance(spectra,DataArray):
+    if isinstance(spectra, (Dataset, FrequencyDirectionSpectrum)):
+        spectra = spectra["variance_density"].values
+    elif isinstance(spectra, DataArray):
         spectra = spectra.values
 
-
-    dtype = numpy.dtype('float32') #
+    dtype = numpy.dtype("float32")  #
     dtype = dtype.newbyteorder(parent_restart_file._meta_data.byte_order)
 
     shape = spectra.shape
     if shape[0] != parent_restart_file.number_of_spatial_points:
-        raise ValueError('Input spectra have more spatial points than the '
-                         'source resource file contains')
+        raise ValueError(
+            "Input spectra have more spatial points than the "
+            "source resource file contains"
+        )
 
     if shape[1] != parent_restart_file.number_of_frequencies:
-        raise ValueError('Input spectra have more frequences than the '
-                         'source resource file contains')
+        raise ValueError(
+            "Input spectra have more frequences than the "
+            "source resource file contains"
+        )
 
     if shape[2] != parent_restart_file.number_of_frequencies:
-        raise ValueError('Input spectra have more directions than the '
-                         'source resource file contains')
+        raise ValueError(
+            "Input spectra have more directions than the "
+            "source resource file contains"
+        )
 
     # Ensure we are writing the right floating point accuracy and byte_order
     spectra = spectra.astype(dtype, copy=False)
     if spectra_are_frequence_energy_density:
-        conversion_factor = \
-            parent_restart_file.to_wavenumber_action_density(slice(None, None, None))
-        spectra[:,:,:] = spectra[:,:,:] * conversion_factor
+        conversion_factor = parent_restart_file.to_wavenumber_action_density(
+            slice(None, None, None)
+        )
+        spectra[:, :, :] = spectra[:, :, :] * conversion_factor
 
-
-    with create_resource(target_file,'wb') as file:
+    with create_resource(target_file, "wb") as file:
         # Use the parent file to get the valid header.
         file.write(parent_restart_file.header_bytes())
-        file.write( spectra.tobytes('C') )
+        file.write(spectra.tobytes("C"))
         # Use the parent file to get the "tail", i.e. all the information
         # stored in the restart file after the header. Currently *I* do not
         # know what this information exactly is.
@@ -198,12 +199,12 @@ def write_restart_file(spectra:Union[Dataset,numpy.ndarray,DataArray],
 
 
 def write_partial_restart_file(
-        spectra: Union[Dataset,numpy.ndarray,DataArray],
-        target_file: str,
-        parent_restart_file: RestartFile,
-        s: slice,
-        spectra_are_frequence_energy_density=True
-        ):
+    spectra: Union[FrequencyDirectionSpectrum, Dataset, numpy.ndarray, DataArray],
+    target_file: str,
+    parent_restart_file: RestartFile,
+    s: slice,
+    spectra_are_frequence_energy_density=True,
+) -> None:
     """
     Create a partial restart file containing only the given spectra and
     their corresponding linear indices in the complete restart file. Used as
@@ -228,38 +229,44 @@ def write_partial_restart_file(
         and no transformation is applied.
     :return:
     """
-    if isinstance(spectra,Dataset):
-        spectra = spectra['variance_density'].values
-    elif isinstance(spectra,DataArray):
+    if isinstance(spectra, (Dataset, FrequencyDirectionSpectrum)):
+        spectra = spectra["variance_density"].values
+    elif isinstance(spectra, DataArray):
         spectra = spectra.values
 
-    dtype = numpy.dtype('float32')  #
+    dtype = numpy.dtype("float32")  #
     dtype = dtype.newbyteorder(parent_restart_file._meta_data.byte_order)
 
     shape = spectra.shape
     start, stop, step = s.indices(parent_restart_file.number_of_spatial_points)
     if shape[0] != stop - start:
-        raise ValueError('Input spectra have more spatial points than the '
-                         'source resource file contains')
+        raise ValueError(
+            "Input spectra have more spatial points than the "
+            "source resource file contains"
+        )
 
     if shape[1] != parent_restart_file.number_of_frequencies:
-        raise ValueError('Input spectra have more frequences than the '
-                         'source resource file contains')
+        raise ValueError(
+            "Input spectra have more frequences than the "
+            "source resource file contains"
+        )
 
     if shape[2] != parent_restart_file.number_of_frequencies:
-        raise ValueError('Input spectra have more directions than the '
-                         'source resource file contains')
+        raise ValueError(
+            "Input spectra have more directions than the "
+            "source resource file contains"
+        )
 
     # Ensure we are writing the right floating point accuracy and byte_order
     spectra = spectra.astype(dtype, copy=False)
 
     if spectra_are_frequence_energy_density:
-        spectra[:, :, :] = spectra[:, :, :] * \
-                           parent_restart_file.to_wavenumber_action_density(
-                               slice(start, stop, step))
+        spectra[:, :, :] = spectra[
+            :, :, :
+        ] * parent_restart_file.to_wavenumber_action_density(slice(start, stop, step))
 
-    with create_resource(target_file,'wb') as file:
-        location = parent_restart_file.resource.resource_location.encode('utf-8')
+    with create_resource(target_file, "wb") as file:
+        location = parent_restart_file.resource.resource_location.encode("utf-8")
 
         # for a partial file we will just write as a header:
         #  1) the length of the location string (path, uri) of the
@@ -270,11 +277,11 @@ def write_partial_restart_file(
         #  5) the spectra themselves.
         # All other information (spectral size etc.) is contained in the
         # source restart file we point to.
-        file.write(len(location).to_bytes(4, 'little'))
+        file.write(len(location).to_bytes(4, "little"))
         file.write(location)
-        file.write(start.to_bytes(4, 'little'))
-        file.write(stop.to_bytes(4, 'little'))
-        file.write(spectra.tobytes('C'))
+        file.write(start.to_bytes(4, "little"))
+        file.write(stop.to_bytes(4, "little"))
+        file.write(spectra.tobytes("C"))
 
 
 class _PartialRestartFileReader:
@@ -291,6 +298,7 @@ class _PartialRestartFileReader:
         spectra: ( start-stop)*numer_of_spectral_points*4 byte float array
             containing the spectral data.
     """
+
     def __init__(self, location, parent_restart_file):
         """
         :param location: local file path or s3 uri.
@@ -301,16 +309,14 @@ class _PartialRestartFileReader:
         self.resource = create_resource(location)
 
         # Read the header information
-        self.location_length = int.from_bytes(self.resource.read(4), 'little')
-        self.location = self.resource.read(
-            self.location_length).decode('utf-8')
+        self.location_length = int.from_bytes(self.resource.read(4), "little")
+        self.location = self.resource.read(self.location_length).decode("utf-8")
 
-        self.start = int.from_bytes(self.resource.read(4), 'little')
-        self.stop = int.from_bytes(self.resource.read(4), 'little')
+        self.start = int.from_bytes(self.resource.read(4), "little")
+        self.stop = int.from_bytes(self.resource.read(4), "little")
 
         self.source_restart_file = parent_restart_file
-        assert self.source_restart_file.resource.resource_location \
-                   == self.location
+        assert self.source_restart_file.resource.resource_location == self.location
 
     def spectra(self) -> numpy.ndarray:
         """
@@ -319,21 +325,21 @@ class _PartialRestartFileReader:
         :return:
         """
         raw_data = self.resource.read()
-        dtype = numpy.dtype('float32')
-        dtype = dtype.newbyteorder(
-            self.source_restart_file._meta_data.byte_order)
-        spectra = numpy.frombuffer( raw_data, dtype=dtype )
-        spectra = numpy.reshape( spectra,
+        dtype = numpy.dtype("float32")
+        dtype = dtype.newbyteorder(self.source_restart_file._meta_data.byte_order)
+        spectra = numpy.frombuffer(raw_data, dtype=dtype)
+        spectra = numpy.reshape(
+            spectra,
             (
-            self.stop-self.start ,
-            self.source_restart_file.number_of_frequencies,
-            self.source_restart_file.number_of_directions)
+                self.stop - self.start,
+                self.source_restart_file.number_of_frequencies,
+                self.source_restart_file.number_of_directions,
+            ),
         )
         return spectra
 
 
-def clone_restart_file(source_restart_file,
-                       model_definition_file, target) -> None:
+def clone_restart_file(source_restart_file, model_definition_file, target) -> None:
     """
     Clone restart file. Mostly useful to test that the reading and writing
     operations create an exact duplicate of a given restart file (otherwise
@@ -344,7 +350,5 @@ def clone_restart_file(source_restart_file,
     :param target: target file
     :return: None
     """
-    source_restart_file = open_restart_file(source_restart_file,
-                                            model_definition_file)
-    source_restart_file._convert = False
-    write_restart_file(source_restart_file[:], target, source_restart_file, False)
+    source_restart_file = open_restart_file(source_restart_file, model_definition_file)
+    write_restart_file(source_restart_file[:], target, source_restart_file, True)

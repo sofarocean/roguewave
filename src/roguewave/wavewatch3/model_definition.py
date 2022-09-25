@@ -198,56 +198,9 @@ class Grid:
         return linear_data
 
 
-class LinearIndexedGridData:
-    """
-    A simple class to interact with data that is stored in a packed linear
-    fasion in wavewatch. Wavewatch uses a 2d grid (lat,lon) but stores spatial
-    point in a 1d indexed array- where _only_ ocean/sea/lake points are
-    included. To refer back to the original 2d tuple we therefore need a trans-
-    lation array relating index -> ilat,ilon and ilat,ilon -> index. Note that
-    for the second mapping not all points are defined (if ilat,ilon is a land
-    point).
-
-    Usage- to get data from the array we instantiate the object:
-
-    linear_indexed_data = LinearIndexedGridData( ... )
-
-    and subsequently use linear_indexed_data[linear_index] to get data from
-    a linear index, or linear_indexed_data[ilat,ilon] to retrieve it from a
-    specific lat lon. Assignment works similarly.
-    """
-
-    def __init__(self, linear_indexed_data: numpy.ndarray, grid: Grid):
-        """
-        :param linear_indexed_data: Data stored in packed linear fashion
-        :param grid: the associated grid object
-        """
-        self._linear_indexed_data = DataArray(data=linear_indexed_data, dims="points")
-        self._grid = grid
-
-    def __getitem__(self, *item) -> DataArray:
-        if len(item) == 2:
-            item = [_to_slice(x) for x in item]
-            return self._grid.project(item[0], item[1], self._linear_indexed_data)
-        elif isinstance(item[0], (Sequence, numpy.ndarray)):
-            return self._linear_indexed_data[item[0]]
-
-        else:
-            return self._linear_indexed_data[_to_slice(item[0])]
-
-    def __setitem__(self, *args):
-        if len(args) == 3:
-            item = [_to_slice(x) for x in args[:2]]
-            self._grid.set_linear_data(
-                item[0], item[1], self._linear_indexed_data, args[2]
-            )
-        else:
-            return self._linear_indexed_data[_to_slice(args[0])]
-
-
 def read_model_definition(
     resource: Resource, byte_order: Literal["<", ">", "="] = "<"
-) -> Tuple[Grid, LinearIndexedGridData, numpy.ndarray]:
+) -> Tuple[Grid, numpy.ndarray, numpy.ndarray]:
 
     """
     Read a ww3 model definition file, see comments on top of this file for
@@ -413,7 +366,7 @@ def read_model_definition(
 
     latitude = numpy.linspace(
         data["latitude_start"],
-        data["latitude_start"] + data["latitude_stepsize"] * data["nlat"],
+        data["latitude_start"] + data["latitude_stepsize"] * (data["nlat"] - 1),
         data["nlat"],
         endpoint=True,
     )
@@ -434,7 +387,7 @@ def read_model_definition(
         _to_point_index=data["to_point_index"],
     )
 
-    depth = LinearIndexedGridData(-data["bottom_datum"], grid)
+    depth = -data["bottom_datum"]
 
     return grid, depth, data["mask"]
 

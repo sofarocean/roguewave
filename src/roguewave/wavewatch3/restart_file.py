@@ -23,8 +23,9 @@ How To Use This Module
 """
 
 import numpy
+from numpy.typing import ArrayLike, NDArray
 from roguewave.wavewatch3.resources import Resource
-from roguewave.wavewatch3.model_definition import Grid, LinearIndexedGridData
+from roguewave.wavewatch3.model_definition import Grid
 from roguewave.wavetheory.lineardispersion import (
     inverse_intrinsic_dispersion_relation,
     jacobian_wavenumber_to_radial_frequency,
@@ -52,7 +53,7 @@ class RestartFile(Sequence):
         grid: Grid,
         meta_data: MetaData,
         resource: Resource,
-        depth: LinearIndexedGridData = None,
+        depth: numpy.ndarray = None,
         parallel=True,
     ):
 
@@ -63,10 +64,9 @@ class RestartFile(Sequence):
         self.parallel = parallel
 
         if depth is None:
-            _depth = numpy.inf * numpy.ones(
+            self._depth = numpy.inf * numpy.ones(
                 (self.number_of_spatial_points,), dtype="float32"
             )
-            self._depth = LinearIndexedGridData(_depth, grid)
         else:
             self._depth = depth
 
@@ -255,15 +255,15 @@ class RestartFile(Sequence):
             Dataset(
                 data_vars={
                     "variance_density": (
-                        ("point_index", "frequency", "direction"),
+                        ("linear_index", "frequency", "direction"),
                         data,
                     ),
-                    "longitude": (("point_index"), coords[1]),
-                    "latitude": (("point_index"), coords[0]),
-                    "linear_index": (("point_index"), s),
+                    "longitude": (("linear_index"), coords[1]),
+                    "latitude": (("linear_index"), coords[0]),
+                    "time": to_datetime64(self.time),
                 },
                 coords={
-                    "point index": numpy.arange(0, len(s)),
+                    "linear_index": s,
                     "frequency": self.frequency,
                     "direction": self.direction,
                 },
@@ -314,8 +314,8 @@ class RestartFile(Sequence):
 
     def interpolate_in_space(
         self,
-        latitude: Union[numpy.ndarray, float],
-        longitude: Union[numpy.ndarray, float],
+        latitude: Union[ArrayLike, float],
+        longitude: Union[ArrayLike, float],
     ) -> FrequencyDirectionSpectrum:
         """
         Extract interpolated spectra at given latitudes and longitudes.
@@ -377,14 +377,27 @@ class RestartFile(Sequence):
             data_period=None,
             data_discont=None,
         )
+
         return FrequencyDirectionSpectrum(
-            self._create_dataset(
-                interpolator.interpolate(points), numpy.arange(len(latitude))
+            Dataset(
+                data_vars={
+                    "variance_density": (
+                        ("points", "frequency", "direction"),
+                        interpolator.interpolate(points),
+                    ),
+                    "longitude": (("points"), points["longitude"]),
+                    "latitude": (("points"), points["latitude"]),
+                    "time": self.time,
+                },
+                coords={
+                    "frequency": self.frequency,
+                    "direction": self.direction,
+                },
             )
         )
 
     def to_wavenumber_action_density(
-        self, s: Union[slice, numpy.ndarray, Sequence]
+        self, s: Union[slice, NDArray, Sequence]
     ) -> numpy.array:
         """
         Factor that when multiplied with frequency energy density spectra at
@@ -505,25 +518,28 @@ class RestartFile(Sequence):
             lon_slice=longitude_slice, lat_slice=latitude_slice, var=self[index].m0()
         )
 
+    @property
     def number_of_header_bytes(self) -> int:
         """
         :return: length of the header in bytes.
         """
         return len(self.header_bytes())
 
+    @property
     def number_of_tail_bytes(self) -> int:
         """
         :return: length of the tail in bytes.
         """
         return len(self.tail_bytes())
 
+    @property
     def size_in_bytes(self) -> int:
         """
         :return: Total size in bytes of a restart file.
         """
         return (
-            self.number_of_tail_bytes()
-            + self.number_of_header_bytes()
+            self.number_of_tail_bytes
+            + self.number_of_header_bytes
             + self.number_of_spatial_points
             * self.number_of_spectral_points
             * self._dtype.itemsize
@@ -549,7 +565,7 @@ class RestartFile(Sequence):
                 "time": self.time,
             },
             coords={
-                "point index": numpy.arange(0, len(linear_indices)),
+                "point_index": numpy.arange(0, len(linear_indices)),
                 "frequency": self.frequency,
                 "direction": self.direction,
             },

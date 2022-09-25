@@ -51,15 +51,85 @@ def interpolate_in_space():
 
 
 def test_latitude():
-    pass
+    restart_file = clone_remote()
+    assert numpy.all(
+        numpy.abs(
+            restart_file.latitude
+            - numpy.linspace(-90, 90, restart_file.number_of_latitudes, endpoint=True)
+        )
+        < 1.0e-3
+    )
 
 
 def test_longitude():
-    pass
+    restart_file = clone_remote()
+    assert numpy.all(
+        numpy.abs(
+            restart_file.longitude
+            - numpy.linspace(0, 360, restart_file.number_of_longitudes, endpoint=False)
+        )
+        < 1.0e-3
+    )
 
 
 def test_linear_indices():
-    pass
+    restart_file = clone_remote()
+    assert numpy.all(
+        numpy.abs(
+            numpy.arange(restart_file.number_of_spatial_points)
+            - restart_file.linear_indices
+        )
+        == 0
+    )
+
+
+def test_get_item():
+    restart_file = clone_remote()
+
+    # Normal indices
+    spectra = restart_file[20000:20003]
+    lats, lons = restart_file.coordinates(slice(20000, 20003, 1))
+
+    assert isinstance(spectra, FrequencyDirectionSpectrum)
+    assert len(spectra) == 3
+
+    # Check if coordinates are returned correctly
+    assert numpy.all(numpy.abs(lats - spectra.latitude) < 1e-3)
+    assert numpy.all(numpy.abs(lons - spectra.longitude) < 1e-3)
+
+    # Check if we get the correct significant waveheights.
+    hm0 = numpy.array([3.38909043, 3.31185516, 3.25957171])
+    assert numpy.all(numpy.abs(spectra.hm0() - hm0) < 1e-3)
+
+    # Fancy indices
+    spectra = restart_file[[20000, 20001, 20002]]
+    lats, lons = restart_file.coordinates([20000, 20001, 20002])
+
+    assert isinstance(spectra, FrequencyDirectionSpectrum)
+    assert len(spectra) == 3
+
+    # Check if coordinates are returned correctly
+    assert numpy.all(numpy.abs(lats - spectra.latitude) < 1e-3)
+    assert numpy.all(numpy.abs(lons - spectra.longitude) < 1e-3)
+
+    # Check if we get the correct significant waveheights.
+    hm0 = numpy.array([3.38909043, 3.31185516, 3.25957171])
+    assert numpy.all(numpy.abs(spectra.hm0() - hm0) < 1e-3)
+
+    # Scalar index
+    spectra = restart_file[20000]
+    lats, lons = restart_file.coordinates(20000)
+
+    assert isinstance(spectra, FrequencyDirectionSpectrum)
+    assert len(spectra) == 1
+
+    # Check if coordinates are returned correctly
+    assert numpy.all(numpy.abs(lats - spectra.latitude) < 1e-3)
+    assert numpy.all(numpy.abs(lons - spectra.longitude) < 1e-3)
+
+    # Check if we get the correct significant waveheights.
+    hm0 = numpy.array([3.38909043])
+    assert numpy.all(numpy.abs(spectra.hm0() - hm0) < 1e-3)
 
 
 def test_number_of_directions():
@@ -141,3 +211,4 @@ if __name__ == "__main__":
     test_latitude()
     test_longitude()
     test_linear_indices()
+    test_get_item()

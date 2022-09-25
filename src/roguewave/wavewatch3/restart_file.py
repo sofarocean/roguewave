@@ -99,7 +99,7 @@ class RestartFile(Sequence):
         return self._grid.longitude
 
     def coordinates(
-        self, index: Union[slice, int, numpy.ndarray]
+        self, index: Union[slice, int, ArrayLike]
     ) -> Tuple[Union[float, numpy.ndarray], Union[float, numpy.ndarray]]:
         """
         Return the latitude and longitude as a function of the linear index.
@@ -169,7 +169,7 @@ class RestartFile(Sequence):
         """
         return self.number_of_spatial_points
 
-    def _sliced_index(self, s: slice) -> numpy.ndarray:
+    def _sliced_index(self, s: Union[slice, int]) -> numpy.ndarray:
         """
         Get wavenumber action density spectra at sliced indices.
         :param s: slice
@@ -179,7 +179,7 @@ class RestartFile(Sequence):
                 number_of_frequencies,
                 number_of_directions)
         """
-        if isinstance(s, (int, numpy.int32, numpy.int64)):
+        if issubclass(type(s), int):
             s = slice(s, s + 1, 1)
 
         elif not isinstance(s, slice):
@@ -219,7 +219,7 @@ class RestartFile(Sequence):
         )
 
     def __getitem__(
-        self, s: Union[slice, numpy.ndarray, Sequence, int]
+        self, s: Union[slice, ArrayLike, int]
     ) -> FrequencyDirectionSpectrum:
         """
         Dunder method for the Sequence protocol. If obj is an instance of
@@ -545,31 +545,9 @@ class RestartFile(Sequence):
             * self._dtype.itemsize
         )
 
-    def linear_indices(self, indices: Union[slice, numpy.ndarray, Sequence]):
-        return numpy.arange(self.number_of_spatial_points)[indices]
-
-    def _create_dataset(
-        self, variance_density, linear_indices: Union[slice, numpy.ndarray, Sequence]
-    ) -> Dataset:
-
-        coords = self.coordinates(linear_indices)
-        return Dataset(
-            data_vars={
-                "variance_density": (
-                    ("point_index", "frequency", "direction"),
-                    variance_density,
-                ),
-                "longitude": (("point_index"), coords[1]),
-                "latitude": (("point_index"), coords[0]),
-                "linear_index": (("point_index"), linear_indices),
-                "time": self.time,
-            },
-            coords={
-                "point_index": numpy.arange(0, len(linear_indices)),
-                "frequency": self.frequency,
-                "direction": self.direction,
-            },
-        )
+    @property
+    def linear_indices(self):
+        return numpy.arange(self.number_of_spatial_points)
 
 
 class RestartFileTimeStack:

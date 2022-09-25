@@ -36,7 +36,8 @@ How To Use This Module
 import numpy
 from roguewave.wavewatch3.model_definition import read_model_definition
 from roguewave.wavewatch3.resources import create_resource
-from roguewave.wavewatch3.restart_file import RestartFile, RestartFileTimeStack
+from roguewave.wavewatch3.restart_file import RestartFile
+from roguewave.wavewatch3 import RestartFileTimeStack
 from roguewave.wavewatch3.restart_file_metadata import read_header
 from roguewave import FrequencyDirectionSpectrum
 from multiprocessing.pool import ThreadPool

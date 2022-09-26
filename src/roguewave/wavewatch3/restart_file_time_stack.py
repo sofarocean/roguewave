@@ -122,7 +122,7 @@ class RestartFileTimeStack:
         else:
             raise ValueError("unexpected number of indices")
 
-        if isinstance(time_index, (int, numpy.int32, numpy.int64)):
+        if isinstance(time_index, (int, numpy.integer)):
             time_index = [time_index]
 
         fancy_index = not isinstance(time_index, slice)
@@ -133,7 +133,7 @@ class RestartFileTimeStack:
             _input = [(it, linear_index) for it in time_index]
 
         def _worker(arg) -> Dataset:
-            return self._restart_files[arg[0]][arg[1]].dataset
+            return self._restart_files[arg[0]][arg[1]].dataset.drop("linear_index")
 
         self._init_progress_bar(len(_input))
         if self.parallel and len(_input) > 1:

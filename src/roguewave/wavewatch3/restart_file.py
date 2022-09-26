@@ -176,7 +176,7 @@ class RestartFile(Sequence):
                 number_of_frequencies,
                 number_of_directions)
         """
-        if issubclass(type(s), int):
+        if issubclass(type(s), (int, numpy.integer)):
             s = slice(s, s + 1, 1)
 
         elif not isinstance(s, slice):

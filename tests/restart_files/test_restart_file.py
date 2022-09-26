@@ -21,7 +21,7 @@ def test_direction():
 def test_frequency():
     restart_file = clone_remote()
     fstart = 0.035
-    growth_factor = restart_file._grid._growth_factor
+    growth_factor = restart_file.grid._growth_factor
     for index, frequency in enumerate(restart_file.frequency):
         assert numpy.abs(fstart * growth_factor**index - frequency) < 1e-4
 

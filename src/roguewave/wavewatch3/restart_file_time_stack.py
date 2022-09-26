@@ -13,7 +13,7 @@ from roguewave.wavewatch3.restart_file import RestartFile, MAXIMUM_NUMBER_OF_WOR
 class RestartFileTimeStack:
     def __init__(self, restart_files: Sequence[RestartFile], parallel=True):
         self._restart_files = restart_files
-        self._grid = restart_files[0]._grid
+        self.grid = restart_files[0].grid
         self._time = to_datetime_utc([x.time for x in restart_files])
         self.parallel = parallel
 
@@ -26,28 +26,28 @@ class RestartFileTimeStack:
         """
         :return: 1D numpy array of frequencies
         """
-        return self._grid.frequencies
+        return self.grid.frequencies
 
     @property
     def direction(self) -> numpy.ndarray:
         """
         :return: 1D numpy array of directions
         """
-        return self._grid.directions
+        return self.grid.directions
 
     @property
     def latitude(self) -> numpy.ndarray:
         """
         :return: 1D numpy array of latitudes.
         """
-        return self._grid.latitude
+        return self.grid.latitude
 
     @property
     def longitude(self) -> numpy.ndarray:
         """
         :return: 1D numpy array of longitudes.
         """
-        return self._grid.longitude
+        return self.grid.longitude
 
     def coordinates(
         self, index: Union[slice, int, numpy.ndarray]
@@ -57,8 +57,8 @@ class RestartFileTimeStack:
         :param index: linear index
         :return:  ( latitude(s), longitude(s)
         """
-        ilon = self._grid.longitude_index(index)
-        ilat = self._grid.latitude_index(index)
+        ilon = self.grid.longitude_index(index)
+        ilat = self.grid.latitude_index(index)
         return self.latitude[ilat], self.longitude[ilon]
 
     @property
@@ -97,7 +97,7 @@ class RestartFileTimeStack:
             self.number_of_latitudes * self.number_of_longitudes
             Also referred to as "NSEA" in wavewatch III.
         """
-        return self._grid.number_of_spatial_points
+        return self.grid.number_of_spatial_points
 
     @property
     def number_of_spectral_points(self) -> int:
@@ -118,7 +118,7 @@ class RestartFileTimeStack:
             time_index, linear_index = nargs
         elif len(nargs) == 3:
             time_index, lat_index, lon_index = nargs
-            linear_index = self._grid.index(lat_index, lon_index, valid_only=True)
+            linear_index = self.grid.index(lat_index, lon_index, valid_only=True)
         else:
             raise ValueError("unexpected number of indices")
 
@@ -214,7 +214,7 @@ class RestartFileTimeStack:
 
         def _get_data(indices, idims):
             time_index = indices[0]
-            index = self._grid.index(
+            index = self.grid.index(
                 latitude_index=indices[1], longitude_index=indices[2]
             )
 

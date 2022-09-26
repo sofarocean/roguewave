@@ -54,7 +54,7 @@ class RestartFile(Sequence):
         parallel=True,
     ):
 
-        self._grid = grid
+        self.grid = grid
         self._meta_data = meta_data
         self.resource = resource
         self._dtype = numpy.dtype("float32").newbyteorder(meta_data.byte_order)
@@ -72,28 +72,28 @@ class RestartFile(Sequence):
         """
         :return: 1D numpy array of frequencies
         """
-        return self._grid.frequencies
+        return self.grid.frequencies
 
     @property
     def direction(self) -> numpy.ndarray:
         """
         :return: 1D numpy array of directions
         """
-        return self._grid.directions
+        return self.grid.directions
 
     @property
     def latitude(self) -> numpy.ndarray:
         """
         :return: 1D numpy array of latitudes.
         """
-        return self._grid.latitude
+        return self.grid.latitude
 
     @property
     def longitude(self) -> numpy.ndarray:
         """
         :return: 1D numpy array of longitudes.
         """
-        return self._grid.longitude
+        return self.grid.longitude
 
     def coordinates(
         self, index: Union[slice, int, ArrayLike]
@@ -103,8 +103,8 @@ class RestartFile(Sequence):
         :param index: linear index
         :return:  ( latitude(s), longitude(s)
         """
-        ilon = self._grid.longitude_index(index)
-        ilat = self._grid.latitude_index(index)
+        ilon = self.grid.longitude_index(index)
+        ilat = self.grid.latitude_index(index)
         return self.latitude[ilat], self.longitude[ilon]
 
     @property
@@ -143,7 +143,7 @@ class RestartFile(Sequence):
             self.number_of_latitudes * self.number_of_longitudes
             Also referred to as "NSEA" in wavewatch III.
         """
-        return self._grid.number_of_spatial_points
+        return self.grid.number_of_spatial_points
 
     @property
     def number_of_spectral_points(self) -> int:
@@ -337,7 +337,7 @@ class RestartFile(Sequence):
         periodic_coordinates = {"longitude": 360}
 
         def _get_data(indices, _dummy):
-            index = self._grid.index(
+            index = self.grid.index(
                 latitude_index=indices[0], longitude_index=indices[1]
             )
 
@@ -505,13 +505,13 @@ class RestartFile(Sequence):
         :param longitude_slice: longitude index range as slice
         :return:
         """
-        index = self._grid.index(
+        index = self.grid.index(
             latitude_index=latitude_slice,
             longitude_index=longitude_slice,
             valid_only=True,
         )
 
-        return self._grid.project(
+        return self.grid.project(
             lon_slice=longitude_slice, lat_slice=latitude_slice, var=self[index].m0()
         )
 

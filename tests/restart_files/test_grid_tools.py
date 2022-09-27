@@ -1,9 +1,6 @@
 from tests.restart_files import clone_remote
 from xarray import DataArray
-from roguewave import (
-    FrequencyDirectionSpectrum,
-    unpack_ww3_data,
-)
+from roguewave import FrequencyDirectionSpectrum, unpack_ww3_data
 
 
 # , concatenate_spectra
@@ -38,15 +35,6 @@ def test_unpack_numpy():
     assert isinstance(E, numpy.ndarray)
     assert E.shape == (361, 720, 36, 36)
 
-
-# def concat():
-#     restart_file = clone_remote()
-#     restart_file2 = clone_remote()
-#     E = [restart_file[:],restart_file2[:]]
-#     d = concatenate_spectra(E,dim='ensemble')
-#     d = unpack_ww3_data(d.significant_waveheight,restart_file.grid)
-#     print(d.mean(dim='ensemble',skipna=False))
-#     print(d.std(dim='ensemble',skipna=False))
 
 if __name__ == "__main__":
     test_unpack_spectrum()

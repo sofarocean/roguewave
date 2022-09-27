@@ -129,6 +129,66 @@ class WaveSpectrum(DatasetWrapper):
         "is_swell_spectrum",
     )
 
+    def mean(self, dim, skipna=False) -> "WaveSpectrum":
+        """
+        Calculate the mean value of the spectrum along the given dimension.
+        :param dim: dimension to average over
+        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nanmean
+        :return:
+        """
+
+        cls = type(self)
+        dataset = Dataset()
+        dataset["variance_density"] = self.dataset["variance_density"].mean(
+            dim=dim, skipna=skipna
+        )
+        for x in self.dataset:
+            if x == "variance_density":
+                continue
+            dataset[x] = self.dataset[x]
+
+        return cls(dataset)
+
+    def sum(self, dim, skipna=False) -> "WaveSpectrum":
+        """
+        Calculate the sum value of the spectrum along the given dimension.
+        :param dim: dimension to sum over
+        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nansum
+        :return:
+        """
+
+        cls = type(self)
+        dataset = Dataset()
+        dataset["variance_density"] = self.dataset["variance_density"].sum(
+            dim=dim, skipna=skipna
+        )
+        for x in self.dataset:
+            if x == "variance_density":
+                continue
+            dataset[x] = self.dataset[x]
+
+        return cls(dataset)
+
+    def std(self, dim, skipna=False) -> "WaveSpectrum":
+        """
+        Calculate the standard deviation of the spectrum along the given dimension.
+        :param dim: dimension to calculate standard deviation over
+        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nanstd
+        :return:
+        """
+
+        cls = type(self)
+        dataset = Dataset()
+        dataset["variance_density"] = self.dataset["variance_density"].std(
+            dim=dim, skipna=skipna
+        )
+        for x in self.dataset:
+            if x == "variance_density":
+                continue
+            dataset[x] = self.dataset[x]
+
+        return cls(dataset)
+
     def __init__(self, dataset: Dataset):
         super(WaveSpectrum, self).__init__(dataset)
 

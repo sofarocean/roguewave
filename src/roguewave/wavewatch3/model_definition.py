@@ -29,6 +29,8 @@ Pieter Smit, Aug, 2022
 """
 
 import numpy
+
+from roguewave.wavewatch3.grid_tools import Grid
 from roguewave.wavewatch3.fortran_types import (
     FortranInt,
     FortranFloat,
@@ -36,171 +38,12 @@ from roguewave.wavewatch3.fortran_types import (
 )
 from roguewave.wavewatch3.resources import Resource
 from io import BytesIO
-from dataclasses import dataclass
-from typing import Union, Tuple, Sequence, Literal
-from roguewave.tools.math import wrapped_difference
-from xarray import DataArray
-
-
-@dataclass()
-class Grid:
-    """
-    A class that encapsulates all grid data from the model definition. It also
-    contains convinience methods to project linear indexed data to a 2d array
-    of latitude and longitude (with NaN for missing values), and vice versa
-    extract the needed data to construct a linear indexed version compatible
-    with WW3.
-
-    Purpose:
-    We need this information for reading restart files.
-    """
-
-    number_of_spatial_points: int  # number of spatial "sea" points
-    frequencies: numpy.ndarray
-    directions: numpy.ndarray
-    latitude: numpy.ndarray  # 1D array of model latitudes
-    longitude: numpy.ndarray  # 1D array of model longitudes
-    _to_linear_index: numpy.ndarray  # mapping of [ilon,ilat] => linear index
-    _to_point_index: numpy.ndarray  # mapping of linear index => [ilon,ilat]
-
-    @property
-    def _growth_factor(self):
-        return self.frequencies[1] / self.frequencies[0]
-
-    def longitude_index(
-        self, linear_index: Union[slice, Sequence, numpy.ndarray]
-    ) -> numpy.ndarray:
-        """
-        :param linear_index: linear 1d index
-        :return: longitude 1d index
-        """
-
-        return self._to_point_index[0, linear_index]
-
-    def latitude_index(
-        self, linear_index: Union[slice, Sequence, numpy.ndarray]
-    ) -> numpy.ndarray:
-        """
-        :param linear_index: linear 1d index
-        :return: latitude 1d index
-        """
-        return self._to_point_index[1, linear_index]
-
-    def index(
-        self,
-        latitude_index: Union[slice, Sequence, numpy.ndarray],
-        longitude_index: Union[slice, Sequence, numpy.ndarray],
-        valid_only=False,
-    ):
-        """
-        get the linear index of the array
-        :param latitude_index:
-        :param longitude_index:
-        :return:
-        """
-        indices = self._to_linear_index[latitude_index, longitude_index]
-        if valid_only:
-            indices = indices[indices >= 0]
-        return indices
-
-    def direction_step(self):
-        return wrapped_difference(
-            numpy.diff(self.directions, append=self.directions[0]), period=360
-        )
-
-    def frequency_step(self):
-        delta = numpy.diff(
-            self.frequencies,
-            prepend=self.frequencies[0] / self._growth_factor,
-            append=self.frequencies[-1] * self._growth_factor,
-        )
-        return (delta[0:-1] + delta[1:]) / 2
-
-    def extract(
-        self,
-        s: Union[slice, Sequence, numpy.ndarray],
-        var: Union[numpy.ndarray, DataArray],
-    ) -> DataArray:
-        """
-        Extract linear indexed data (with indices indicated by the slice) from
-        a 2D array (lat,lon)
-        :param s: slice instance
-        :param var: 2D ndarray
-        :return: 1D ndarray of length slice.stop-slice.start
-        """
-        if isinstance(var, DataArray):
-            return var[
-                DataArray(self.latitude_index(s), dims="points"),
-                DataArray(self.longitude_index(s), dims="points"),
-            ]
-        else:
-            return DataArray(
-                data=var[self.latitude_index(s), self.longitude_index(s)], dims="points"
-            )
-
-    def project(
-        self,
-        lon_slice: slice,
-        lat_slice: slice,
-        var: Union[numpy.ndarray, DataArray],
-        except_val=numpy.nan,
-    ) -> DataArray:
-        """
-        Project linear indexed data onto a 2d array (lat ,lon).
-
-        :param lon_slice: slice of ilon indices we want
-        :param lat_slice: slice of ilat indices we want
-        :param var:
-        :param except_val:
-        :return:
-        """
-        ind = self._to_linear_index[lat_slice, lon_slice]
-        mask = ind >= 0
-        ind = ind[mask]
-        ilon = self.longitude_index(ind)
-        ilat = self.latitude_index(ind)
-
-        nlon = len(self.longitude[lon_slice])
-        nlat = len(self.latitude[lat_slice])
-
-        # this will not work for stepsizes != 1
-        out = numpy.zeros((nlat, nlon), dtype=var.dtype) + except_val
-        out[ilat, ilon] = var[ind]
-
-        return DataArray(
-            data=out,
-            coords={
-                "latitude": self.latitude[lat_slice],
-                "longitude": self.longitude[lon_slice],
-            },
-            dims=("latitude", "longitude"),
-            name="variance",
-        )
-
-    def set_linear_data(
-        self,
-        lon_slice: Union[slice, Sequence, numpy.ndarray],
-        lat_slice: Union[slice, Sequence, numpy.ndarray],
-        linear_data: Union[numpy.ndarray, DataArray],
-        data: Union[numpy.ndarray, DataArray],
-    ):
-        """
-        Update data stored in a linear array with data from a 2d array.
-        :param lon_slice: longitude indices
-        :param lat_slice: latitude indices
-        :param linear_data: linear data array to update
-        :param data: 2d Array
-        :return:
-        """
-
-        ind = self.index(lat_slice, lon_slice, valid_only=True)
-        linear_data[ind] = self.extract(ind, data)
-        return linear_data
+from typing import Union, Literal
 
 
 def read_model_definition(
     resource: Resource, byte_order: Literal["<", ">", "="] = "<"
-) -> Tuple[Grid, numpy.ndarray, numpy.ndarray]:
+) -> Grid:
 
     """
     Read a ww3 model definition file, see comments on top of this file for
@@ -377,19 +220,20 @@ def read_model_definition(
         data["nlon"],
         endpoint=False,
     )
+    depth = -data["bottom_datum"]
     grid = Grid(
         number_of_spatial_points=data["num_sea"],
         frequencies=data["frequency_hertz"],
         directions=data["direction_degree"],
         latitude=latitude,
         longitude=longitude,
+        depth=depth,
+        mask=data["mask"],
         _to_linear_index=data["to_linear_index"],
         _to_point_index=data["to_point_index"],
     )
 
-    depth = -data["bottom_datum"]
-
-    return grid, depth, data["mask"]
+    return grid
 
 
 def _to_slice(val: Union[slice, int]) -> slice:

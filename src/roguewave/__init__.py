@@ -14,17 +14,25 @@ from roguewave.modeldata import (
     list_available_variables,
     open_remote_dataset,
     extract_from_remote_dataset,
-    generate_uris
+    generate_uris,
 )
 
 # Interpolate
 from roguewave.interpolate import (
-    interpolate_dataset, tracks_as_dataset,TrackSet,Track,Cluster)
+    interpolate_dataset,
+    tracks_as_dataset,
+    TrackSet,
+    Track,
+    Cluster,
+)
 
 # Wave spectrum
 from roguewave.wavespectra import (
-    FrequencySpectrum, FrequencyDirectionSpectrum,
-    create_1d_spectrum, create_2d_spectrum
+    FrequencySpectrum,
+    FrequencyDirectionSpectrum,
+    create_1d_spectrum,
+    create_2d_spectrum,
+    concatenate_spectra,
 )
 
 # IO
@@ -36,7 +44,9 @@ from roguewave.wavewatch3 import (
     open_restart_file,
     write_partial_restart_file,
     write_restart_file,
-    reassemble_restart_file_from_parts
+    reassemble_restart_file_from_parts,
+    unpack_ww3_data,
+    read_model_definition,
 )
 
 # Partitioning
@@ -44,15 +54,12 @@ from roguewave.wavespectra.partitioning import (
     get_bulk_partitions_from_spectral_partitions,
     get_spectral_partitions_from_2dspectra,
     get_bulk_partitions_from_observations,
-    get_spectral_partitions_from_observations
+    get_spectral_partitions_from_observations,
 )
 
 # Colocation
 from roguewave.colocate import (
     colocate_model_spotter,
     colocated_tracks_as_dataset,
-    colocate_model_spotter_spectra
+    colocate_model_spotter_spectra,
 )
-
-
-

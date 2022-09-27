@@ -105,16 +105,14 @@ def test_remote_reassemble():
 
     output = "test.file"
     reassemble_restart_file_from_parts(output, names, restart_file)
-
     assert file_hash(output) == REASSEMBLED_HASH
-
     os.remove(output)
 
 
 if __name__ == "__main__":
-    test_clone_remote()
-    test_local_partial_write()
-    test_local_reassemble()
+    # test_clone_remote()
+    # test_local_partial_write()
+    # test_local_reassemble()
     test_remote_partial_write()
     test_remote_reassemble()
     #

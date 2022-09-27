@@ -1,18 +1,18 @@
-from typing import Dict, Tuple
+from typing import Dict
 import numpy
 from xarray import DataArray
 
 from roguewave.interpolate.nd_interp import NdInterpolator
 
 
-def interpolate_track_data_arrray(data_array: DataArray,
-                                  tracks: Dict[str, numpy.ndarray],
-                                  independent_variable=None,
-                                  periodic_coordinates: Dict[str, float] = None,
-                                  period_data=None,
-                                  discont=None
-                                  ) \
-        -> DataArray:
+def interpolate_track_data_arrray(
+    data_array: DataArray,
+    tracks: Dict[str, numpy.ndarray],
+    independent_variable=None,
+    periodic_coordinates: Dict[str, float] = None,
+    period_data=None,
+    discont=None,
+) -> DataArray:
     """
     Interpolate a data array from a dataset at given points in N-dimensions.
 
@@ -65,22 +65,21 @@ def interpolate_track_data_arrray(data_array: DataArray,
     """
 
     # Get dimensions of the data array
-    dimensions = data_array.dims  # type: Tuple[Hashable,...]
+    dimensions = data_array.dims
 
     if periodic_coordinates is not None:
         for wrapped_coordinate in periodic_coordinates:
             if wrapped_coordinate not in dimensions:
-                raise ValueError(f'Cyclic coordinate {wrapped_coordinate} is'
-                                 f' not a valid coordinate of the dataset.')
+                raise ValueError(
+                    f"Cyclic coordinate {wrapped_coordinate} is"
+                    f" not a valid coordinate of the dataset."
+                )
     else:
         periodic_coordinates = {}
 
-    # number of coordinates
-    number_coor = len(dimensions)
-
     if independent_variable is None:
-        if 'time' in dimensions:
-            independent_variable = 'time'
+        if "time" in dimensions:
+            independent_variable = "time"
         else:
             independent_variable = dimensions[0]
 
@@ -91,22 +90,25 @@ def interpolate_track_data_arrray(data_array: DataArray,
 
     if len(tracks) != len(dimensions):
         dim_str = [str(dim) for dim in dimensions]
-        raise ValueError(f' Points expected to have {len(dimensions)} '
-                         f'coordinates corresponding to: {", ".join(dim_str)}')
+        raise ValueError(
+            f" Points expected to have {len(dimensions)} "
+            f'coordinates corresponding to: {", ".join(dim_str)}'
+        )
 
     for coordinate_name in tracks:
         dim_str = [str(dim) for dim in dimensions]
         if coordinate_name not in dim_str:
-            raise ValueError(f' Coordinate {coordinate_name} not in data array'
-                             f'coordinates: {", ".join(dim_str)}')
+            raise ValueError(
+                f" Coordinate {coordinate_name} not in data array"
+                f'coordinates: {", ".join(dim_str)}'
+            )
 
     coordinates = []
     for index, coordinate_name in enumerate(data_array.dims):
         # Get weights and indices
-        coordinates.append((coordinate_name,
-                            data_array[coordinate_name].values))
+        coordinates.append((coordinate_name, data_array[coordinate_name].values))
 
-    def _get_data( indices,_dummy ):
+    def _get_data(indices, _dummy):
         return data_array[tuple([DataArray(x) for x in indices])].values
 
     interpolator = NdInterpolator(
@@ -117,15 +119,13 @@ def interpolate_track_data_arrray(data_array: DataArray,
         interp_index_coord_name=independent_variable,
         data_periodic_coordinates=periodic_coordinates,
         data_period=period_data,
-        data_discont=discont
+        data_discont=discont,
     )
     interpolated_values = interpolator.interpolate(tracks)
 
     return DataArray(
         interpolated_values,
         coords={independent_variable: tracks[independent_variable]},
-        dims='time',
-        name=data_array.name
+        dims=independent_variable,
+        name=data_array.name,
     )
-
-

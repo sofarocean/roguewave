@@ -14,6 +14,7 @@ class RestartFileTimeStack:
     def __init__(self, restart_files: Sequence[RestartFile], parallel=True):
         self._restart_files = restart_files
         self.grid = restart_files[0].grid
+        self.depth = restart_files[0].depth
         self._time = to_datetime_utc([x.time for x in restart_files])
         self.parallel = parallel
 
@@ -259,10 +260,39 @@ class RestartFileTimeStack:
         self._init_progress_bar(len(latitude) * 8)
         dataset = interpolator.interpolate(points)
 
+        def _get_depth_data(indices, idims):
+            index = self.grid.index(
+                latitude_index=indices[0], longitude_index=indices[1]
+            )
+            output = numpy.zeros(len(index))
+            mask = index >= 0
+            output[mask] = self.depth[index[mask]]
+            output[~mask] = numpy.nan
+            return output
+
+        depth_points = {
+            "latitude": numpy.atleast_1d(latitude),
+            "longitude": numpy.atleast_1d(longitude),
+        }
+        depth_interpolator = NdInterpolator(
+            get_data=_get_depth_data,
+            data_coordinates=(
+                ("latitude", self.latitude),
+                ("longitude", self.longitude),
+            ),
+            data_shape=[self.number_of_latitudes, self.number_of_longitudes],
+            interp_coord_names=list(depth_points.keys()),
+            interp_index_coord_name="latitude",
+            data_periodic_coordinates=periodic_coordinates,
+            data_period=None,
+            data_discont=None,
+        )
+
         return FrequencyDirectionSpectrum(
             Dataset(
                 data_vars={
                     "variance_density": (("time", "frequency", "direction"), dataset),
+                    "depth": (("time",), depth_interpolator.interpolate(depth_points)),
                     "longitude": (("time"), longitude),
                     "latitude": (("time"), latitude),
                 },

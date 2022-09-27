@@ -59,8 +59,8 @@ def open_restart_file(restart_file: str, model_definition_file: str) -> RestartF
     model_definition_resource = create_resource(model_definition_file)
 
     meta_data = read_header(restart_file_resource)
-    grid, depth, mask = read_model_definition(model_definition_resource)
-    return RestartFile(grid, meta_data, restart_file_resource, depth)
+    grid = read_model_definition(model_definition_resource)
+    return RestartFile(grid, meta_data, restart_file_resource)
 
 
 def open_restart_file_stack(
@@ -78,12 +78,12 @@ def open_restart_file_stack(
     model_definition_resource = create_resource(
         model_definition_file, "rb", cache, cache_name
     )
-    grid, depth, mask = read_model_definition(model_definition_resource)
+    grid = read_model_definition(model_definition_resource)
 
     for uri in uris:
         restart_file_resource = create_resource(uri, "rb", cache, cache_name)
         meta_data = read_header(restart_file_resource)
-        restart_files.append(RestartFile(grid, meta_data, restart_file_resource, depth))
+        restart_files.append(RestartFile(grid, meta_data, restart_file_resource))
 
     return RestartFileTimeStack(restart_files)
 

@@ -1,6 +1,8 @@
 import numpy
 from numba import njit, generated_jit, types
+
 GRAV = 9.81
+
 
 @generated_jit(nopython=True)
 def atleast_1d(x):
@@ -32,39 +34,33 @@ def inverse_intrinsic_dispersion_relation(
 
     # Numba does not recognize "atleast_1d" for scalars - hence the weird
     # call to array first.
-    w = atleast_1d( angular_frequency)
+    w = atleast_1d(angular_frequency)
 
-    k_deep_water_estimate = w ** 2 / grav
+    k_deep_water_estimate = w**2 / grav
     k_shallow_water_estimate = w / numpy.sqrt(grav * dep)
 
     # == FIRST GUESS==
     # Use the intersection between shallow and deep water estimates to guestimate
     # which relation to use
-
-    k0 = numpy.where( w > numpy.sqrt(grav / dep) ,
-                      k_deep_water_estimate,
-                      k_shallow_water_estimate)
-
+    k0 = numpy.where(
+        w > numpy.sqrt(grav / dep), k_deep_water_estimate, k_shallow_water_estimate
+    )
 
     # == Newton Iteration ==
     F = numpy.sqrt(k0 * grav * numpy.tanh(k0 * dep)) - w
-    cg = numpy.zeros(w.shape, dtype=w.dtype)
-
     for ii in range(0, maximum_number_of_iterations):
         kd = k0 * dep
         cg = numpy.where(
-            kd > 5,
-            0.5 * w / k0,
-            (1 / 2 + kd / numpy.sinh(2 * kd)) * w / k0
+            kd > 5, 0.5 * w / k0, (1 / 2 + kd / numpy.sinh(2 * kd)) * w / k0
         )
         k0 = k0 - F / cg
-
         F = numpy.sqrt(k0 * grav * numpy.tanh(k0 * dep)) - w
         error = numpy.abs(F) / w
         if numpy.all(error < tolerance):
             break
 
     return k0
+
 
 @njit(cache=True)
 def intrinsic_dispersion_relation(k, dep, grav=GRAV):
@@ -77,6 +73,7 @@ def intrinsic_dispersion_relation(k, dep, grav=GRAV):
     k = atleast_1d(k)
     return numpy.sqrt(grav * k * numpy.tanh(k * dep))
 
+
 @njit(cache=True)
 def phase_velocity(k, depth, grav=GRAV):
     """
@@ -87,6 +84,7 @@ def phase_velocity(k, depth, grav=GRAV):
     """
     return intrinsic_dispersion_relation(k, depth, grav=GRAV) / k
 
+
 @njit(cache=True)
 def ratio_group_velocity_to_phase_velocity(k, depth, grav):
     """
@@ -96,7 +94,8 @@ def ratio_group_velocity_to_phase_velocity(k, depth, grav):
     :return:
     """
     kd = k * depth
-    return numpy.where( kd > 5, 0.5, 0.5 + kd / numpy.sinh(2 * kd) )
+    return numpy.where(kd > 5, 0.5, 0.5 + kd / numpy.sinh(2 * kd))
+
 
 @njit(cache=True)
 def intrinsic_group_velocity(k, depth, grav=GRAV):
@@ -106,7 +105,10 @@ def intrinsic_group_velocity(k, depth, grav=GRAV):
     :param grav: Gravitational acceleration (m/s^2)
     :return:
     """
-    return ratio_group_velocity_to_phase_velocity(k, depth, grav=GRAV) * phase_velocity(k, depth, grav)
+    return ratio_group_velocity_to_phase_velocity(k, depth, grav=GRAV) * phase_velocity(
+        k, depth, grav
+    )
+
 
 @njit(cache=True)
 def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV):
@@ -117,6 +119,7 @@ def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV):
     :return:
     """
     return 1 / intrinsic_group_velocity(k, depth, grav)
+
 
 @njit(cache=True)
 def jacobian_radial_frequency_to_wavenumber(k, depth, grav=GRAV):

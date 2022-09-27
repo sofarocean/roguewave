@@ -11,4 +11,5 @@ from roguewave.wavewatch3.io import (
 
 from roguewave.wavewatch3.resources import create_resource
 from roguewave.wavewatch3.restart_file_metadata import read_header, MetaData
-from roguewave.wavewatch3.model_definition import read_model_definition, Grid
+from roguewave.wavewatch3.model_definition import read_model_definition
+from roguewave.wavewatch3.grid_tools import Grid, unpack_ww3_data

@@ -25,7 +25,7 @@ How To Use This Module
 import numpy
 from numpy.typing import ArrayLike, NDArray
 from roguewave.wavewatch3.resources import Resource
-from roguewave.wavewatch3.model_definition import Grid
+from roguewave.wavewatch3.grid_tools import Grid
 from roguewave.wavetheory.lineardispersion import (
     inverse_intrinsic_dispersion_relation,
     jacobian_wavenumber_to_radial_frequency,
@@ -50,7 +50,6 @@ class RestartFile(Sequence):
         grid: Grid,
         meta_data: MetaData,
         resource: Resource,
-        depth: numpy.ndarray = None,
         parallel=True,
     ):
 
@@ -60,12 +59,9 @@ class RestartFile(Sequence):
         self._dtype = numpy.dtype("float32").newbyteorder(meta_data.byte_order)
         self.parallel = parallel
 
-        if depth is None:
-            self._depth = numpy.inf * numpy.ones(
-                (self.number_of_spatial_points,), dtype="float32"
-            )
-        else:
-            self._depth = depth
+    @property
+    def depth(self):
+        return self.grid.depth
 
     @property
     def frequency(self) -> numpy.ndarray:
@@ -258,6 +254,7 @@ class RestartFile(Sequence):
                     "longitude": (("linear_index"), coords[1]),
                     "latitude": (("linear_index"), coords[0]),
                     "time": to_datetime64(self.time),
+                    "depth": (("linear_index"), self.depth[s]),
                 },
                 coords={
                     "linear_index": s,
@@ -375,6 +372,29 @@ class RestartFile(Sequence):
             data_discont=None,
         )
 
+        def _get_depth(indices, _dummy):
+            index = self.grid.index(
+                latitude_index=indices[0], longitude_index=indices[1]
+            )
+            output = numpy.zeros(len(indices))
+            mask = index >= 0
+            output[mask] = self.depth[index[mask]]
+            return output
+
+        depth_interpolator = NdInterpolator(
+            get_data=_get_depth,
+            data_coordinates=(
+                ("latitude", self.latitude),
+                ("longitude", self.longitude),
+            ),
+            data_shape=(self.number_of_latitudes, self.number_of_longitudes),
+            interp_coord_names=list(points.keys()),
+            interp_index_coord_name="latitude",
+            data_periodic_coordinates=periodic_coordinates,
+            data_period=None,
+            data_discont=None,
+        )
+
         return FrequencyDirectionSpectrum(
             Dataset(
                 data_vars={
@@ -385,6 +405,7 @@ class RestartFile(Sequence):
                     "longitude": (("points"), points["longitude"]),
                     "latitude": (("points"), points["latitude"]),
                     "time": self.time,
+                    "depth": (("points"), depth_interpolator.interpolate(points)),
                 },
                 coords={
                     "frequency": self.frequency,
@@ -438,7 +459,7 @@ class RestartFile(Sequence):
         """
 
         # get the depth and make sure it has dimension [ spatial_points , 1 ]
-        depth = self._depth[s, None]
+        depth = self.depth[s, None]
 
         # Get omega and make sure it has dimensions [ 1 , frequency_points ]
         w = self.frequency[None, :] * numpy.pi * 2

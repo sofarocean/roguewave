@@ -22,7 +22,7 @@ _NAME_b2 = "b2"
 _NAME_LAT = "latitude"
 _NAME_LON = "longitude"
 _NAME_DEPTH = "depth"
-_NAMES_2D = (_NAME_F, _NAME_D, _NAME_T, _NAME_E, _NAME_LAT, _NAME_LON)
+_NAMES_2D = (_NAME_F, _NAME_D, _NAME_T, _NAME_E, _NAME_LAT, _NAME_LON, _NAME_DEPTH)
 _NAMES_1D = (
     _NAME_F,
     _NAME_T,
@@ -33,6 +33,7 @@ _NAMES_1D = (
     _NAME_b1,
     _NAME_a2,
     _NAME_b2,
+    _NAME_DEPTH,
 )
 
 _T = TypeVar("_T")
@@ -439,15 +440,45 @@ class WaveSpectrum(DatasetWrapper):
         return self._spectral_weighted(self.b2, fmin, fmax)
 
     @property
-    def depth(self):
-        if _NAME_DEPTH in self.dataset:
-            return self.dataset[_NAME_DEPTH]
-        else:
-            return numpy.inf
+    def depth(self) -> DataArray:
+        return self.dataset[_NAME_DEPTH]
 
     @property
     def wavenumber(self) -> DataArray:
-        return inverse_intrinsic_dispersion_relation(self.radian_frequency, self.depth)
+        """
+        Determine the wavenumbers for the frequencies in the spectrum. Note that since the dispersion relation depends
+        on depth the returned wavenumber array has the dimensions associated with the depth array by the frequency
+        dimension.
+
+        :return: wavenumbers
+        """
+
+        # For numba (used in the dispersion relation) we need raw numpy arrays of the correct dimension
+        depth = self.depth.expand_dims(dim=_NAME_F, axis=-1).values
+        radian_frequency = self.radian_frequency.expand_dims(dim=self.depth.dims).values
+
+        # Broadcasting does not work inside the numba implementaiton, we explicitly need to construct arrays of the
+        # correct input dimension.
+        depth_shape = depth.shape
+        radian_frequency_shape = radian_frequency.shape
+
+        depth = depth * numpy.ones(radian_frequency_shape)
+        radian_frequency = numpy.ones(depth_shape) * radian_frequency
+
+        # Construct the output coordinates and dimension of the data array
+        return_dimensions = [*self.depth.dims, _NAME_F]
+        coords = {}
+        for dim in return_dimensions:
+            if dim == _NAME_F:
+                coords[dim] = self.radian_frequency.values
+            else:
+                coords[dim] = self.dataset[dim].values
+
+        return DataArray(
+            data=inverse_intrinsic_dispersion_relation(radian_frequency, depth),
+            dims=return_dimensions,
+            coords=coords,
+        )
 
     @property
     def wavelength(self) -> DataArray:
@@ -529,7 +560,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
         return data_array
 
     def _directionally_integrate(self, data_array: DataArray) -> DataArray:
-        return (data_array * self.direction_step()).sum(_NAME_D)
+        return (data_array * self.direction_step()).sum(_NAME_D, skipna=False)
 
     @property
     def e(self) -> DataArray:

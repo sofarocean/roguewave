@@ -376,7 +376,7 @@ class RestartFile(Sequence):
             index = self.grid.index(
                 latitude_index=indices[0], longitude_index=indices[1]
             )
-            output = numpy.zeros(len(indices))
+            output = numpy.zeros(len(indices[0]))
             mask = index >= 0
             output[mask] = self.depth[index[mask]]
             return output

@@ -7,8 +7,8 @@ from roguewave.tools.math import wrapped_difference
 from roguewave.tools.time import to_datetime64
 from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
 from roguewave.wavespectra.estimators import mem2
-from typing import Iterator, Hashable, Iterable, TypeVar
-from xarray import Dataset, DataArray, concat
+from typing import Iterator, Hashable, Iterable, TypeVar, Union, List
+from xarray import Dataset, DataArray, concat, open_dataset
 from xarray.core.coordinates import DatasetCoordinates
 
 _NAME_F = "frequency"
@@ -35,6 +35,9 @@ _NAMES_1D = (
     _NAME_b2,
     _NAME_DEPTH,
 )
+_SPECTRAL_VARS = (_NAME_E, _NAME_a1, _NAME_b1, _NAME_a2, _NAME_b2)
+_SPECTRAL_DIMS = (_NAME_F, _NAME_D)
+_SPACE_TIME_DIMS = (_NAME_T, _NAME_LON, _NAME_LAT)
 
 _T = TypeVar("_T")
 
@@ -129,77 +132,17 @@ class WaveSpectrum(DatasetWrapper):
         "is_swell_spectrum",
     )
 
-    def mean(self, dim, skipna=False) -> "WaveSpectrum":
-        """
-        Calculate the mean value of the spectrum along the given dimension.
-        :param dim: dimension to average over
-        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nanmean
-        :return:
-        """
-
-        cls = type(self)
-        dataset = Dataset()
-        dataset["variance_density"] = self.dataset["variance_density"].mean(
-            dim=dim, skipna=skipna
-        )
-        for x in self.dataset:
-            if x == "variance_density":
-                continue
-            dataset[x] = self.dataset[x]
-
-        return cls(dataset)
-
-    def sum(self, dim, skipna=False) -> "WaveSpectrum":
-        """
-        Calculate the sum value of the spectrum along the given dimension.
-        :param dim: dimension to sum over
-        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nansum
-        :return:
-        """
-
-        cls = type(self)
-        dataset = Dataset()
-        dataset["variance_density"] = self.dataset["variance_density"].sum(
-            dim=dim, skipna=skipna
-        )
-        for x in self.dataset:
-            if x == "variance_density":
-                continue
-            dataset[x] = self.dataset[x]
-
-        return cls(dataset)
-
-    def std(self, dim, skipna=False) -> "WaveSpectrum":
-        """
-        Calculate the standard deviation of the spectrum along the given dimension.
-        :param dim: dimension to calculate standard deviation over
-        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nanstd
-        :return:
-        """
-
-        cls = type(self)
-        dataset = Dataset()
-        dataset["variance_density"] = self.dataset["variance_density"].std(
-            dim=dim, skipna=skipna
-        )
-        for x in self.dataset:
-            if x == "variance_density":
-                continue
-            dataset[x] = self.dataset[x]
-
-        return cls(dataset)
-
     def __init__(self, dataset: Dataset):
         super(WaveSpectrum, self).__init__(dataset)
 
     def __add__(self: _T, other: _T) -> _T:
         spectrum = self.copy(deep=True)
-        spectrum[_NAME_E] = spectrum[_NAME_E] + other[_NAME_E]
+        spectrum.dataset[_NAME_E] = spectrum.dataset[_NAME_E] + other.dataset[_NAME_E]
         return spectrum
 
     def __sub__(self: _T, other: _T) -> _T:
         spectrum = self.copy(deep=True)
-        spectrum[_NAME_E] = spectrum[_NAME_E] - other[_NAME_E]
+        spectrum.dataset[_NAME_E] = spectrum.dataset[_NAME_E] - other.dataset[_NAME_E]
         return spectrum
 
     def __neg__(self: _T) -> _T:
@@ -209,8 +152,113 @@ class WaveSpectrum(DatasetWrapper):
             sign.
         """
         spectrum = self.copy(deep=True)
-        spectrum[_NAME_E] = -spectrum[_NAME_E]
+        spectrum.dataset[_NAME_E] = -spectrum.dataset[_NAME_E]
         return spectrum
+
+    def __len__(self):
+        return self.number_of_spectra
+
+    def __getitem__(self: _T, item) -> _T:
+        if len(item) < self.ndims:
+            raise ValueError(
+                f"Indexing requires same number of inputs as dimensions: {self.ndims}"
+            )
+
+        nspectral_dims = len(self.dims_spectral)
+        space_time_index = item[:-nspectral_dims]
+
+        dataset = Dataset()
+        for var in self.dataset:
+            if var in _SPECTRAL_VARS:
+                dataset = dataset.assign({var: self.dataset[var].__getitem__(item)})
+            else:
+                if space_time_index:
+                    # array
+                    dataset = dataset.assign(
+                        {var: self.dataset[var].__getitem__(space_time_index)}
+                    )
+                else:
+                    # Scalar
+                    dataset = dataset.assign({var: self.dataset[var]})
+
+        cls = type(self)
+        return cls(dataset)
+
+    @property
+    def ndims(self):
+        return len(self.dims)
+
+    def sel(self: _T, *args, **kwargs) -> _T:
+        cls = type(self)
+        dataset = Dataset()
+        for var in self.dataset:
+            dataset = dataset.assign({var: self.dataset[var].sel(*args, **kwargs)})
+        return cls(dataset=dataset)
+
+    def isel(self: _T, *args, **kwargs) -> _T:
+        cls = type(self)
+        dataset = Dataset()
+        for var in self.dataset:
+            dataset = dataset.assign({var: self.dataset[var].isel(*args, **kwargs)})
+        return cls(dataset=dataset)
+
+    def mean(self: _T, dim, skipna=False) -> _T:
+        """
+        Calculate the mean value of the spectrum along the given dimension.
+        :param dim: dimension to average over
+        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nanmean
+        :return:
+        """
+        if dim in _SPECTRAL_DIMS:
+            raise ValueError("Cannot calculate mean over spectral dimensions")
+
+        cls = type(self)
+        dataset = Dataset()
+        # Todo: fix averaging over longitude for (prime/anti) meridian issues
+        dataset = dataset.assign({dim: self.dataset[dim].mean(dim=dim, skipna=skipna)})
+        for x in self.dataset:
+            dataset = dataset.assign({x: self.dataset[x].mean(dim=dim, skipna=skipna)})
+        return cls(dataset)
+
+    def sum(self: _T, dim, skipna=False) -> _T:
+        """
+        Calculate the sum value of the spectrum along the given dimension.
+        :param dim: dimension to sum over
+        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nansum
+        :return:
+        """
+
+        if dim in _SPECTRAL_DIMS:
+            raise ValueError("Cannot calculate sum over spectral dimensions")
+
+        cls = type(self)
+        dataset = Dataset()
+        dataset = dataset.assign({dim: self.dataset[dim].sum(dim=dim, skipna=skipna)})
+        for x in self.dataset:
+            dataset = dataset.assign({x: self.dataset[x].sumn(dim=dim, skipna=skipna)})
+        return cls(dataset)
+
+    def std(self: _T, dim, skipna=False) -> _T:
+        """
+        Calculate the standard deviation of the spectrum along the given dimension.
+        :param dim: dimension to calculate standard deviation over
+        :param skipna: whether or not to "skip" nan values; if True behaves as numpy.nanstd
+        :return:
+        """
+        if dim in _SPECTRAL_DIMS:
+            raise ValueError(
+                "Cannot calculate standard deviation over spectral dimensions"
+            )
+
+        cls = type(self)
+        dataset = Dataset()
+        dataset = dataset.assign({dim: self.dataset[dim].std(dim=dim, skipna=skipna)})
+        for x in self.dataset:
+            dataset = dataset.assign({x: self.dataset[x].std(dim=dim, skipna=skipna)})
+        return cls(dataset)
+
+    def shape(self):
+        return self.variance_density.shape
 
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> DataArray:
         """
@@ -237,6 +285,28 @@ class WaveSpectrum(DatasetWrapper):
         return len(self.frequency)
 
     @property
+    def dims_space_time(self) -> List[str]:
+        return [str(x) for x in self.variance_density.dims if x not in (_SPECTRAL_DIMS)]
+
+    @property
+    def dims_spectral(self) -> List[str]:
+        return [str(x) for x in self.variance_density.dims if x in (_SPECTRAL_DIMS)]
+
+    @property
+    def dims(self) -> List[str]:
+        return [str(x) for x in self.variance_density.dims]
+
+    @property
+    def number_of_spectra(self):
+        dims = self.dims_space_time
+        if dims:
+            shape = 1
+            for d in dims:
+                shape *= len(self.dataset[d])
+        else:
+            return 1
+
+    @property
     def spectral_values(self) -> DataArray:
         """
         :return: Spectral levels
@@ -248,7 +318,7 @@ class WaveSpectrum(DatasetWrapper):
         """
         :return: Radian frequency
         """
-        data_array = self[_NAME_F] * 2 * numpy.pi
+        data_array = self.dataset[_NAME_F] * 2 * numpy.pi
         data_array.name = "radian_frequency"
         return data_array
 
@@ -257,28 +327,28 @@ class WaveSpectrum(DatasetWrapper):
         """
         :return: latitudes
         """
-        return self[_NAME_LAT]
+        return self.dataset[_NAME_LAT]
 
     @property
     def longitude(self) -> DataArray:
         """
         :return: longitudes
         """
-        return self[_NAME_LON]
+        return self.dataset[_NAME_LON]
 
     @property
     def time(self) -> DataArray:
         """
         :return: Time
         """
-        return self[_NAME_T]
+        return self.dataset[_NAME_T]
 
     @property
     def variance_density(self) -> DataArray:
         """
         :return: Time
         """
-        return self[_NAME_E]
+        return self.dataset[_NAME_E]
 
     @property
     def e(self) -> DataArray:
@@ -286,35 +356,35 @@ class WaveSpectrum(DatasetWrapper):
         :return: 1D spectral values (directionally integrated spectrum).
             Equivalent to self.spectral_values if this is a 1D spectrum.
         """
-        return self[_NAME_E]
+        return self.dataset[_NAME_E]
 
     @property
     def a1(self) -> DataArray:
         """
         :return: normalized Fourier moment cos(theta)
         """
-        return self[_NAME_a1]
+        return self.dataset[_NAME_a1]
 
     @property
     def b1(self) -> DataArray:
         """
         :return: normalized Fourier moment sin(theta)
         """
-        return self[_NAME_b1]
+        return self.dataset[_NAME_b1]
 
     @property
     def a2(self) -> DataArray:
         """
         :return: normalized Fourier moment cos(2*theta)
         """
-        return self[_NAME_a2]
+        return self.dataset[_NAME_a2]
 
     @property
     def b2(self) -> DataArray:
         """
         :return: normalized Fourier moment sin(2*theta)
         """
-        return self[_NAME_b2]
+        return self.dataset[_NAME_b2]
 
     @property
     def A1(self) -> DataArray:
@@ -349,7 +419,7 @@ class WaveSpectrum(DatasetWrapper):
         """
         :return: Frequencies (Hz)
         """
-        return self[_NAME_F]
+        return self.dataset[_NAME_F]
 
     def m0(self, fmin=0, fmax=numpy.inf) -> DataArray:
         """
@@ -433,7 +503,7 @@ class WaveSpectrum(DatasetWrapper):
         :param fmax: maximum frequency
         :return: peak frequency
         """
-        return self[_NAME_F][self.peak_index(fmin, fmax)]
+        return self.dataset[_NAME_F][self.peak_index(fmin, fmax)]
 
     def peak_period(self, fmin=0, fmax=numpy.inf) -> DataArray:
         """
@@ -477,6 +547,7 @@ class WaveSpectrum(DatasetWrapper):
     def _spectral_weighted(self, property: DataArray, fmin=0, fmax=numpy.inf):
         range = {_NAME_F: self._range(fmin, fmax)}
 
+        property = property.fillna(0)
         return numpy.trapz(
             property.isel(**range) * self.e.isel(**range), self.frequency[range]
         ) / self.m0(fmin, fmax)
@@ -589,7 +660,12 @@ class WaveSpectrum(DatasetWrapper):
         )
 
     def _range(self, fmin=0.0, fmax=numpy.inf) -> numpy.ndarray:
-        return (self[_NAME_F].values >= fmin) & (self[_NAME_F].values < fmax)
+        return (self.dataset[_NAME_F].values >= fmin) & (
+            self.dataset[_NAME_F].values < fmax
+        )
+
+    def save_as_netcdf(self, path):
+        self.dataset.to_netcdf(path)
 
 
 class FrequencyDirectionSpectrum(WaveSpectrum):
@@ -615,7 +691,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
 
     @property
     def radian_direction(self) -> DataArray:
-        data_array = self[_NAME_D] * numpy.pi / 180
+        data_array = self.dataset[_NAME_D] * numpy.pi / 180
         data_array.name = "radian_direction"
         return data_array
 
@@ -624,13 +700,13 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
 
     @property
     def e(self) -> DataArray:
-        return self._directionally_integrate(self[_NAME_E])
+        return self._directionally_integrate(self.dataset[_NAME_E])
 
     @property
     def a1(self) -> DataArray:
         return (
             self._directionally_integrate(
-                self[_NAME_E] * numpy.cos(self.radian_direction)
+                self.dataset[_NAME_E] * numpy.cos(self.radian_direction)
             )
             / self.e
         )
@@ -639,7 +715,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
     def b1(self) -> DataArray:
         return (
             self._directionally_integrate(
-                self[_NAME_E] * numpy.sin(self.radian_direction)
+                self.dataset[_NAME_E] * numpy.sin(self.radian_direction)
             )
             / self.e
         )
@@ -648,7 +724,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
     def a2(self) -> DataArray:
         return (
             self._directionally_integrate(
-                self[_NAME_E] * numpy.cos(2 * self.radian_direction)
+                self.dataset[_NAME_E] * numpy.cos(2 * self.radian_direction)
             )
             / self.e
         )
@@ -657,7 +733,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
     def b2(self) -> DataArray:
         return (
             self._directionally_integrate(
-                self[_NAME_E] * numpy.sin(2 * self.radian_direction)
+                self.dataset[_NAME_E] * numpy.sin(2 * self.radian_direction)
             )
             / self.e
         )
@@ -677,6 +753,8 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
             self.b1.values,
             self.a2.values,
             self.b2.values,
+            depth=self.depth,
+            dims=self.dims_space_time + [_NAME_F],
         )
 
     @property
@@ -738,27 +816,23 @@ class FrequencySpectrum(WaveSpectrum):
             latitude=self.latitude.values,
             longitude=self.longitude.values,
             depth=self.depth.values,
+            dims=list(self.variance_density.dims).append(_NAME_D),
         )
 
 
 def create_1d_spectrum(
     frequency: numpy.ndarray,
     variance_density: numpy.ndarray,
-    time,
-    latitude,
-    longitude,
-    a1=None,
-    b1=None,
-    a2=None,
-    b2=None,
-    depth=None,
+    time: Union[numpy.ndarray, float],
+    latitude: Union[numpy.ndarray, float],
+    longitude: Union[numpy.ndarray, float],
+    a1: numpy.ndarray = None,
+    b1: numpy.ndarray = None,
+    a2: numpy.ndarray = None,
+    b2: numpy.ndarray = None,
+    depth: Union[numpy.ndarray, float] = numpy.inf,
+    dims=(_NAME_T, _NAME_F),
 ) -> FrequencySpectrum:
-    time = to_datetime64(numpy.atleast_1d(time))
-    latitude = numpy.atleast_1d(latitude)
-    longitude = numpy.atleast_1d(longitude)
-    if depth is None:
-        depth = numpy.zeros(len(time)) + numpy.inf
-
     if a1 is None:
         a1 = numpy.nan + numpy.ones_like(variance_density)
     if b1 is None:
@@ -768,31 +842,20 @@ def create_1d_spectrum(
     if b2 is None:
         b2 = numpy.nan + numpy.ones_like(variance_density)
 
-    if variance_density.ndim == 1:
-        variance_density = variance_density[
-            None,
-            :,
-        ]
-        a1 = a1[None, :]
-        b1 = b1[None, :]
-        a2 = a2[None, :]
-        b2 = b2[None, :]
+    variables = {
+        _NAME_T: numpy.atleast_1d(to_datetime64(time)),
+        _NAME_LAT: numpy.atleast_1d(latitude),
+        _NAME_LON: numpy.atleast_1d(longitude),
+        _NAME_DEPTH: numpy.atleast_1d(depth),
+        _NAME_F: frequency,
+        _NAME_E: variance_density,
+        _NAME_a1: a1,
+        _NAME_b1: b1,
+        _NAME_a2: a2,
+        _NAME_b2: b2,
+    }
 
-    return FrequencySpectrum(
-        Dataset(
-            data_vars={
-                _NAME_E: ((_NAME_T, _NAME_F), variance_density),
-                _NAME_a1: ((_NAME_T, _NAME_F), a1),
-                _NAME_b1: ((_NAME_T, _NAME_F), b1),
-                _NAME_a2: ((_NAME_T, _NAME_F), a2),
-                _NAME_b2: ((_NAME_T, _NAME_F), b2),
-                _NAME_LAT: ((_NAME_T,), latitude),
-                _NAME_LON: ((_NAME_T,), longitude),
-                _NAME_DEPTH: ((_NAME_T,), depth),
-            },
-            coords={_NAME_T: to_datetime64(time), _NAME_F: frequency},
-        )
-    )
+    return FrequencySpectrum(create_spectrum_dataset(dims, variables))
 
 
 def create_2d_spectrum(
@@ -800,26 +863,81 @@ def create_2d_spectrum(
     direction: numpy.ndarray,
     variance_density: numpy.ndarray,
     time,
-    latitude,
-    longitude,
-    depth=None,
+    latitude: Union[numpy.ndarray, float],
+    longitude: Union[numpy.ndarray, float],
+    dims=(_NAME_T, _NAME_F, _NAME_D),
+    depth: Union[numpy.ndarray, float] = numpy.inf,
 ) -> FrequencyDirectionSpectrum:
-    time = numpy.atleast_1d(time)
-    latitude = numpy.atleast_1d(latitude)
-    longitude = numpy.atleast_1d(longitude)
-    if depth is None:
-        depth = numpy.zeros(len(time)) + numpy.inf
+    """
+    :param frequency:
+    :param direction:
+    :param variance_density:
+    :param time:
+    :param latitude:
+    :param longitude:
+    :param dims:
+    :param depth:
+    :return:
+    """
 
-    if variance_density.ndim == 2:
-        variance_density = variance_density[None, :, :]
+    variables = {
+        _NAME_T: numpy.atleast_1d(to_datetime64(time)),
+        _NAME_LAT: numpy.atleast_1d(latitude),
+        _NAME_LON: numpy.atleast_1d(longitude),
+        _NAME_DEPTH: numpy.atleast_1d(depth),
+        _NAME_F: frequency,
+        _NAME_D: direction,
+        _NAME_E: variance_density,
+    }
+    return FrequencyDirectionSpectrum(create_spectrum_dataset(dims, variables))
 
-    dataset = Dataset(
-        data_vars={
-            _NAME_E: ((_NAME_T, _NAME_F, _NAME_D), variance_density),
-            _NAME_LAT: ((_NAME_T,), latitude),
-            _NAME_LON: ((_NAME_T,), longitude),
-            _NAME_DEPTH: ((_NAME_T,), depth),
-        },
-        coords={_NAME_T: to_datetime64(time), _NAME_F: frequency, _NAME_D: direction},
-    )
-    return FrequencyDirectionSpectrum(dataset)
+
+def create_spectrum_dataset(dims, variables) -> Dataset:
+    independent_variables = dims
+    dependent_variables = [x for x in variables if x not in independent_variables]
+
+    spectral_coords = {k: variables[k] for k in independent_variables}
+    spatial_coords = {
+        k: variables[k] for k in independent_variables if k not in _SPECTRAL_DIMS
+    }
+
+    dataset = Dataset()
+    for variable in dependent_variables:
+        if variable in _SPECTRAL_VARS:
+            coords = spectral_coords
+        else:
+            coords = spatial_coords
+        dims = [k for k in coords]
+
+        if dims:
+            dataset = dataset.assign(
+                {
+                    variable: DataArray(
+                        data=variables[variable], dims=dims, coords=coords
+                    )
+                }
+            )
+
+        else:
+            if len(variables[variable]) == 1:
+                # If no coordinate is known, and the variable has length 1, we add it as a scalar.
+                data = variables[variable][0]
+            else:
+                # otherwise we add without coordinate/dimension.
+                data = DataArray(data=variables[variable])
+
+            dataset = dataset.assign({variable: data})
+    return dataset
+
+
+def load_spectrum_from_netcdf(filename_or_obj) -> WaveSpectrum:
+    """
+    Load a spectrum from netcdf file
+    :param filename_or_obj:
+    :return:
+    """
+    dataset = open_dataset(filename_or_obj=filename_or_obj)
+    if _NAME_D in dataset.coords:
+        return FrequencyDirectionSpectrum(dataset=dataset)
+    else:
+        return FrequencySpectrum(dataset=dataset)

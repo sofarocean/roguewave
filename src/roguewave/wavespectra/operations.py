@@ -17,14 +17,15 @@ def concatenate_spectra(spectra: Sequence[_T], dim, **kwargs) -> _T:
 
     # Concatenate the dataset in the spectral objects using the xarray concatenate function
     dataset = Dataset()
-    dataset["variance_density"] = concat(
-        [x.dataset["variance_density"] for x in spectra], dim=dim, **kwargs
-    )
-    dataset["depth"] = spectra[0].depth
-    dataset["latitude"] = spectra[0].latitude
-    dataset["longitude"] = spectra[0].longitude
-    if "time" not in dataset:
-        dataset["time"] = spectra[0].time
+    dataset[dim] = [x.dataset[dim].values for x in spectra]
+
+    for variable_name in spectra[0]:
+        if variable_name == dim:
+            continue
+
+        dataset[variable_name] = concat(
+            [x.dataset[variable_name] for x in spectra], dim=dim, **kwargs
+        )
 
     # Get the class of the input spectra.
     cls = type(spectra[0])

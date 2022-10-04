@@ -27,18 +27,28 @@ from .exceptions import ExceptionNoDataForVariable
 from multiprocessing.pool import ThreadPool
 from pysofar.spotter import Spotter, SofarApi
 from roguewave import logger
-from roguewave.tools.time import datetime_to_iso_time_string, to_datetime_utc
-from roguewave.wavespectra  import FrequencySpectrum, create_1d_spectrum
+from roguewave.tools.time import (
+    datetime_to_iso_time_string,
+    to_datetime_utc,
+    to_datetime64,
+)
+from roguewave.wavespectra import FrequencySpectrum, create_1d_spectrum
 
-from roguewave.metoceandata import WaveBulkData, as_dataframe, WindData, \
-    SSTData, MetoceanData, BarometricPressure
+from roguewave.metoceandata import (
+    WaveBulkData,
+    as_dataframe,
+    WindData,
+    SSTData,
+    MetoceanData,
+    BarometricPressure,
+)
 from typing import Dict, List, Union, TypedDict, Tuple, Sequence
 from tqdm import tqdm
 from pandas import DataFrame
 from .helper_functions import _get_sofar_api, get_spotter_ids
 import numpy
 import roguewave.spotterapi.spotter_cache as spotter_cache
-from xarray import Dataset, concat
+from xarray import Dataset
 
 # 2) Constants & Private Variables
 # =============================================================================
@@ -66,6 +76,7 @@ class VariablesToInclude(TypedDict):
     are potentially available. This class is internal- should not be
     instantiated or returned.
     """
+
     frequencyData: bool
     waves: bool
     wind: bool
@@ -76,12 +87,12 @@ class VariablesToInclude(TypedDict):
 # 4) Main Functions
 # =============================================================================
 def get_spectrum(
-        spotter_ids: Union[str, Sequence[str]],
-        start_date: Union[datetime, int, float, str] = None,
-        end_date: Union[datetime, int, float, str] = None,
-        session: SofarApi = None,
-        parallel_download=True,
-        cache: bool = True
+    spotter_ids: Union[str, Sequence[str]],
+    start_date: Union[datetime, int, float, str] = None,
+    end_date: Union[datetime, int, float, str] = None,
+    session: SofarApi = None,
+    parallel_download=True,
+    cache: bool = True,
 ) -> Dict[str, FrequencySpectrum]:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
@@ -124,11 +135,11 @@ def get_spectrum(
         include_surface_temp_data=False,
         session=session,
         parallel_download=parallel_download,
-        cache=cache
+        cache=cache,
     )
     out = {}
     for key in data:
-        out[key] = data[key]['frequencyData']
+        out[key] = data[key]["frequencyData"]
     return out
 
 
@@ -136,15 +147,15 @@ def get_spectrum(
 
 
 def get_bulk_wave_data(
-        spotter_ids: Union[str, Sequence[str]],
-        start_date: Union[datetime, int, float, str] = None,
-        end_date: Union[datetime, int, float, str] = None,
-        session: SofarApi = None,
-        parallel_download: bool = True,
-        bulk_data_as_dataframe: bool = True,
-        cache: bool = True,
-        convert_to_sofar_model_names = False
-) -> Dict[str, Union[DataFrame,list[WaveBulkData]]]:
+    spotter_ids: Union[str, Sequence[str]],
+    start_date: Union[datetime, int, float, str] = None,
+    end_date: Union[datetime, int, float, str] = None,
+    session: SofarApi = None,
+    parallel_download: bool = True,
+    bulk_data_as_dataframe: bool = True,
+    cache: bool = True,
+    convert_to_sofar_model_names=False,
+) -> Dict[str, Union[DataFrame, list[WaveBulkData]]]:
     """
     Gets the requested bulk wave data for the spotter(s) in the given interval
 
@@ -189,32 +200,31 @@ def get_bulk_wave_data(
         parallel_download=parallel_download,
         bulk_data_as_dataframe=bulk_data_as_dataframe,
         cache=cache,
-        convert_to_sofar_model_names=convert_to_sofar_model_names
+        convert_to_sofar_model_names=convert_to_sofar_model_names,
     )
     out = {}
     for key in data:
-        out[key] = data[key]['waves']
+        out[key] = data[key]["waves"]
     return out
 
 
 # -----------------------------------------------------------------------------
 def get_data(
-        spotter_ids: Union[str, List[str]],
-        start_date: Union[datetime, int, float, str] = None,
-        end_date: Union[datetime, int, float, str] = None,
-        include_frequency_data=False,
-        include_waves=True,
-        include_wind=False,
-        include_barometer_data=False,
-        include_surface_temp_data=False,
-        session: SofarApi = None,
-        parallel_download=True,
-        bulk_data_as_dataframe=True,
-        spectral_data_as_dataset_spectrum=True,
-        cache=True,
-        convert_to_sofar_model_names=False
-) -> Dict[str, Dict[str, Union[FrequencySpectrum,
-                               list[WaveBulkData], DataFrame]]]:
+    spotter_ids: Union[str, List[str]],
+    start_date: Union[datetime, int, float, str] = None,
+    end_date: Union[datetime, int, float, str] = None,
+    include_frequency_data=False,
+    include_waves=True,
+    include_wind=False,
+    include_barometer_data=False,
+    include_surface_temp_data=False,
+    session: SofarApi = None,
+    parallel_download=True,
+    bulk_data_as_dataframe=True,
+    spectral_data_as_dataset_spectrum=True,
+    cache=True,
+    convert_to_sofar_model_names=False,
+) -> Dict[str, Dict[str, Union[FrequencySpectrum, list[WaveBulkData], DataFrame]]]:
     """
     Gets the requested data for the spotter(s) in the given interval
 
@@ -277,33 +287,33 @@ def get_data(
         barometerData=include_barometer_data,
     )
     out = {}
-    for variable,to_include in variables_to_include.items():
+    for variable, to_include in variables_to_include.items():
         if to_include:
-            print(
-                f"Getting spotter data: retrieving {variable}")
+            print(f"Getting spotter data: retrieving {variable}")
             dummy = VariablesToInclude(
                 frequencyData=False,
                 wind=False,
                 waves=False,
                 surfaceTemp=False,
-                barometerData=False)
+                barometerData=False,
+            )
             dummy[variable] = to_include
 
             temp = _get_data(
                 spotter_ids,
                 start_date,
                 end_date,
-                dummy['frequencyData'],
-                dummy['waves'],
-                dummy['wind'],
-                dummy['barometerData'],
-                dummy['surfaceTemp'],
+                dummy["frequencyData"],
+                dummy["waves"],
+                dummy["wind"],
+                dummy["barometerData"],
+                dummy["surfaceTemp"],
                 session,
                 parallel_download,
                 bulk_data_as_dataframe,
                 spectral_data_as_dataset_spectrum,
                 cache,
-                convert_to_sofar_model_names
+                convert_to_sofar_model_names,
             )
             for spotter_id in temp:
                 if spotter_id not in out:
@@ -311,23 +321,23 @@ def get_data(
                 out[spotter_id][variable] = temp[spotter_id][variable]
     return out
 
+
 def _get_data(
-        spotter_ids: Union[str, List[str]],
-        start_date: Union[datetime, int, float, str] = None,
-        end_date: Union[datetime, int, float, str] = None,
-        include_frequency_data=False,
-        include_waves=True,
-        include_wind=False,
-        include_barometer_data=False,
-        include_surface_temp_data=False,
-        session: SofarApi = None,
-        parallel_download=True,
-        bulk_data_as_dataframe=True,
-        spectral_data_as_dataset_spectrum=True,
-        cache=True,
-        convert_to_sofar_model_names=False
-) -> Dict[str, Dict[str, Union[FrequencySpectrum,
-                               list[WaveBulkData], DataFrame]]]:
+    spotter_ids: Union[str, List[str]],
+    start_date: Union[datetime, int, float, str] = None,
+    end_date: Union[datetime, int, float, str] = None,
+    include_frequency_data=False,
+    include_waves=True,
+    include_wind=False,
+    include_barometer_data=False,
+    include_surface_temp_data=False,
+    session: SofarApi = None,
+    parallel_download=True,
+    bulk_data_as_dataframe=True,
+    spectral_data_as_dataset_spectrum=True,
+    cache=True,
+    convert_to_sofar_model_names=False,
+) -> Dict[str, Dict[str, Union[FrequencySpectrum, list[WaveBulkData], DataFrame]]]:
     """
     Gets the requested data for the spotter(s) in the given interval
 
@@ -401,38 +411,41 @@ def _get_data(
             start_date=start_date,
             end_date=end_date,
             bulk_data_as_dataframe=bulk_data_as_dataframe,
-            convert_to_sofar_model_names=convert_to_sofar_model_names)
+            convert_to_sofar_model_names=convert_to_sofar_model_names,
+        )
     else:
         if session is None:
             session = _get_sofar_api()
 
         def worker(_spotter_id):
-            return _download_data(_spotter_id, session, variables_to_include,
-                                  start_date, end_date, bulk_data_as_dataframe,
-                                  limit=None,
-                                  convert_to_sofar_model_names=
-                                  convert_to_sofar_model_names)
+            return _download_data(
+                _spotter_id,
+                session,
+                variables_to_include,
+                start_date,
+                end_date,
+                bulk_data_as_dataframe,
+                limit=None,
+                convert_to_sofar_model_names=convert_to_sofar_model_names,
+            )
 
         if parallel_download:
             with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
-                out = list(
-                    tqdm(pool.imap(worker, spotter_ids),
-                         total=len(spotter_ids)))
+                out = list(tqdm(pool.imap(worker, spotter_ids), total=len(spotter_ids)))
         else:
-            out = list(
-                tqdm(map(worker, spotter_ids), total=len(spotter_ids)))
+            out = list(tqdm(map(worker, spotter_ids), total=len(spotter_ids)))
 
     data = {}
     for spotter_id, spotter_data in zip(spotter_ids, out):
         #
         # Did we get any data for this spotter
         if spotter_data is not None:
-            if 'frequencyData' in spotter_data:
-                if isinstance(spotter_data['frequencyData'],List):
+            if "frequencyData" in spotter_data:
+                if isinstance(spotter_data["frequencyData"], List):
                     # This will be deprecated in a future version.
-                    spotter_data['frequencyData'] = \
-                        FrequencySpectrum.concat_from_list(
-                            spotter_data['frequencyData'])
+                    spotter_data["frequencyData"] = FrequencySpectrum.concat_from_list(
+                        spotter_data["frequencyData"]
+                    )
             data[spotter_id] = spotter_data
 
     return data
@@ -442,12 +455,12 @@ def _get_data(
 
 
 def search_circle(
-        start_date: Union[datetime, str],
-        end_date: Union[datetime, str],
-        center_lat_lon: Tuple,
-        radius: float,
-        session: SofarApi = None,
-        cache=False
+    start_date: Union[datetime, str],
+    end_date: Union[datetime, str],
+    center_lat_lon: Tuple,
+    radius: float,
+    session: SofarApi = None,
+    cache=False,
 ):
     """
     Search for all Spotters that have data available within the give spatio-
@@ -464,7 +477,7 @@ def search_circle(
     :return:
     """
 
-    geometry = {'type': 'circle', 'points': center_lat_lon, 'radius': radius}
+    geometry = {"type": "circle", "points": center_lat_lon, "radius": radius}
 
     if session is None:
         session = _get_sofar_api()
@@ -476,7 +489,7 @@ def search_circle(
             session=session,
             start_date=start_date,
             end_date=end_date,
-            geometry=geometry
+            geometry=geometry,
         )
     else:
         #
@@ -487,11 +500,11 @@ def search_circle(
 
 
 def search_rectangle(
-        start_date: Union[datetime, str],
-        end_date: Union[datetime, str],
-        bounding_box,
-        session: SofarApi = None,
-        cache=False
+    start_date: Union[datetime, str],
+    end_date: Union[datetime, str],
+    bounding_box,
+    session: SofarApi = None,
+    cache=False,
 ):
     """
     Search for all Spotters that have data available within the give spatio-
@@ -509,9 +522,7 @@ def search_rectangle(
                     set in the environment.
     :return:
     """
-    geometry = {'type': 'envelope',
-                'points': bounding_box,
-                'radius': None}
+    geometry = {"type": "envelope", "points": bounding_box, "radius": None}
 
     if session is None:
         session = _get_sofar_api()
@@ -523,7 +534,7 @@ def search_rectangle(
             session,
             start_date=start_date,
             end_date=end_date,
-            geometry=geometry
+            geometry=geometry,
         )
     else:
         #
@@ -536,15 +547,15 @@ def search_rectangle(
 # 5) Private Functions
 # =============================================================================
 def _download_data(
-        spotter_id: str,
-        session: SofarApi,
-        variables_to_include: VariablesToInclude,
-        start_date: Union[datetime, str, int, float] = None,
-        end_date: Union[datetime, str, int, float] = None,
-        bulk_data_as_dataframe: bool = True,
-        limit: int = None,
-        convert_to_sofar_model_names=False) -> \
-        Dict[str, Union[List[FrequencySpectrum], List[WaveBulkData]]]:
+    spotter_id: str,
+    session: SofarApi,
+    variables_to_include: VariablesToInclude,
+    start_date: Union[datetime, str, int, float] = None,
+    end_date: Union[datetime, str, int, float] = None,
+    bulk_data_as_dataframe: bool = True,
+    limit: int = None,
+    convert_to_sofar_model_names=False,
+) -> Dict[str, Union[List[FrequencySpectrum], List[WaveBulkData]]]:
     """
     Function that downloads data from the API for the requested Spotter
     It abstracts away the limitation that the API can only return a maximum
@@ -571,7 +582,7 @@ def _download_data(
     # we download
     _start_date = start_date
 
-    if variables_to_include['frequencyData']:
+    if variables_to_include["frequencyData"]:
         max_local_limit = MAX_LOCAL_LIMIT
     else:
         max_local_limit = MAX_LOCAL_LIMIT_BULK
@@ -605,9 +616,11 @@ def _download_data(
 
         try:
             # Try to get the next batch of data
-            _next, number_of_items_returned, max_time = \
-                _get_next_page(spotter, variables_to_include,
-                               _start_date, end_date, local_limit)
+            _next, number_of_items_returned, max_time = _get_next_page(
+                spotter, variables_to_include, _start_date, end_date, local_limit
+            )
+            if number_of_items_returned == 0:
+                break
 
         except ExceptionNoDataForVariable as e:
             # Could not download data, add nothing, raise warning
@@ -621,24 +634,8 @@ def _download_data(
             else:
                 data[key] = _next[key]
 
-        #
-        # HACK WARNING: currently the API returns exactly half the number of
-        # samples requested for surfaceTemp. So we need to half the checking
-        # limit as well.
-        if variables_to_include['surfaceTemp']:
-            actual_limit = local_limit/2
-        else:
-            actual_limit = local_limit
-
         # If we did not receive all data we requested...
-        if number_of_items_returned < actual_limit:
-            # , we are done...
-            break
-        else:
-            # ... else we update the startdate to be the time of the last
-            # known entry we received plus a second, and use this as the new
-            # start.
-            _start_date = to_datetime_utc(max_time,to_scalar=True) + timedelta(seconds=1)
+        _start_date = to_datetime_utc(max_time, to_scalar=True) + timedelta(seconds=1)
 
     # Postprocessing
     if len(data) < 1:
@@ -647,13 +644,12 @@ def _download_data(
         if bulk_data_as_dataframe:
             # Convert bulk data to a dataframe if desired
             for key in data:
-                if key == 'frequencyData':
+                if key == "frequencyData":
                     # Concatenate all the spectral dataset along time dimension
                     # and return a wave frequency spectrum object
                     data[key] = FrequencySpectrum.concat_from_list(data[key])
                 else:
-                    data[key] = as_dataframe(
-                        data[key],convert_to_sofar_model_names)
+                    data[key] = as_dataframe(data[key], convert_to_sofar_model_names)
     return data
 
 
@@ -661,13 +657,12 @@ def _download_data(
 
 
 def _get_next_page(
-        spotter: Spotter,
-        variables_to_include: VariablesToInclude,
-        start_date: Union[datetime, str, int, float] = None,
-        end_date: Union[datetime, str, int, float] = None,
-        limit: int = MAX_LOCAL_LIMIT,
-) -> Tuple[Dict[str, Union[List[Dataset],
-                           List[WaveBulkData]]], int, datetime]:
+    spotter: Spotter,
+    variables_to_include: VariablesToInclude,
+    start_date: Union[datetime, str, int, float] = None,
+    end_date: Union[datetime, str, int, float] = None,
+    limit: int = MAX_LOCAL_LIMIT,
+) -> Tuple[Dict[str, Union[List[Dataset], List[WaveBulkData]]], int, datetime]:
     """
     Function that downloads the page of Data from the Spotter API that lie
     within the given interval, starting from the record closest to the
@@ -707,21 +702,20 @@ def _get_next_page(
                 limit=limit,
                 start_date=datetime_to_iso_time_string(start_date),
                 end_date=datetime_to_iso_time_string(end_date),
-                include_frequency_data=variables_to_include[
-                    'frequencyData'],
-                include_directional_moments=variables_to_include[
-                    'frequencyData'],
-                include_barometer_data=variables_to_include['barometerData'],
-                include_waves=variables_to_include['waves'],
-                include_wind=variables_to_include['wind'],
-                include_surface_temp_data=variables_to_include[
-                    'surfaceTemp'],
+                include_frequency_data=variables_to_include["frequencyData"],
+                include_directional_moments=variables_to_include["frequencyData"],
+                include_barometer_data=variables_to_include["barometerData"],
+                include_waves=variables_to_include["waves"],
+                include_wind=variables_to_include["wind"],
+                include_surface_temp_data=variables_to_include["surfaceTemp"],
             )
             break
         except Exception as e:
             if retry < NUMBER_OF_RETRIES:
-                warning = f'Error downloading data for {spotter.id}, ' \
-                          f'attempting retry {retry + 1}'
+                warning = (
+                    f"Error downloading data for {spotter.id}, "
+                    f"attempting retry {retry + 1}"
+                )
                 logger.warning(warning)
             else:
                 raise e
@@ -760,8 +754,7 @@ def _get_next_page(
             max_num_items = max(max_num_items, elements_returned)
 
             # Add to output
-            out[var_name] = \
-                [_get_class(var_name, data) for data in json_data[var_name]]
+            out[var_name] = [_get_class(var_name, data) for data in json_data[var_name]]
 
             # Filter for doubles.
             out[var_name] = _unique_filter(out[var_name])
@@ -771,7 +764,8 @@ def _get_next_page(
             # time object, the former returns a length 1 data-array of
             # datetime64. To ensure we get a datetime - we call the datetime
             # conversion and request output as a scalar.
-            if to_datetime_utc(out[var_name][-1].time,True) > max_time:
+
+            if to_datetime_utc(out[var_name][-1].time, True) > max_time:
                 max_time = to_datetime_utc(out[var_name][-1].time, True)
 
     return out, max_num_items, max_time
@@ -780,29 +774,33 @@ def _get_next_page(
 # -----------------------------------------------------------------------------
 
 
-def _search(start_date: Union[datetime, str],
-            end_date: Union[datetime, str],
-            geometry: dict,
-            session: SofarApi = None,
-            variables_to_include: VariablesToInclude = None,
-            page_size=500,
-            bulk_data_as_dataframe: bool = True,
-            ):
+def _search(
+    start_date: Union[datetime, str],
+    end_date: Union[datetime, str],
+    geometry: dict,
+    session: SofarApi = None,
+    variables_to_include: VariablesToInclude = None,
+    page_size=500,
+    bulk_data_as_dataframe: bool = True,
+):
     if session is None:
         session = _get_sofar_api()
 
     if variables_to_include is None:
         variables_to_include = VariablesToInclude(
-            frequencyData=True, waves=True, wind=True, surfaceTemp=True,
-            barometerData=True
+            frequencyData=True,
+            waves=True,
+            wind=True,
+            surfaceTemp=True,
+            barometerData=True,
         )
 
     start_date_str = datetime_to_iso_time_string(start_date)
     end_date_str = datetime_to_iso_time_string(end_date)
 
-    shape = geometry['type']
-    shape_params = geometry['points']
-    radius = geometry['radius']
+    shape = geometry["type"]
+    shape_params = geometry["points"]
+    radius = geometry["radius"]
 
     generator = session.search(
         shape=shape,
@@ -811,13 +809,13 @@ def _search(start_date: Union[datetime, str],
         end_date=end_date_str,
         radius=radius,
         page_size=page_size,
-        return_generator=True
+        return_generator=True,
     )
 
     spotters = {}
     # loop over all spotters returned
     for spotter in generator:
-        spotter_id = spotter['spotterId']
+        spotter_id = spotter["spotterId"]
         # loop over keys we can parse
         for key, value in variables_to_include.items():
             #
@@ -831,9 +829,9 @@ def _search(start_date: Union[datetime, str],
                     # no data
                     continue
 
-                item['latitude'] = spotter['latitude']
-                item['longitude'] = spotter['longitude']
-                item['timestamp'] = spotter['timestamp']
+                item["latitude"] = spotter["latitude"]
+                item["longitude"] = spotter["longitude"]
+                item["timestamp"] = spotter["timestamp"]
                 data = _get_class(key, item)
                 if spotter_id not in spotters:
                     spotters[spotter_id] = {}
@@ -846,14 +844,12 @@ def _search(start_date: Union[datetime, str],
     for spotter_id in spotters:
         for key in spotters[spotter_id]:
             # ensure results are unique
-            spotters[spotter_id][key] = _unique_filter(
-                spotters[spotter_id][key])
+            spotters[spotter_id][key] = _unique_filter(spotters[spotter_id][key])
 
-            if bulk_data_as_dataframe and (not key == 'frequencyData'):
-                spotters[spotter_id][key] = as_dataframe(
-                    spotters[spotter_id][key])
+            if bulk_data_as_dataframe and (not key == "frequencyData"):
+                spotters[spotter_id][key] = as_dataframe(spotters[spotter_id][key])
 
-            if key == 'frequencyData':
+            if key == "frequencyData":
                 spotters[spotter_id][key] = FrequencySpectrum.concat_from_list(
                     spotters[spotter_id][key]
                 )
@@ -874,11 +870,10 @@ def _unique_filter(data):
     """
 
     # Get time
-    if isinstance(data[0],FrequencySpectrum ):
-        time = numpy.array(
-            [to_datetime_utc(x['time'].values[0]).timestamp() for x in data])
+    if isinstance(data[0], FrequencySpectrum):
+        time = numpy.array([to_datetime_utc(x.time.values).timestamp() for x in data])
     else:
-        time= numpy.array([x.time.timestamp() for x in data])
+        time = numpy.array([x.time.timestamp() for x in data])
 
     # Get indices of unique times
     _, unique_indices = numpy.unique(time, return_index=True)
@@ -898,10 +893,10 @@ def _none_filter(data: Dict):
     """
     return list(
         filter(
-            lambda x: (x['latitude'] is not None) and (
-                    x['longitude'] is not None) and (
-                                  x['timestamp'] is not None),
-            data
+            lambda x: (x["latitude"] is not None)
+            and (x["longitude"] is not None)
+            and (x["timestamp"] is not None),
+            data,
         )
     )
 
@@ -910,47 +905,51 @@ def _none_filter(data: Dict):
 
 
 def _get_class(key, data) -> Union[MetoceanData, FrequencySpectrum]:
-    if key == 'waves':
+    if key == "waves":
         return WaveBulkData(
-            time=data['timestamp'],
-            latitude=data['latitude'],
-            longitude=data['longitude'],
-            significant_waveheight=data['significantWaveHeight'],
-            peak_period=data['peakPeriod'],
-            mean_period=data['meanPeriod'],
-            peak_direction=data['peakDirection'],
-            peak_directional_spread=data['peakDirectionalSpread'],
-            mean_direction=data['meanDirection'],
-            mean_directional_spread=data['meanDirectionalSpread'],
-            peak_frequency=1.0 / data['peakPeriod']
+            time=data["timestamp"],
+            latitude=data["latitude"],
+            longitude=data["longitude"],
+            significant_waveheight=data["significantWaveHeight"],
+            peak_period=data["peakPeriod"],
+            mean_period=data["meanPeriod"],
+            peak_direction=data["peakDirection"],
+            peak_directional_spread=data["peakDirectionalSpread"],
+            mean_direction=data["meanDirection"],
+            mean_directional_spread=data["meanDirectionalSpread"],
+            peak_frequency=1.0 / data["peakPeriod"],
         )
-    elif key == 'frequencyData':
+    elif key == "frequencyData":
         return create_1d_spectrum(
-            frequency=numpy.array(data['frequency']),
-            variance_density=numpy.array(data['varianceDensity']),
-            time=to_datetime_utc(data['timestamp']),
-            latitude=numpy.array(data['latitude']),
-            longitude=numpy.array(data['longitude']),
-            a1=numpy.array(data['a1']),
-            b1=numpy.array(data['b1']),
-            a2=numpy.array(data['a2']),
-            b2=numpy.array(data['b2'])
-            )
-    elif key == 'wind':
+            frequency=numpy.array(data["frequency"]),
+            variance_density=numpy.array(data["varianceDensity"]),
+            time=to_datetime64(to_datetime_utc(data["timestamp"])),
+            latitude=numpy.array(data["latitude"]),
+            longitude=numpy.array(data["longitude"]),
+            a1=numpy.array(data["a1"]),
+            b1=numpy.array(data["b1"]),
+            a2=numpy.array(data["a2"]),
+            b2=numpy.array(data["b2"]),
+            dims=("frequency",),
+            depth=numpy.inf,
+        )
+    elif key == "wind":
         data = data.copy()
-        data['time'] = data['timestamp']
-        data.pop('timestamp')
+        data["time"] = data["timestamp"]
+        data.pop("timestamp")
         return WindData(**data)
-    elif key == 'surfaceTemp':
+    elif key == "surfaceTemp":
         data = data.copy()
-        data['time'] = data['timestamp']
-        data.pop('timestamp')
+        data["time"] = data["timestamp"]
+        data.pop("timestamp")
         return SSTData(**data)
-    elif key == 'barometerData':
+    elif key == "barometerData":
         data = data.copy()
-        data['time'] = data['timestamp']
-        data.pop('timestamp')
+        data["time"] = data["timestamp"]
+        data.pop("timestamp")
         return BarometricPressure(**data)
     else:
-        raise Exception('Unknown variable')
+        raise Exception("Unknown variable")
+
+
 # -----------------------------------------------------------------------------

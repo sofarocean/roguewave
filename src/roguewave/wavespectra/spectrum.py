@@ -128,8 +128,6 @@ class WaveSpectrum(DatasetWrapper):
         "latitude",
         "longitude",
         "time",
-        "is_sea_spectrum",
-        "is_swell_spectrum",
     )
 
     def __init__(self, dataset: Dataset):
@@ -233,9 +231,10 @@ class WaveSpectrum(DatasetWrapper):
 
         cls = type(self)
         dataset = Dataset()
-        dataset = dataset.assign({dim: self.dataset[dim].sum(dim=dim, skipna=skipna)})
+        # we assign the average coordinate to the dimension we sum over
+        dataset = dataset.assign({dim: self.dataset[dim].mean(dim=dim, skipna=skipna)})
         for x in self.dataset:
-            dataset = dataset.assign({x: self.dataset[x].sumn(dim=dim, skipna=skipna)})
+            dataset = dataset.assign({x: self.dataset[x].sum(dim=dim, skipna=skipna)})
         return cls(dataset)
 
     def std(self: _T, dim, skipna=False) -> _T:
@@ -252,7 +251,8 @@ class WaveSpectrum(DatasetWrapper):
 
         cls = type(self)
         dataset = Dataset()
-        dataset = dataset.assign({dim: self.dataset[dim].std(dim=dim, skipna=skipna)})
+        # we assign the average coordinate to the dimension we calculate the std over
+        dataset = dataset.assign({dim: self.dataset[dim].mean(dim=dim, skipna=skipna)})
         for x in self.dataset:
             dataset = dataset.assign({x: self.dataset[x].std(dim=dim, skipna=skipna)})
         return cls(dataset)
@@ -273,9 +273,13 @@ class WaveSpectrum(DatasetWrapper):
         :return: frequency moment
         """
         _range = self._range(fmin, fmax)
+
+        # Integrate dataset over frequencies. Make sure to fill any NaN entries with 0 before the integration.
         return (
-            self.e.isel({_NAME_F: _range}) * self.frequency[_range] ** power
-        ).integrate(coord=_NAME_F)
+            (self.e.isel({_NAME_F: _range}) * self.frequency[_range] ** power)
+            .fillna(0)
+            .integrate(coord=_NAME_F)
+        )
 
     @property
     def number_of_frequencies(self) -> int:
@@ -597,13 +601,10 @@ class WaveSpectrum(DatasetWrapper):
         radian_frequency = numpy.ones(depth_shape) * radian_frequency
 
         # Construct the output coordinates and dimension of the data array
-        return_dimensions = [*self.depth.dims, _NAME_F]
+        return_dimensions = (*self.dims_space_time, _NAME_F)
         coords = {}
         for dim in return_dimensions:
-            if dim == _NAME_F:
-                coords[dim] = self.radian_frequency.values
-            else:
-                coords[dim] = self.dataset[dim].values
+            coords[dim] = self.dataset[dim].values
 
         return DataArray(
             data=inverse_intrinsic_dispersion_relation(radian_frequency, depth),
@@ -618,8 +619,17 @@ class WaveSpectrum(DatasetWrapper):
     @property
     def peak_wavenumber(self) -> DataArray:
         index = self.peak_index()
-        return inverse_intrinsic_dispersion_relation(
-            self.radian_frequency[index], self.depth
+        # Construct the output coordinates and dimension of the data array
+        coords = {}
+        for dim in self.dims_space_time:
+            coords[dim] = self.dataset[dim].values
+
+        return DataArray(
+            data=inverse_intrinsic_dispersion_relation(
+                self.radian_frequency[index].values, self.depth.values
+            ),
+            dims=self.dims_space_time,
+            coords=coords,
         )
 
     def bulk_variables(self) -> Dataset:
@@ -696,7 +706,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
         return data_array
 
     def _directionally_integrate(self, data_array: DataArray) -> DataArray:
-        return (data_array * self.direction_step()).sum(_NAME_D, skipna=False)
+        return (data_array * self.direction_step()).sum(_NAME_D, skipna=True)
 
     @property
     def e(self) -> DataArray:
@@ -753,7 +763,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
             self.b1.values,
             self.a2.values,
             self.b2.values,
-            depth=self.depth,
+            depth=self.depth.values,
             dims=self.dims_space_time + [_NAME_F],
         )
 
@@ -816,7 +826,7 @@ class FrequencySpectrum(WaveSpectrum):
             latitude=self.latitude.values,
             longitude=self.longitude.values,
             depth=self.depth.values,
-            dims=list(self.variance_density.dims).append(_NAME_D),
+            dims=list(self.variance_density.dims) + [_NAME_D],
         )
 
 

@@ -154,7 +154,7 @@ def write_restart_file(
     :return: None
     """
     if isinstance(spectra, (Dataset, FrequencyDirectionSpectrum)):
-        spectra = spectra["variance_density"].values
+        spectra = spectra.variance_density.values
     elif isinstance(spectra, DataArray):
         spectra = spectra.values
 
@@ -230,7 +230,7 @@ def write_partial_restart_file(
     :return:
     """
     if isinstance(spectra, (Dataset, FrequencyDirectionSpectrum)):
-        spectra = spectra["variance_density"].values
+        spectra = spectra.variance_density.values
     elif isinstance(spectra, DataArray):
         spectra = spectra.values
 

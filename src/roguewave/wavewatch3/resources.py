@@ -39,16 +39,18 @@ from tqdm import tqdm
 from roguewave.wavewatch3.restart_file_cache import get_data
 
 
-class Resource():
+class Resource:
     """
     Context manager base clase defining a resource. needs to be implemented.
     """
-    def __init__(self,
-                 resource_location,
-                 mode:Literal['rb','wb']='rb',
-                 cache:bool=False,
-                 cache_name: str = None
-                 ):
+
+    def __init__(
+        self,
+        resource_location,
+        mode: Literal["rb", "wb"] = "rb",
+        cache: bool = False,
+        cache_name: str = None,
+    ):
         """
         :param resource_location:
         :param mode: mode to open file, only binary read ('rb') or binary write
@@ -58,23 +60,23 @@ class Resource():
         self.mode = mode
         self.cache = cache
         self.cache_name = cache_name
+        self.resource_handle = None
 
     @property
     def read_only(self):
         """
         :return: resource is opened as readonly
         """
-        return self.mode == 'rb'
+        return self.mode == "rb"
 
     @property
     def write_only(self):
         """
         :return: resource is opened as writeonly
         """
-        return self.mode == 'wb'
+        return self.mode == "wb"
 
-    def read_range(self, s:Union[slice,Sequence[slice]]
-                   ) -> List[bytearray]:
+    def read_range(self, s: Union[slice, Sequence[slice]]) -> List[bytearray]:
         """
         Read a range of bytes as defined by the slice(s). We can
         input a single slice, or multiple slices. We always return a list of
@@ -95,7 +97,7 @@ class Resource():
         """
         pass
 
-    def write(self, _bytes:bytes):
+    def write(self, _bytes: bytes):
         """
         write a byte array to the resource
         :param _bytes: bytes to write
@@ -159,11 +161,14 @@ class FileResource(Resource):
     Open a file as a "resource". Only needed becuase we want to abstract away
     the difference between a local and remote file for s3.
     """
-    def __init__(self,
-                 resource_location,
-                 mode:Literal['rb','wb']='rb',
-                 cache:bool=False,
-                 cache_name: str = None):
+
+    def __init__(
+        self,
+        resource_location,
+        mode: Literal["rb", "wb"] = "rb",
+        cache: bool = False,
+        cache_name: str = None,
+    ):
         """
         :param resource_location:
         :param mode: mode to open file, only binary read ('rb') or binary write
@@ -172,8 +177,9 @@ class FileResource(Resource):
         super().__init__(resource_location, mode, False, None)
         self.resource_handle = open(resource_location, mode)
 
-    def read_range(self, slices:Union[slice,Sequence[slice]]) \
-            -> Union[bytearray,List[bytearray]]:
+    def read_range(
+        self, slices: Union[slice, Sequence[slice]]
+    ) -> Union[bytearray, List[bytearray]]:
         """
         Read a range of bytes as defined by the slice(s). We can
         input a single slice, or multiple slices. We always return a list of
@@ -184,12 +190,12 @@ class FileResource(Resource):
         :return: List of bytearrays
         """
 
-
         if self.write_only:
-            raise IOError('Resource has been opened as write only, cannot'
-                             'read from it.')
+            raise IOError(
+                "Resource has been opened as write only, cannot" "read from it."
+            )
 
-        if isinstance(slices,slice):
+        if isinstance(slices, slice):
             slices = [slices]
 
         out = []
@@ -200,7 +206,7 @@ class FileResource(Resource):
 
         return out
 
-    def write(self,_bytes:bytes):
+    def write(self, _bytes: bytes):
         """
         write a byte array to the resource
         :param _bytes: bytes to write
@@ -215,8 +221,9 @@ class FileResource(Resource):
         :return: return a bytearray of the data read
         """
         if self.write_only:
-            raise IOError('Resource has been opened as write only, cannot'
-                             'read from it.')
+            raise IOError(
+                "Resource has been opened as write only, cannot" "read from it."
+            )
 
         return bytearray(self.resource_handle.read(number_of_bytes))
 
@@ -250,32 +257,35 @@ class S3Resource(Resource):
     as if it was a regular stream (supports read, write, seek, tell). Obviously
     less performant than local IO.
     """
+
     boto3_client_lock = Lock()
 
-    def __init__(self, resource_location, mode:Literal['rb','wb']='rb',
-                 cache:bool=False, cache_name: str = None):
+    def __init__(
+        self,
+        resource_location,
+        mode: Literal["rb", "wb"] = "rb",
+        cache: bool = False,
+        cache_name: str = None,
+    ):
         """
         :param resource_location:
         :param mode: mode to open file, only binary read ('rb') or binary write
             ('wb') are supported.
         """
-        super().__init__(resource_location,mode,cache,cache_name)
+        super().__init__(resource_location, mode, cache, cache_name)
 
-        bucket, key = \
-            resource_location.replace('s3://', '').split('/', maxsplit=1)
+        bucket, key = resource_location.replace("s3://", "").split("/", maxsplit=1)
         self._key = key
         self._bucket = bucket
 
         # Creation is not thread safe. Ensure only one thread is creating.
         with self.boto3_client_lock:
-            self.resource_handle = resource('s3')
+            self.resource_handle = resource("s3")
         self._position = 0
         self._write_buffer = BytesIO()
         self._bytes_written = False
 
-
-    def read_range(self, slices: Union[slice, Sequence[slice]]) \
-            ->List[bytearray]:
+    def read_range(self, slices: Union[slice, Sequence[slice]]) -> List[bytearray]:
         """
         Read a range of bytes as defined by the slice(s). We can
         input a single slice, or multiple slices. We always return a list of
@@ -288,7 +298,7 @@ class S3Resource(Resource):
         :param s: slice or list of slices
         :return: List of bytearrays
         """
-        if isinstance(slices,slice):
+        if isinstance(slices, slice):
             slices = [slices]
 
         if self.cache:
@@ -299,40 +309,33 @@ class S3Resource(Resource):
                 stop_byte.append(_slice.stop)
                 start_byte.append(_slice.start)
                 keys.append(self.resource_location)
-            return get_data(keys,start_byte,stop_byte,self.cache_name)
+            return get_data(keys, start_byte, stop_byte, self.cache_name)
 
         if self.write_only:
-            raise IOError('Resource has been opened as write only, cannot'
-                             'read from it.')
+            raise IOError(
+                "Resource has been opened as write only, cannot" "read from it."
+            )
 
-        def _worker( s:slice):
+        def _worker(s: slice):
             if s.start == 0 and s.stop == -1:
                 obj = self.resource_handle.Object(self._bucket, self._key)
                 with BytesIO() as file:
-                    response = obj.download_fileobj(file)
+                    _ = obj.download_fileobj(file)
                     file.seek(0)
                     _bytes = bytearray(file.read())
 
                 return bytearray(_bytes)
             else:
                 obj = self.resource_handle.Object(self._bucket, self._key)
-                data = obj.get(Range=f'bytes={s.start}-{s.stop-1}')['Body']
+                data = obj.get(Range=f"bytes={s.start}-{s.stop-1}")["Body"]
                 return bytearray(data.read())
-
-
 
         if len(slices) > 1:
             with ThreadPool(processes=10) as pool:
-                output = list(
-                    tqdm(
-                        pool.imap(_worker, slices),
-                        total=len(slices)
-                    )
-                )
+                output = list(tqdm(pool.imap(_worker, slices), total=len(slices)))
         else:
             output = [_worker(slices[0])]
         return output
-
 
     def read(self, number_of_bytes=-1) -> bytearray:
         """
@@ -341,20 +344,21 @@ class S3Resource(Resource):
         :return: return a bytearray of the data read
         """
         if self.write_only:
-            raise IOError('Resource has been opened as write only, cannot'
-                             'read from it.')
+            raise IOError(
+                "Resource has been opened as write only, cannot" "read from it."
+            )
 
         start_byte = self._position
         if number_of_bytes < 0:
             end_byte = -1
-            _bytes= self.read_range(slice(0,end_byte,1 ))[0]
+            _bytes = self.read_range(slice(0, end_byte, 1))[0]
             return _bytes[start_byte:]
         else:
             end_byte = self._position + number_of_bytes
             self._position += number_of_bytes
-            return self.read_range(slice( start_byte,end_byte,1 ))[0]
+            return self.read_range(slice(start_byte, end_byte, 1))[0]
 
-    def write(self, _bytes:bytes):
+    def write(self, _bytes: bytes):
         """
         Write a byte array to the resource. Note that the s3 resource writes
         to an internal buffer. Only when the object is closed is the buffer
@@ -374,7 +378,7 @@ class S3Resource(Resource):
 
         self._write_buffer.seek(0)
         obj = self.resource_handle.Object(self._bucket, self._key)
-        response = obj.upload_fileobj(self._write_buffer)
+        _ = obj.upload_fileobj(self._write_buffer)
 
     def close(self):
         """
@@ -402,8 +406,9 @@ class S3Resource(Resource):
         self._position = position_bytes
 
 
-def create_resource(uri:str,mode:Literal['wb','rb']='rb',cache=False,
-                    cache_name=None)->Resource:
+def create_resource(
+    uri: str, mode: Literal["wb", "rb"] = "rb", cache=False, cache_name=None
+) -> Resource:
     """
     Create the appropriate resource object basded on the "uri". If the uri
     starts with "s3://" we assume it refer to a s3 object in the form
@@ -413,9 +418,11 @@ def create_resource(uri:str,mode:Literal['wb','rb']='rb',cache=False,
         mode.
     :return: resource object
     """
-    if 's3://' in uri:
-        return S3Resource(resource_location=uri,mode=mode,
-                          cache=cache,cache_name=cache_name)
+    if "s3://" in uri:
+        return S3Resource(
+            resource_location=uri, mode=mode, cache=cache, cache_name=cache_name
+        )
     else:
-        return FileResource(resource_location=uri,mode=mode,
-                            cache=cache,cache_name=cache_name)
+        return FileResource(
+            resource_location=uri, mode=mode, cache=cache, cache_name=cache_name
+        )

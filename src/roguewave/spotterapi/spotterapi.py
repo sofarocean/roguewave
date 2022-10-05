@@ -32,7 +32,11 @@ from roguewave.tools.time import (
     to_datetime_utc,
     to_datetime64,
 )
-from roguewave.wavespectra import FrequencySpectrum, create_1d_spectrum
+from roguewave.wavespectra import (
+    FrequencySpectrum,
+    create_1d_spectrum,
+    concatenate_spectra,
+)
 
 from roguewave.metoceandata import (
     WaveBulkData,
@@ -443,8 +447,8 @@ def _get_data(
             if "frequencyData" in spotter_data:
                 if isinstance(spotter_data["frequencyData"], List):
                     # This will be deprecated in a future version.
-                    spotter_data["frequencyData"] = FrequencySpectrum.concat_from_list(
-                        spotter_data["frequencyData"]
+                    spotter_data["frequencyData"] = concatenate_spectra(
+                        spotter_data["frequencyData"], dim="time"
                     )
             data[spotter_id] = spotter_data
 
@@ -647,7 +651,7 @@ def _download_data(
                 if key == "frequencyData":
                     # Concatenate all the spectral dataset along time dimension
                     # and return a wave frequency spectrum object
-                    data[key] = FrequencySpectrum.concat_from_list(data[key])
+                    data[key] = concatenate_spectra(data[key], dim="time")
                 else:
                     data[key] = as_dataframe(data[key], convert_to_sofar_model_names)
     return data
@@ -850,8 +854,8 @@ def _search(
                 spotters[spotter_id][key] = as_dataframe(spotters[spotter_id][key])
 
             if key == "frequencyData":
-                spotters[spotter_id][key] = FrequencySpectrum.concat_from_list(
-                    spotters[spotter_id][key]
+                spotters[spotter_id][key] = concatenate_spectra(
+                    spotters[spotter_id][key], dim="time"
                 )
     return spotters
 

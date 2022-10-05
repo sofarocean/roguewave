@@ -7,8 +7,8 @@ from roguewave.tools.math import wrapped_difference
 from roguewave.tools.time import to_datetime64
 from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
 from roguewave.wavespectra.estimators import mem2
-from typing import Iterator, Hashable, Iterable, TypeVar, Union, List
-from xarray import Dataset, DataArray, concat, open_dataset
+from typing import Iterator, Hashable, TypeVar, Union, List
+from xarray import Dataset, DataArray, open_dataset
 from xarray.core.coordinates import DatasetCoordinates
 
 _NAME_F = "frequency"
@@ -89,21 +89,6 @@ class DatasetWrapper:
 
     def __iter__(self) -> Iterator[Hashable]:
         return self.dataset.__iter__()
-
-    @classmethod
-    def concat_from_list(cls: _T, _list: Iterable[_T], dim="time") -> _T:
-        """
-        Classmethod to aggregate a list of wavespectra and concatenate them
-        into a single spectral object. For instance, from spotter observations
-        we may get 1 spectrum per timestamp- and we want to aggregate all
-        spectra in a single object.
-
-        :param _list: list (Iterable) of WaveSpectra
-        :param dim: the dimension over which to concatenate the spectra,
-            usually time.
-        :return: Wavespectrum object.
-        """
-        return cls(concat([x.dataset for x in _list], dim=dim))
 
 
 class WaveSpectrum(DatasetWrapper):

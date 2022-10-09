@@ -142,13 +142,19 @@ class WaveSpectrum(DatasetWrapper):
         return self.number_of_spectra
 
     def __getitem__(self: _T, item) -> _T:
-        if len(item) < self.ndims:
-            raise ValueError(
-                f"Indexing requires same number of inputs as dimensions: {self.ndims}"
-            )
 
-        nspectral_dims = len(self.dims_spectral)
-        space_time_index = item[:-nspectral_dims]
+        if isinstance(item, tuple):
+            if len(item) < self.ndims:
+                raise ValueError(
+                    f"Indexing requires same number of inputs as dimensions: {self.ndims}"
+                )
+            space_time_index = item[: -len(self.dims_spectral)]
+        else:
+            if not self.ndims == 1:
+                raise ValueError(
+                    f"Indexing requires same number of inputs as dimensions: {self.ndims}"
+                )
+            space_time_index = []
 
         dataset = Dataset()
         for var in self.dataset:
@@ -292,6 +298,7 @@ class WaveSpectrum(DatasetWrapper):
             shape = 1
             for d in dims:
                 shape *= len(self.dataset[d])
+            return shape
         else:
             return 1
 
@@ -431,6 +438,12 @@ class WaveSpectrum(DatasetWrapper):
         """
         return self.frequency_moment(1, fmin, fmax)
 
+    def wave_speed(self) -> DataArray:
+        return self.radian_frequency / self.wavenumber
+
+    def peak_wave_speed(self) -> DataArray:
+        return 2 * numpy.pi * self.peak_frequency() / self.peak_wavenumber
+
     def m2(self, fmin=0, fmax=numpy.inf) -> DataArray:
         """
         Second order frequency moment. Primarily used in calculating the zero
@@ -493,6 +506,17 @@ class WaveSpectrum(DatasetWrapper):
         :return: peak frequency
         """
         return self.dataset[_NAME_F][self.peak_index(fmin, fmax)]
+
+    def peak_angukar_frequency(self, fmin=0, fmax=numpy.inf) -> DataArray:
+        """
+        Peak frequency of the spectrum, i.e. frequency at which the spectrum
+        obtains its maximum.
+
+        :param fmin: minimum frequency
+        :param fmax: maximum frequency
+        :return: peak frequency
+        """
+        return self.peak_frequency(fmin, fmax) * numpy.pi * 2
 
     def peak_period(self, fmin=0, fmax=numpy.inf) -> DataArray:
         """

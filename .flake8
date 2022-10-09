@@ -1,5 +1,5 @@
 [flake8]
 max-line-length = 120
 per-file-ignores = __init__.py:F401
-max-complexity = 18
+max-complexity = 20
 select = B,C,E,F,W,T4,B9

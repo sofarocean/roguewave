@@ -34,6 +34,7 @@ from roguewave.wavespectra import (
     create_2d_spectrum,
     concatenate_spectra,
     load_spectrum_from_netcdf,
+    WaveSpectrum,
 )
 
 # IO

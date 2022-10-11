@@ -31,7 +31,7 @@ def test_header_bytes():
     assert bytes_hash(restart_file.header_bytes()) == "d8fb87f5d4516d0ddcc8668bf0343487"
 
 
-def interpolate_in_space():
+def test_interpolate_in_space():
     restart_file = clone_remote()
     lats = numpy.array((-1, -10))
     lons = numpy.array((-0.25, 359.9))
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     test_direction()
     test_frequency()
     test_header_bytes()
-    interpolate_in_space()
+    test_interpolate_in_space()
     test_latitude()
     test_longitude()
     test_linear_indices()

@@ -342,9 +342,7 @@ class RestartFile(Sequence):
                 (len(index), self.number_of_frequencies, self.number_of_directions)
             )
             mask = index >= 0
-            output[mask, :, :] = self.__getitem__(index[mask])[
-                "variance_density"
-            ].values
+            output[mask, :, :] = self.__getitem__(index[mask]).variance_density.values
             output[~mask, :, :] = numpy.nan
             return output
 

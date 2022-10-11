@@ -12,10 +12,18 @@ import typing
 import numpy
 from typing import Literal
 from roguewave import FrequencySpectrum
-from xarray import Dataset, ones_like, DataArray
+from roguewave.wavephysics.balance import SourceTermBalance
+from xarray import Dataset, ones_like, DataArray, where
+from tqdm import tqdm
+from multiprocessing import get_context, cpu_count
+from copy import deepcopy
+from scipy.optimize import brentq
 
 _methods = Literal["peak", "mean"]
 _charnock_parametrization = Literal["constant", "voermans15", "voermans16"]
+_direction_convention = Literal[
+    "coming_from_clockwise_north", "going_to_counter_clockwise_east"
+]
 
 
 def friction_velocity(
@@ -28,8 +36,8 @@ def friction_velocity(
     beta=0.012,
     grav=9.81,
     numberOfBins=20,
+    direction_convention: _direction_convention = "coming_from_clockwise_north",
 ) -> Dataset:
-
     e, a1, b1 = equilibrium_range_values(
         spectrum,
         method=method,
@@ -45,19 +53,25 @@ def friction_velocity(
     Ustar = Emean / grav / directional_spreading_constant / beta / 4
 
     # Convert directions to where the wind is coming from, measured positive clockwise from North
-    dir = (270.0 - 180.0 / numpy.pi * numpy.arctan2(b1, a1)) % 360
+
+    if direction_convention == "coming_from_clockwise_north":
+        dir = (270.0 - 180.0 / numpy.pi * numpy.arctan2(b1, a1)) % 360
+    elif direction_convention == "going_to_counter_clockwise_east":
+        dir = 180.0 / numpy.pi * numpy.arctan2(b1, a1)
+    else:
+        raise ValueError(f"Unknown direectional convention: {direction_convention}")
 
     coords = {x: spectrum.dataset[x].values for x in spectrum.dims_space_time}
     return Dataset(
         data_vars={
             "friction_velocity": (spectrum.dims_space_time, Ustar),
-            "direction_degrees": (spectrum.dims_space_time, dir),
+            "direction": (spectrum.dims_space_time, dir),
         },
         coords=coords,
     )
 
 
-def U10(
+def estimate_u10_from_spectrum(
     spectrum: FrequencySpectrum,
     method: _methods = "peak",
     fmin=-1.0,
@@ -70,6 +84,7 @@ def U10(
     grav=9.81,
     number_of_bins=20,
     charnock_parametrization: _charnock_parametrization = "constant",
+    direction_convention: _direction_convention = "coming_from_clockwise_north",
 ) -> Dataset:
     #
     # =========================================================================
@@ -116,6 +131,7 @@ def U10(
         phillips_constant_beta,
         grav,
         number_of_bins,
+        direction_convention,
     )
 
     charnock = charnock_constant_estimate(
@@ -228,3 +244,119 @@ def equilibrium_range_values(
         b1 *= fac
 
         return e, a1, b1
+
+
+def _worker(args):
+    balance: SourceTermBalance = args[0]
+    spec: FrequencySpectrum = args[1]
+    direction: DataArray = args[2]
+
+    spec2d = spec.as_frequency_direction_spectrum(36)
+
+    def func(U10):
+        return balance.evaluate_bulk_imbalance(U10, direction, spec2d).values[0]
+
+    lower_bound = 0
+    upper_bound = 100
+    if func(0) * func(100) > 0:
+        return numpy.nan
+    return brentq(func, a=lower_bound, b=upper_bound)
+
+
+def estimate_u10_from_source_terms(
+    spectrum: FrequencySpectrum, balance: SourceTermBalance, method="newton", **kwargs
+) -> DataArray:
+    if method == "newton":
+        return _estimate_u10_from_source_terms_newton(spectrum, balance, **kwargs)
+    elif method == "brentq":
+        return _estimate_u10_from_source_terms_brentq(spectrum, balance, **kwargs)
+    else:
+        raise ValueError("unknown method")
+
+
+def _estimate_u10_from_source_terms_brentq(
+    spectrum: FrequencySpectrum, balance: SourceTermBalance, parallel=False
+):
+    observed = estimate_u10_from_spectrum(
+        spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
+    )
+    wind_direction = observed["direction"]
+
+    if parallel:
+        # We have to force a load from disc if we want to use multiprocessing.
+        spectrum.dataset.load()
+
+    number_of_spectra = spectrum.number_of_spectra
+    work = []
+    for ii in range(number_of_spectra):
+        spec = spectrum[slice(ii, ii + 1, 1), :]
+        work.append((deepcopy(balance), spec, wind_direction[ii]))
+    if parallel:
+        with get_context("spawn").Pool(processes=cpu_count()) as pool:
+            out = list(tqdm(pool.imap(_worker, work), total=number_of_spectra))
+    else:
+        out = list(tqdm(map(_worker, work), total=number_of_spectra))
+
+    u10 = DataArray(
+        data=numpy.array(out),
+        dims=spectrum.dims_space_time,
+        coords={x: spectrum.dataset[x].values for x in spectrum.dims_space_time},
+    )
+    dataset = Dataset()
+    return dataset.assign({"U10": u10, "direction": wind_direction})
+
+
+def _estimate_u10_from_source_terms_newton(
+    spectrum: FrequencySpectrum,
+    balance: SourceTermBalance,
+    atol=1e-3,
+    rtol=1e-3,
+    max_iter=100,
+):
+    observed = estimate_u10_from_spectrum(
+        spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
+    )
+    wind_direction = observed["direction"]
+    guess = observed["U10"]
+
+    cur_iter = guess
+
+    spec2d = spectrum.as_frequency_direction_spectrum(36)
+    dissipation = balance.dissipation.bulk_rate(spec2d)
+
+    def func(u10):
+        return balance.generation.bulk_rate(u10, wind_direction, spec2d) + dissipation
+
+    cur_func = func(cur_iter)
+
+    for ii in range(0, max_iter):
+        delta = cur_iter * 0.01
+
+        # Note- actually numerically evaluating the derivative is more stable than a
+        # newton-raphson iteration
+        derivative = (func(cur_iter + delta) - func(cur_iter - delta)) / delta / 2
+
+        updated_guess = cur_iter - cur_func / derivative
+        updated_guess = where(updated_guess > 0, updated_guess, 0.5 * cur_iter)
+
+        prev_iter = cur_iter
+        cur_iter = updated_guess
+
+        cur_func = func(cur_iter)
+        delta = (cur_iter - prev_iter) / cur_iter
+
+        if numpy.all(
+            (numpy.abs(cur_func) < atol)
+            & (numpy.abs(cur_func) / numpy.abs(dissipation) < rtol)
+        ):
+            break
+
+        if numpy.all(numpy.abs(delta) < rtol):
+            break
+
+    else:
+        # raise ValueError(f'No convergence after {max_iter} iterations')
+        pass
+
+    dataset = Dataset()
+    return dataset.assign({"U10": cur_iter, "direction": wind_direction})

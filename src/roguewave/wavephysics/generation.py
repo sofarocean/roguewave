@@ -1,7 +1,82 @@
 from .fluidproperties import AIR, WATER, FluidProperties, GRAVITATIONAL_ACCELERATION
-from roguewave import WaveSpectrum, FrequencySpectrum, FrequencyDirectionSpectrum
+from roguewave import (
+    WaveSpectrum,
+    FrequencySpectrum,
+    FrequencyDirectionSpectrum,
+    integrate_spectral_data,
+)
 from numpy import tanh, cos, pi, sqrt
 from xarray import DataArray, where
+from abc import ABC, abstractmethod
+from typing import Literal
+
+wind_parametrizations = Literal["st6"]
+
+
+class WindGeneration(ABC):
+    def __init__(self, **kwargs):
+        pass
+
+    @abstractmethod
+    def rate(
+        self,
+        u10: DataArray,
+        direction: DataArray,
+        spectrum: FrequencyDirectionSpectrum,
+        air=AIR,
+        water=WATER,
+    ) -> DataArray:
+        pass
+
+    def bulk_rate(
+        self,
+        u10: DataArray,
+        direction: DataArray,
+        spectrum: FrequencyDirectionSpectrum,
+        air=AIR,
+        water=WATER,
+    ) -> DataArray:
+        return integrate_spectral_data(
+            self.rate(u10, direction, spectrum, air, water),
+            dims=["frequency", "direction"],
+        )
+
+
+class ST6(WindGeneration):
+    def rate(
+        self,
+        u10: DataArray,
+        direction: DataArray,
+        spectrum: FrequencySpectrum,
+        air=AIR,
+        water=WATER,
+    ) -> DataArray:
+        return wind_source_term(spectrum, u10, direction, air, water)
+
+
+class ST4(WindGeneration):
+    def __init__(self, growth_parameter, vonkarman_constant=0.4):
+        self.growth_parameter = growth_parameter
+        self.vonkarman_constant = vonkarman_constant
+
+    def rate(
+        self,
+        u10: DataArray,
+        direction: DataArray,
+        spectrum: FrequencySpectrum,
+        air=AIR,
+        water=WATER,
+    ) -> DataArray:
+        pass
+
+
+def create_wind_source_term(
+    wind_parametrization: wind_parametrizations = "st6", **kwargs
+):
+    if wind_parametrization == "st6":
+        return ST6(**kwargs)
+    else:
+        raise ValueError(f"Unknown parametrization: {wind_parametrization}")
 
 
 def wind_source_term(
@@ -33,11 +108,7 @@ def wind_source_term(
         * (spectrum.variance_density * spectrum.radian_frequency * gamma)
     )
 
-    if isinstance(spectrum, FrequencySpectrum):
-        return wind_input
-
-    elif isinstance(spectrum, FrequencyDirectionSpectrum):
-        return (wind_input * spectrum.direction_step()).sum(dim="direction")
+    return wind_input
 
 
 def temporal_growth_rate_wave_energy(
@@ -74,7 +145,7 @@ def directional_spreading_function(u10: DataArray, spectrum: WaveSpectrum) -> Da
     :return:
     """
     cp = spectrum.peak_wave_speed()
-    peak_omega = spectrum.peak_angukar_frequency()
+    peak_omega = spectrum.peak_angular_frequency()
     omega = spectrum.radian_frequency
     return 1.12 * (u10 / cp) ** (-0.5) * (omega / peak_omega) ** -(0.95) + 1 / (2 * pi)
 
@@ -89,19 +160,14 @@ def spectral_saturation(
     :param gravitational_acceleration:
     :return:
     """
-    omega = spectrum.radian_frequency
-    jac_freq_to_ang_freq = 1 / 2 / pi
-    if isinstance(spectrum, FrequencyDirectionSpectrum):
-        E = (spectrum.variance_density * spectrum.direction_step()).sum(
-            dim="direction"
-        ) * jac_freq_to_ang_freq
-
-    else:
-        E = spectrum.variance_density * jac_freq_to_ang_freq
-
     return (
-        omega**5 * E / 2 / gravitational_acceleration**2
-    ) * directional_spreading_function(u10, spectrum)
+        spectrum.group_velocity
+        * spectrum.e
+        * spectrum.wavenumber**3
+        / 2
+        / pi
+        * directional_spreading_function(u10, spectrum)
+    )
 
 
 def wind_forcing_parameter(

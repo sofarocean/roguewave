@@ -5,10 +5,13 @@ from roguewave.interpolate.dataset import (
 )
 from roguewave.tools.math import wrapped_difference
 from roguewave.tools.time import to_datetime64
-from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
+from roguewave.wavetheory.lineardispersion import (
+    inverse_intrinsic_dispersion_relation,
+    intrinsic_group_velocity,
+)
 from roguewave.wavespectra.estimators import mem2
 from typing import Iterator, Hashable, TypeVar, Union, List
-from xarray import Dataset, DataArray, open_dataset
+from xarray import Dataset, DataArray, open_dataset, concat, ones_like
 from xarray.core.coordinates import DatasetCoordinates
 
 _NAME_F = "frequency"
@@ -507,7 +510,7 @@ class WaveSpectrum(DatasetWrapper):
         """
         return self.dataset[_NAME_F][self.peak_index(fmin, fmax)]
 
-    def peak_angukar_frequency(self, fmin=0, fmax=numpy.inf) -> DataArray:
+    def peak_angular_frequency(self, fmin=0, fmax=numpy.inf) -> DataArray:
         """
         Peak frequency of the spectrum, i.e. frequency at which the spectrum
         obtains its maximum.
@@ -586,6 +589,24 @@ class WaveSpectrum(DatasetWrapper):
     @property
     def depth(self) -> DataArray:
         return self.dataset[_NAME_DEPTH]
+
+    @property
+    def group_velocity(self) -> DataArray:
+        depth = self.depth.expand_dims(dim=_NAME_F, axis=-1).values
+        k = self.wavenumber.values
+        depth = depth * numpy.ones(k.shape)
+
+        # Construct the output coordinates and dimension of the data array
+        return_dimensions = (*self.dims_space_time, _NAME_F)
+        coords = {}
+        for dim in return_dimensions:
+            coords[dim] = self.dataset[dim].values
+
+        return DataArray(
+            data=intrinsic_group_velocity(k, depth),
+            dims=return_dimensions,
+            coords=coords,
+        )
 
     @property
     def wavenumber(self) -> DataArray:
@@ -671,7 +692,67 @@ class WaveSpectrum(DatasetWrapper):
     def interpolate(self: _T, coordinates) -> _T:
         return self.__class__(interpolate_dataset_grid(coordinates, self.dataset))
 
-    def interpolate_frequency(self: _T, new_frequencies) -> _T:
+    def extrapolate_tail(self, end_frequency, power=-5) -> "FrequencySpectrum":
+        e = self.e
+        a1 = self.a1
+        b1 = self.b1
+        a2 = self.a2
+        b2 = self.b2
+
+        frequency = self.frequency.values
+        frequency_delta = frequency[-1] - frequency[-2]
+        n = int((end_frequency - frequency[-1]) / frequency_delta) + 1
+
+        fstart = frequency[-1] + frequency_delta
+        fend = frequency[-1] + n * frequency_delta
+        tail_frequency = numpy.linspace(fstart, fend, n, endpoint=True)
+        tail_frequency = DataArray(
+            data=tail_frequency, coords={"frequency": tail_frequency}, dims="frequency"
+        )
+        tail_power = e.isel(frequency=-1) * (tail_frequency / frequency[-1]) ** power
+        tail_a1 = a1.isel(frequency=-1) * ones_like(tail_frequency)
+        tail_b1 = b1.isel(frequency=-1) * ones_like(tail_frequency)
+        tail_a2 = a1.isel(frequency=-1) * ones_like(tail_frequency)
+        tail_b2 = b1.isel(frequency=-1) * ones_like(tail_frequency)
+
+        e = concat((e, tail_power), dim="frequency")
+        a1 = concat((a1, tail_a1), dim="frequency")
+        b1 = concat((b1, tail_b1), dim="frequency")
+        a2 = concat((a2, tail_a2), dim="frequency")
+        b2 = concat((b2, tail_b2), dim="frequency")
+
+        return create_1d_spectrum(
+            e.frequency.values,
+            e.values,
+            e.time.values,
+            self.latitude.values,
+            self.longitude.values,
+            a1.values,
+            b1.values,
+            a2.values,
+            b2.values,
+            depth=self.depth.values,
+            dims=self.dims_space_time + [_NAME_F],
+        )
+
+    def bandpass(self: _T, fmin=0, fmax=numpy.inf) -> _T:
+
+        dataset = Dataset()
+
+        for name in self.dataset:
+            if name in _SPECTRAL_VARS:
+                data = self.dataset[name].where(
+                    (self.frequency > fmin) & (self.frequency < fmax), drop=True
+                )
+                dataset = dataset.assign({name: data})
+            else:
+                dataset = dataset.assign({name: self.dataset[name]})
+        cls = type(self)
+        return cls(dataset)
+
+    def interpolate_frequency(
+        self: _T, new_frequencies, extrapolate_tail=True, extrapolate_power=5
+    ) -> _T:
         return self.__class__(
             interpolate_dataset_along_axis(
                 new_frequencies, self.dataset, coordinate_name="frequency"
@@ -827,16 +908,28 @@ class FrequencySpectrum(WaveSpectrum):
             )
         output_array = numpy.reshape(output_array, output_shape)
 
-        return create_2d_spectrum(
-            frequency=self.frequency.values,
-            direction=direction,
-            variance_density=output_array,
-            time=self.time.values,
-            latitude=self.latitude.values,
-            longitude=self.longitude.values,
-            depth=self.depth.values,
-            dims=list(self.variance_density.dims) + [_NAME_D],
-        )
+        dims = self.dims_space_time + [_NAME_F, _NAME_D]
+        coords = {x: self.dataset[x].values for x in self.dims}
+        coords[_NAME_D] = direction
+
+        data = {_NAME_E: (dims, output_array)}
+        for x in self.dataset:
+            if x in _SPECTRAL_VARS:
+                continue
+            data[x] = (self.dims_space_time, self.dataset[x].values)
+
+        return FrequencyDirectionSpectrum(Dataset(data_vars=data, coords=coords))
+        #
+        # return create_2d_spectrum(
+        #     frequency=self.frequency.values,
+        #     direction=direction,
+        #     variance_density=output_array,
+        #     time=self.time.values,
+        #     latitude=self.latitude.values,
+        #     longitude=self.longitude.values,
+        #     depth=self.depth.values,
+        #     dims=list(self.variance_density.dims) + [_NAME_D],
+        # )
 
 
 def create_1d_spectrum(
@@ -949,7 +1042,9 @@ def create_spectrum_dataset(dims, variables) -> Dataset:
     return dataset
 
 
-def load_spectrum_from_netcdf(filename_or_obj) -> WaveSpectrum:
+def load_spectrum_from_netcdf(
+    filename_or_obj,
+) -> Union[FrequencySpectrum, FrequencyDirectionSpectrum]:
     """
     Load a spectrum from netcdf file
     :param filename_or_obj:

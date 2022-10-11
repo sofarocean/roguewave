@@ -7,4 +7,4 @@ from .spectrum import (
     load_spectrum_from_netcdf,
 )
 
-from .operations import concatenate_spectra
+from .operations import concatenate_spectra, integrate_spectral_data

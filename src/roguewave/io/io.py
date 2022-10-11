@@ -208,7 +208,7 @@ def load(filename: str) -> _UNION:
 
     with gzip.open(filename, "rb") as file:
         data = file.read().decode("utf-8")
-        return json.loads(data, object_hook=object_hook)
+    return json.loads(data, object_hook=object_hook)
 
 
 def save(

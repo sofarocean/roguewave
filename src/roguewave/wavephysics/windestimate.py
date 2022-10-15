@@ -14,10 +14,10 @@ from typing import Literal
 from roguewave import FrequencySpectrum
 from roguewave.wavephysics.balance import SourceTermBalance
 from xarray import Dataset, ones_like, DataArray, where
-from tqdm import tqdm
 from multiprocessing import get_context, cpu_count
 from copy import deepcopy
 from scipy.optimize import brentq
+from tqdm import tqdm
 
 _methods = Literal["peak", "mean"]
 _charnock_parametrization = Literal["constant", "voermans15", "voermans16"]
@@ -198,6 +198,7 @@ def equilibrium_range_values(
         scaled_spec = spectrum.variance_density * spectrum.frequency**power
 
         # Find fmin/fmax
+        fmin = 0
         iMin = numpy.argmin(numpy.abs(spectrum.frequency.values - fmin), axis=-1)
         iMax = numpy.argmin(numpy.abs(spectrum.frequency.values - fmax), axis=-1)
         nf = spectrum.number_of_frequencies
@@ -234,10 +235,17 @@ def equilibrium_range_values(
         b1 = numpy.zeros(iMinVariance.shape)
 
         index = numpy.array(list(range(0, spectrum.number_of_spectra)))
+        index = numpy.unravel_index(index, iMinVariance.shape)
+        iMinVariance = iMinVariance.flatten()
+
         for ii in range(0, number_of_bins):
-            e += scaled_spec.values[index, iMinVariance + ii]
-            a1 += spectrum.a1.values[index, iMinVariance + ii]
-            b1 += spectrum.b1.values[index, iMinVariance + ii]
+            jj = numpy.clip(iMinVariance + ii, a_min=0, a_max=nf - 1 - number_of_bins)
+
+            indexer = tuple([ind for ind in index] + [jj])
+
+            e[index] += scaled_spec.values[indexer]
+            a1[index] += spectrum.a1.values[indexer]
+            b1[index] += spectrum.b1.values[indexer]
         fac = 1 / number_of_bins
         e *= fac
         a1 *= fac
@@ -334,7 +342,7 @@ def _estimate_u10_from_source_terms_newton(
 
         # Note- actually numerically evaluating the derivative is more stable than a
         # newton-raphson iteration
-        derivative = (func(cur_iter + delta) - func(cur_iter - delta)) / delta / 2
+        derivative = (func(cur_iter + delta) - cur_func) / delta / 2
 
         updated_guess = cur_iter - cur_func / derivative
         updated_guess = where(updated_guess > 0, updated_guess, 0.5 * cur_iter)
@@ -345,9 +353,13 @@ def _estimate_u10_from_source_terms_newton(
         cur_func = func(cur_iter)
         delta = (cur_iter - prev_iter) / cur_iter
 
+        msk = numpy.isfinite(cur_func)
         if numpy.all(
-            (numpy.abs(cur_func) < atol)
-            & (numpy.abs(cur_func) / numpy.abs(dissipation) < rtol)
+            (numpy.abs(cur_func.values[msk]) < atol)
+            & (
+                numpy.abs(cur_func.values[msk]) / numpy.abs(dissipation.values[msk])
+                < rtol
+            )
         ):
             break
 

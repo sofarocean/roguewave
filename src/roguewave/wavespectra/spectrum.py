@@ -13,6 +13,7 @@ from roguewave.wavespectra.estimators import mem2
 from typing import Iterator, Hashable, TypeVar, Union, List
 from xarray import Dataset, DataArray, open_dataset, concat, ones_like
 from xarray.core.coordinates import DatasetCoordinates
+from warnings import warn
 
 _NAME_F = "frequency"
 _NAME_D = "direction"
@@ -842,7 +843,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
     def direction(self) -> DataArray:
         return self.dataset[_NAME_D]
 
-    def spectrum_1d(self) -> "FrequencySpectrum":
+    def as_frequency_spectrum(self) -> "FrequencySpectrum":
         return create_1d_spectrum(
             self.frequency.values,
             self.e.values,
@@ -856,6 +857,18 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
             depth=self.depth.values,
             dims=self.dims_space_time + [_NAME_F],
         )
+
+    def spectrum_1d(self) -> "FrequencySpectrum":
+        """
+        Will be depricated
+        :return:
+        """
+        warn(
+            'spectrum_1d method will be removed, use "as_frequency_spectru" instead',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.as_frequency_spectrum()
 
     @property
     def number_of_directions(self) -> int:
@@ -876,37 +889,25 @@ class FrequencySpectrum(WaveSpectrum):
         return int(numpy.prod(self.spectral_values.shape[:-1]))
 
     def as_frequency_direction_spectrum(
-        self, number_of_directions, method="mem2"
+        self, number_of_directions, method="newton"
     ) -> "FrequencyDirectionSpectrum":
 
         direction = numpy.linspace(0, 360, number_of_directions, endpoint=False)
         radian_direction = direction * numpy.pi / 180
 
-        input_dims = [str(x) for x in self.spectral_values.dims]
-        input_shape = self.spectral_values.shape
-        output_shape = (*input_shape, number_of_directions)
-
-        loop_elements = numpy.prod(input_shape[:-1])
-        output_array = numpy.empty(
-            (loop_elements, self.number_of_frequencies, number_of_directions)
-        )
-
-        for index in range(loop_elements):
-            indices = numpy.unravel_index(index, input_shape[:-1])
-            indexers = {dim: num for dim, num in zip(input_dims[:-1], indices)}
-            output_array[index, :, :] = (
-                mem2(
-                    radian_direction,
-                    self.a1.isel(indexers).values,
-                    self.b1.isel(indexers).values,
-                    self.a2.isel(indexers).values,
-                    self.b2.isel(indexers).values,
-                )
-                * numpy.pi
-                / 180
-                * self.e.isel(indexers).values[:, None]
+        output_array = (
+            mem2(
+                radian_direction,
+                self.a1.values,
+                self.b1.values,
+                self.a2.values,
+                self.b2.values,
+                method=method,
             )
-        output_array = numpy.reshape(output_array, output_shape)
+            * numpy.pi
+            / 180
+            * self.e.values[..., None]
+        )
 
         dims = self.dims_space_time + [_NAME_F, _NAME_D]
         coords = {x: self.dataset[x].values for x in self.dims}
@@ -919,17 +920,6 @@ class FrequencySpectrum(WaveSpectrum):
             data[x] = (self.dims_space_time, self.dataset[x].values)
 
         return FrequencyDirectionSpectrum(Dataset(data_vars=data, coords=coords))
-        #
-        # return create_2d_spectrum(
-        #     frequency=self.frequency.values,
-        #     direction=direction,
-        #     variance_density=output_array,
-        #     time=self.time.values,
-        #     latitude=self.latitude.values,
-        #     longitude=self.longitude.values,
-        #     depth=self.depth.values,
-        #     dims=list(self.variance_density.dims) + [_NAME_D],
-        # )
 
 
 def create_1d_spectrum(

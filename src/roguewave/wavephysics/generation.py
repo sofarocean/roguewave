@@ -1,6 +1,5 @@
 from .fluidproperties import AIR, WATER, FluidProperties, GRAVITATIONAL_ACCELERATION
 from roguewave import (
-    WaveSpectrum,
     FrequencySpectrum,
     FrequencyDirectionSpectrum,
     integrate_spectral_data,
@@ -15,7 +14,20 @@ wind_parametrizations = Literal["st6"]
 
 class WindGeneration(ABC):
     def __init__(self, **kwargs):
-        pass
+        self._cg = None
+        self._wavenumber = None
+        self._e = None
+        self._peak = None
+        self._peak_wave_speed = None
+        self._object = None
+
+    def memoize(self, spectrum: FrequencyDirectionSpectrum):
+        self.wave_speed = spectrum.wave_speed()
+        self.peak_wave_speed = spectrum.peak_wave_speed()
+        self.peak_angular_frequency = spectrum.peak_angular_frequency()
+        self.saturation_spectrum = (
+            spectrum.wavenumber**3 * spectrum.group_velocity * spectrum.e
+        )
 
     @abstractmethod
     def rate(
@@ -25,6 +37,7 @@ class WindGeneration(ABC):
         spectrum: FrequencyDirectionSpectrum,
         air=AIR,
         water=WATER,
+        memoize=False,
     ) -> DataArray:
         pass
 
@@ -47,11 +60,42 @@ class ST6(WindGeneration):
         self,
         u10: DataArray,
         direction: DataArray,
-        spectrum: FrequencySpectrum,
+        spectrum: FrequencyDirectionSpectrum,
         air=AIR,
         water=WATER,
+        memoize=True,
     ) -> DataArray:
-        return wind_source_term(spectrum, u10, direction, air, water)
+
+        variance_density = spectrum.variance_density
+        if not memoize:
+            wave_speed = spectrum.wave_speed()
+            peak_wave_speed = spectrum.peak_wave_speed()
+            peak_angular_frequency = spectrum.peak_angular_frequency()
+            saturation_spectrum = (
+                spectrum.wavenumber**3 * spectrum.group_velocity * spectrum.e
+            )
+        else:
+            if spectrum is not self._object:
+                self.memoize(spectrum)
+
+            wave_speed = self.wave_speed
+            peak_wave_speed = self.peak_wave_speed
+            peak_angular_frequency = self.peak_angular_frequency
+            saturation_spectrum = self.saturation_spectrum
+
+        return wind_source_term(
+            variance_density,
+            u10,
+            direction,
+            wave_speed,
+            spectrum.direction,
+            peak_wave_speed,
+            peak_angular_frequency,
+            spectrum.radian_frequency,
+            saturation_spectrum,
+            air,
+            water,
+        )
 
 
 class ST4(WindGeneration):
@@ -66,6 +110,7 @@ class ST4(WindGeneration):
         spectrum: FrequencySpectrum,
         air=AIR,
         water=WATER,
+        memoize=False,
     ) -> DataArray:
         pass
 
@@ -80,9 +125,15 @@ def create_wind_source_term(
 
 
 def wind_source_term(
-    spectrum: WaveSpectrum,
+    spectrum,
     u10,
-    wind_direction=DataArray(data=0),
+    wind_direction,
+    wave_speed,
+    direction,
+    peak_wave_speed,
+    peak_angular_frequency,
+    radian_frequency,
+    saturation_spectrum,
     air: FluidProperties = AIR,
     water: FluidProperties = WATER,
     gravitational_acceleration=GRAVITATIONAL_ACCELERATION,
@@ -98,15 +149,18 @@ def wind_source_term(
 
     # Growth rate factor
     gamma = temporal_growth_rate_wave_energy(
-        u10, wind_direction, spectrum, gravitational_acceleration
+        u10,
+        wind_direction,
+        wave_speed,
+        direction,
+        peak_wave_speed,
+        peak_angular_frequency,
+        radian_frequency,
+        saturation_spectrum,
     )
 
     # Sin growth term
-    wind_input = (
-        air.density
-        / water.density
-        * (spectrum.variance_density * spectrum.radian_frequency * gamma)
-    )
+    wind_input = air.density / water.density * (spectrum * radian_frequency * gamma)
 
     return wind_input
 
@@ -114,8 +168,12 @@ def wind_source_term(
 def temporal_growth_rate_wave_energy(
     u10: DataArray,
     wind_direction: DataArray,
-    spectrum: WaveSpectrum,
-    gravitational_acceleration=GRAVITATIONAL_ACCELERATION,
+    wave_speed,
+    direction,
+    peak_wave_speed,
+    peak_angular_frequency,
+    radian_frequency,
+    saturation_spectrum,
 ) -> DataArray:
     """
 
@@ -126,17 +184,32 @@ def temporal_growth_rate_wave_energy(
     :return:
     """
     return (
-        sheltering_coefficient(u10, wind_direction, spectrum)
+        sheltering_coefficient(
+            u10,
+            wind_direction,
+            wave_speed,
+            direction,
+            peak_wave_speed,
+            peak_angular_frequency,
+            radian_frequency,
+            saturation_spectrum,
+        )
         * sqrt(
             spectral_saturation(
-                u10, spectrum, gravitational_acceleration=gravitational_acceleration
+                u10,
+                peak_wave_speed,
+                peak_angular_frequency,
+                radian_frequency,
+                saturation_spectrum,
             )
         )
-        * wind_forcing_parameter(spectrum, u10, wind_direction) ** 2
+        * wind_forcing_parameter(wave_speed, direction, u10, wind_direction) ** 2
     )
 
 
-def directional_spreading_function(u10: DataArray, spectrum: WaveSpectrum) -> DataArray:
+def directional_spreading_function(
+    u10: DataArray, peak_wave_speed, peak_angular_frequency, radian_frequency
+) -> DataArray:
     """
     Babanin & Soloviev, 1998.
 
@@ -144,14 +217,13 @@ def directional_spreading_function(u10: DataArray, spectrum: WaveSpectrum) -> Da
     :param spectrum:
     :return:
     """
-    cp = spectrum.peak_wave_speed()
-    peak_omega = spectrum.peak_angular_frequency()
-    omega = spectrum.radian_frequency
-    return 1.12 * (u10 / cp) ** (-0.5) * (omega / peak_omega) ** -(0.95) + 1 / (2 * pi)
+    return 1.12 * (u10 / peak_wave_speed) ** (-0.5) * (
+        radian_frequency / peak_angular_frequency
+    ) ** -(0.95) + 1 / (2 * pi)
 
 
 def spectral_saturation(
-    u10, spectrum: WaveSpectrum, gravitational_acceleration=9.81
+    u10, peak_wave_speed, peak_angular_frequency, radian_frequency, saturation_spectrum
 ) -> DataArray:
     """
 
@@ -161,17 +233,17 @@ def spectral_saturation(
     :return:
     """
     return (
-        spectrum.group_velocity
-        * spectrum.e
-        * spectrum.wavenumber**3
+        saturation_spectrum
         / 2
         / pi
-        * directional_spreading_function(u10, spectrum)
+        * directional_spreading_function(
+            u10, peak_wave_speed, peak_angular_frequency, radian_frequency
+        )
     )
 
 
 def wind_forcing_parameter(
-    spectrum: WaveSpectrum, u10, wind_direction_degrees
+    wave_speed, direction, u10, wind_direction_degrees
 ) -> DataArray:
     """
 
@@ -180,28 +252,42 @@ def wind_forcing_parameter(
     :param wind_direction_degrees:
     :return:
     """
-    if isinstance(spectrum, FrequencySpectrum):
-        W = u10 / spectrum.wave_speed() - 1
-
-    elif isinstance(spectrum, FrequencyDirectionSpectrum):
-        delta = (spectrum.direction - wind_direction_degrees + 180.0) % 360.0 - 180.0
-        W = u10 * cos(delta * pi / 180) / spectrum.wave_speed() - 1
-
-    else:
-        raise ValueError("unknown spectral object")
-
+    delta = (direction - wind_direction_degrees + 180.0) % 360.0 - 180.0
+    W = u10 * cos(delta * pi / 180) / wave_speed - 1
     return where(W > 0, W, 0)
 
 
 def sheltering_coefficient(
-    u10: DataArray, wind_direction: DataArray, spectrum: WaveSpectrum
+    u10: DataArray,
+    wind_direction: DataArray,
+    wave_speed,
+    direction,
+    peak_wave_speed,
+    peak_angular_frequency,
+    radian_frequency,
+    saturation_spectrum,
 ) -> DataArray:
     """
-
     :param u10:
     :param wind_direction:
     :param spectrum:
     :return:
     """
-    W = wind_forcing_parameter(spectrum, u10, wind_direction)
-    return 2.8 - (1 + tanh(10 * sqrt(spectral_saturation(u10, spectrum)) * W**2 - 11))
+    W = wind_forcing_parameter(wave_speed, direction, u10, wind_direction)
+    return 2.8 - (
+        1
+        + tanh(
+            10
+            * sqrt(
+                spectral_saturation(
+                    u10,
+                    peak_wave_speed,
+                    peak_angular_frequency,
+                    radian_frequency,
+                    saturation_spectrum,
+                )
+            )
+            * W**2
+            - 11
+        )
+    )

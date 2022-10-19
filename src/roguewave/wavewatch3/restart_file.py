@@ -524,14 +524,14 @@ class RestartFile(Sequence):
         :param longitude_slice: longitude index range as slice
         :return:
         """
-        index = self.grid.index(
-            latitude_index=latitude_slice,
-            longitude_index=longitude_slice,
-            valid_only=True,
-        )
+        # index = self.grid.index(
+        #     latitude_index=latitude_slice,
+        #     longitude_index=longitude_slice,
+        #     valid_only=True,
+        # )
 
         return self.grid.project(
-            lon_slice=longitude_slice, lat_slice=latitude_slice, var=self[index].m0()
+            lon_slice=longitude_slice, lat_slice=latitude_slice, var=self[:].m0()
         )
 
     @property

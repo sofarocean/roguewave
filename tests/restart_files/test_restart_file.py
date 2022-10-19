@@ -192,6 +192,12 @@ def test_time():
     ), restart_file.time
 
 
+def test_variance():
+    restart_file = clone_remote()
+    m0 = restart_file.variance(slice(1, 11), slice(1, 11))
+    assert m0.shape == (10, 10)
+
+
 if __name__ == "__main__":
     test_number_of_header_bytes()
     test_number_of_tail_bytes()
@@ -212,3 +218,4 @@ if __name__ == "__main__":
     test_longitude()
     test_linear_indices()
     test_get_item()
+    test_variance()

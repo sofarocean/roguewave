@@ -531,6 +531,9 @@ class RestartFile(Sequence):
         )
 
         msk = index > 0
+        # To note; there is no such thing as an empty spectral object at this moment; we need to explicitly guard
+        # against the case whene there are no valid points in the requested slice here - otherwise we will get some
+        # odd errors down the line (which are not obviously related to "hey there is just no data here").
         if numpy.any(msk):
             m0 = self[index[msk]].m0()
         else:
@@ -557,10 +560,6 @@ class RestartFile(Sequence):
             dims=("latitude", "longitude"),
             name="variance",
         )
-
-        # return self.grid.project(
-        #     lon_slice=longitude_slice, lat_slice=latitude_slice, var=self[:].m0()
-        # )
 
     @property
     def number_of_header_bytes(self) -> int:

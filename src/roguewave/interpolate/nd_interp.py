@@ -138,6 +138,8 @@ class NdInterpolator:
                 points[coordinate_name],
                 indices_1d[index, :, :],
                 period=period,
+                extrapolate_left=False,
+                extrapolate_right=False,
             )
 
         if self.data_is_periodic:
@@ -167,7 +169,7 @@ class NdInterpolator:
 
             mask = numpy.all(
                 ~numpy.isnan(val), axis=self.output_passive_coord_dim_indices
-            )
+            ) & (intp_weight_nd > 0)
 
             weights_sum[self.output_indexing_full(mask)] += intp_weight_nd[
                 self.output_indexing_broadcast(mask)

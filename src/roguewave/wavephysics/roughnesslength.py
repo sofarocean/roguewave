@@ -1,18 +1,27 @@
 from typing import Literal
-from roguewave import WaveSpectrum
+from roguewave import WaveSpectrum, FrequencySpectrum
 from xarray import DataArray, ones_like
+from roguewave.wavephysics.fluidproperties import (
+    GRAVITATIONAL_ACCELERATION,
+)
 from abc import ABC, abstractmethod
+from roguewave.wavephysics.generation import ST4
 import numpy
 
 _kinematic_viscocity_air = 1.48 * 10**-5
 
 _roughness_length_parameterization = Literal[
-    "charnock_constant", "charnock_voermans15", "charnock_voermans16"
+    "charnock_constant",
+    "charnock_voermans15",
+    "charnock_voermans16",
+    "charnock_janssen",
 ]
 
 
 class RoughnessLength(ABC):
-    def z0(self, friction_velocity, spectrum: WaveSpectrum) -> DataArray:
+    def z0(
+        self, friction_velocity, spectrum: WaveSpectrum, wind_direction_degrees=None
+    ) -> DataArray:
         return self.smooth(friction_velocity) + self.form_drag(
             friction_velocity, spectrum
         )
@@ -42,8 +51,12 @@ class RoughnessLength(ABC):
 
 
 class CharnockConstant(RoughnessLength):
-    def __init__(self, constant=0.012, gravitational_acceleration=9.81):
-        self._charnock_constant = constant
+    def __init__(
+        self,
+        charnock_constant=0.012,
+        gravitational_acceleration=GRAVITATIONAL_ACCELERATION,
+    ):
+        self._charnock_constant = charnock_constant
         self.gravitational_acceleration = gravitational_acceleration
 
     def charnock_constant(self, friction_velocity, spectrum: WaveSpectrum) -> DataArray:
@@ -91,6 +104,34 @@ class CharnockVoermans16(CharnockConstant):
         )
 
 
+class Janssen(CharnockConstant):
+    def __init__(
+        self,
+        charnock_constant=0.012,
+        gravitational_acceleration=GRAVITATIONAL_ACCELERATION,
+    ):
+        super(Janssen, self).__init__()
+        self.generation = ST4(
+            charnock_constant=charnock_constant,
+            gravitational_acceleration=gravitational_acceleration,
+        )
+
+    def z0(
+        self, friction_velocity, spectrum: WaveSpectrum, wind_direction_degrees=None
+    ) -> DataArray:
+        if wind_direction_degrees is None:
+            raise ValueError("direction must be specified")
+
+        if isinstance(spectrum, FrequencySpectrum):
+            spectrum = spectrum.as_frequency_direction_spectrum(
+                36, method="approximate"
+            )
+
+        return self.generation.roughness_length(
+            friction_velocity, wind_direction_degrees, spectrum
+        )
+
+
 def create_roughness_length_estimator(
     method: _roughness_length_parameterization = "charnock_constant", **kwargs
 ) -> RoughnessLength:
@@ -102,3 +143,6 @@ def create_roughness_length_estimator(
 
     elif method == "charnock_voermans16":
         return CharnockVoermans16(**kwargs)
+
+    elif method == "charnock_janssen":
+        return Janssen(**kwargs)

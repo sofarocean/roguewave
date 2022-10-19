@@ -1,6 +1,9 @@
 import numpy
 
-def wrapped_difference(delta, period=2*numpy.pi, discont=None):
+
+def wrapped_difference(
+    delta: numpy.ndarray, period=2 * numpy.pi, discont=None
+) -> numpy.ndarray:
     """
     Calculate the wrapped difference for a given delta for a periodic variable.
     E.g. if the difference between two angles measured in degrees is 359 we
@@ -21,6 +24,9 @@ def wrapped_difference(delta, period=2*numpy.pi, discont=None):
         return delta
 
     if discont is None:
-        discont = period/2
+        discont = period / 2
 
-    return (delta + period - discont) % period - period + discont
+    mask = numpy.isfinite(delta)
+    output = numpy.full_like(delta, numpy.nan)
+    output[mask] = (delta[mask] + period - discont) % period - period + discont
+    return output

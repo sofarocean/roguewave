@@ -16,10 +16,11 @@ class WaveBreaking(ABC):
         return cg * spectrum.e * k**3 / 2 / pi
 
     def bulk_rate(self, spectrum: FrequencyDirectionSpectrum) -> DataArray:
-        # return (self.rate(spectrum).integrate(coord="frequency")*spectrum.direction_step() ).sum(dim="direction")
-        return integrate_spectral_data(
-            self.rate(spectrum), dims=["frequency", "direction"]
-        )
+        frequency: Literal[
+            "frequency"
+        ] = "frequency"  # To avoid issues with pycharm flagging the argument as not being a literal
+        direction: Literal["direction"] = "direction"
+        return integrate_spectral_data(self.rate(spectrum), dims=[frequency, direction])
 
 
 class ST6(WaveBreaking):
@@ -64,7 +65,11 @@ class ST6(WaveBreaking):
         freq_delta[-1] += delta[-1] * 0.5
         return (
             -self.a2
-            * ((freq_delta * relative_exceedence_level).cumsum(dim="frequency"))
+            * (
+                (freq_delta * relative_exceedence_level.fillna(0)).cumsum(
+                    dim="frequency"
+                )
+            )
             ** self.p2
             * spectrum.variance_density
         )

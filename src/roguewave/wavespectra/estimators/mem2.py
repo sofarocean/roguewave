@@ -41,9 +41,16 @@ def mem2(
 
     if method == "scipy":
         func = mem2_scipy_root_finder
+        kwargs = {}
 
     elif method == "newton":
         func = mem2_newton
+        kwargs = {}
+
+    elif method == "approximate":
+        func = mem2_newton
+        kwargs = {"approximate": True}
+
     else:
         raise ValueError("Unknown method")
 
@@ -60,7 +67,7 @@ def mem2(
 
     number_of_iterations = a1.shape[0]
     with ProgressBar(total=number_of_iterations) as progress:
-        res = func(directions_radians, a1, b1, a2, b2, progress)
+        res = func(directions_radians, a1, b1, a2, b2, progress, **kwargs)
 
     return res.reshape(output_shape)
 
@@ -190,6 +197,7 @@ def mem2_scipy_root_finder(
     a2: typing.Union[numpy.ndarray, float],
     b2: typing.Union[numpy.ndarray, float],
     progress,
+    **kwargs
 ) -> numpy.ndarray:
     """
     Return the directional distribution that maximizes Shannon [ - D log(D) ]
@@ -275,6 +283,7 @@ def mem2_newton(
     max_iter=500,
     atol=1e-2,
     rcond=1e-6,
+    approximate=False,
 ) -> numpy.ndarray:
     """
     Return the directional distribution that maximizes Shannon [ - D log(D) ]
@@ -348,6 +357,7 @@ def mem2_newton(
             max_iter,
             rcond,
             atol,
+            approximate,
         )
 
     return directional_distribution
@@ -367,6 +377,7 @@ def _mem2_newton_point(
     max_iter,
     rcond,
     atol,
+    approximate,
 ):
     for ifreq in prange(0, number_of_frequencies):
         #
@@ -379,6 +390,7 @@ def _mem2_newton_point(
             max_iter,
             rcond,
             atol,
+            approximate=approximate,
         )
 
 
@@ -392,6 +404,7 @@ def estimate_distribution_newton(
     rcond: float = 1e-6,
     atol: float = 1e-3,
     max_line_search_depth=32,
+    approximate=False,
 ) -> numpy.ndarray:
     """
     Newton iteration to find the solution to the non-linear system of constraint equations defining the lagrange
@@ -410,6 +423,12 @@ def estimate_distribution_newton(
     directional_distribution = numpy.empty(len(direction_increment))
     if numpy.any(numpy.isnan(guess)):
         directional_distribution[:] = 0
+        return directional_distribution
+
+    if approximate:
+        directional_distribution[:] = mem2_directional_distribution(
+            guess, direction_increment, twiddle_factors
+        )
         return directional_distribution
 
     current_lagrange_multiplier_iterate = guess
@@ -501,8 +520,6 @@ def estimate_distribution_newton(
         current_lagrange_multiplier_iterate, direction_increment, twiddle_factors
     )
 
-    if numpy.any(~numpy.isfinite(directional_distribution)):
-        raise ValueError("we did not converge")
     return directional_distribution
 
 

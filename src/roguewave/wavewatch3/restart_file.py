@@ -524,15 +524,43 @@ class RestartFile(Sequence):
         :param longitude_slice: longitude index range as slice
         :return:
         """
-        # index = self.grid.index(
-        #     latitude_index=latitude_slice,
-        #     longitude_index=longitude_slice,
-        #     valid_only=True,
-        # )
-
-        return self.grid.project(
-            lon_slice=longitude_slice, lat_slice=latitude_slice, var=self[:].m0()
+        index = self.grid.index(
+            latitude_index=latitude_slice,
+            longitude_index=longitude_slice,
+            valid_only=False,
         )
+
+        msk = index > 0
+        if numpy.any(msk):
+            m0 = self[index[msk]].m0()
+        else:
+            m0 = numpy.zeros(0)
+
+        ilon = self.grid.longitude_index(index[msk])
+        ilat = self.grid.latitude_index(index[msk])
+
+        nlon = len(self.longitude[longitude_slice])
+        nlat = len(self.latitude[latitude_slice])
+        ilat0 = numpy.min(ilat)
+        ilon0 = numpy.min(ilon)
+
+        # this will not work for stepsizes != 1
+        out = numpy.zeros((nlat, nlon), dtype=m0.dtype) + numpy.nan
+        out[ilat - ilat0, ilon - ilon0] = m0
+
+        return DataArray(
+            data=out,
+            coords={
+                "latitude": self.latitude[latitude_slice],
+                "longitude": self.longitude[longitude_slice],
+            },
+            dims=("latitude", "longitude"),
+            name="variance",
+        )
+
+        # return self.grid.project(
+        #     lon_slice=longitude_slice, lat_slice=latitude_slice, var=self[:].m0()
+        # )
 
     @property
     def number_of_header_bytes(self) -> int:

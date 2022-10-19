@@ -194,8 +194,8 @@ def test_time():
 
 def test_variance():
     restart_file = clone_remote()
-    m0 = restart_file.variance(slice(1, 11), slice(1, 11))
-    assert m0.shape == (10, 10)
+    m0 = restart_file.variance(slice(1, 112), slice(1, 111))
+    assert m0.shape == (111, 110)
 
 
 if __name__ == "__main__":

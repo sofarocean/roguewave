@@ -13,11 +13,18 @@ import numpy
 from typing import Literal
 from roguewave import FrequencySpectrum
 from roguewave.wavephysics.balance import SourceTermBalance
+from roguewave.wavespectra import integrate_spectral_data
+from roguewave.wavespectra.spectrum import NAME_F, NAME_D
 from xarray import Dataset, ones_like, DataArray, where
 from multiprocessing import get_context, cpu_count
 from copy import deepcopy
 from scipy.optimize import brentq
 from tqdm import tqdm
+from roguewave import logger
+from roguewave.wavephysics.roughnesslength import (
+    RoughnessLength,
+    create_roughness_length_estimator,
+)
 
 _methods = Literal["peak", "mean"]
 _charnock_parametrization = Literal["constant", "voermans15", "voermans16"]
@@ -36,7 +43,6 @@ def friction_velocity(
     beta=0.012,
     grav=9.81,
     numberOfBins=20,
-    direction_convention: _direction_convention = "coming_from_clockwise_north",
 ) -> Dataset:
     e, a1, b1 = equilibrium_range_values(
         spectrum,
@@ -53,14 +59,7 @@ def friction_velocity(
     Ustar = Emean / grav / directional_spreading_constant / beta / 4
 
     # Convert directions to where the wind is coming from, measured positive clockwise from North
-
-    if direction_convention == "coming_from_clockwise_north":
-        dir = (270.0 - 180.0 / numpy.pi * numpy.arctan2(b1, a1)) % 360
-    elif direction_convention == "going_to_counter_clockwise_east":
-        dir = 180.0 / numpy.pi * numpy.arctan2(b1, a1)
-    else:
-        raise ValueError(f"Unknown direectional convention: {direction_convention}")
-
+    dir = (180.0 / numpy.pi * numpy.arctan2(b1, a1)) % 360
     coords = {x: spectrum.dataset[x].values for x in spectrum.dims_space_time}
     return Dataset(
         data_vars={
@@ -80,10 +79,9 @@ def estimate_u10_from_spectrum(
     directional_spreading_constant=2.5,
     phillips_constant_beta=0.012,
     vonkarman_constant=0.4,
-    charnock_constant=0.012,
     grav=9.81,
     number_of_bins=20,
-    charnock_parametrization: _charnock_parametrization = "constant",
+    roughness_parametrization: RoughnessLength = None,
     direction_convention: _direction_convention = "coming_from_clockwise_north",
 ) -> Dataset:
     #
@@ -120,6 +118,9 @@ def estimate_u10_from_spectrum(
     # 3) Use Emean to estimate Wind speed (using Charnock and LogLaw)
     # 4) Calculate mean direction over equilibrium range
 
+    if roughness_parametrization is None:
+        roughness_parametrization = create_roughness_length_estimator()
+
     # Get friction velocity from spectrum
     dataset = friction_velocity(
         spectrum,
@@ -131,15 +132,18 @@ def estimate_u10_from_spectrum(
         phillips_constant_beta,
         grav,
         number_of_bins,
-        direction_convention,
     )
-
-    charnock = charnock_constant_estimate(
-        spectrum, charnock_constant, dataset.friction_velocity, charnock_parametrization
-    )
-
     # Find z0 from Charnock Relation
-    z0 = charnock * dataset.friction_velocity**2 / grav
+    z0 = roughness_parametrization.z0(
+        dataset.friction_velocity, spectrum, dataset.direction
+    )
+
+    if direction_convention == "coming_from_clockwise_north":
+        dataset["direction"] = (270.0 - dataset["direction"]) % 360
+    elif direction_convention == "going_to_counter_clockwise_east":
+        pass
+    else:
+        raise ValueError(f"Unknown direectional convention: {direction_convention}")
 
     # Get the wind speed at U10 from loglaw
     return dataset.assign(
@@ -273,7 +277,7 @@ def _worker(args):
 
 def estimate_u10_from_source_terms(
     spectrum: FrequencySpectrum, balance: SourceTermBalance, method="newton", **kwargs
-) -> DataArray:
+) -> Dataset:
     if method == "newton":
         return _estimate_u10_from_source_terms_newton(spectrum, balance, **kwargs)
     elif method == "brentq":
@@ -321,51 +325,94 @@ def _estimate_u10_from_source_terms_newton(
     rtol=1e-3,
     max_iter=100,
 ):
-    observed = estimate_u10_from_spectrum(
-        spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
+    # Create two-dimensional spectra
+    spec2d = spectrum.as_frequency_direction_spectrum(36, method="approximate")
+
+    # Estimate the dissipation
+    dissipation_2d = balance.dissipation.rate(spec2d)
+    dissipation_bulk = integrate_spectral_data(dissipation_2d, dims=[NAME_F, NAME_D])
+
+    # Disspation weighted average wave number to guestimate the wind direction. Note dissipation is negative- hence the
+    # minus signs.
+    kx = -integrate_spectral_data(
+        balance.dissipation.rate(spec2d)
+        * spec2d.wavenumber
+        * numpy.cos(spec2d.radian_direction),
+        dims=[NAME_F, NAME_D],
     )
-    wind_direction = observed["direction"]
-    guess = observed["U10"]
+    ky = -integrate_spectral_data(
+        balance.dissipation.rate(spec2d)
+        * spec2d.wavenumber
+        * numpy.sin(spec2d.radian_direction),
+        dims=[NAME_F, NAME_D],
+    )
 
-    cur_iter = guess
+    # Estimate the wind direction. Note this is our _final_ estimate of the wind direction.
+    wind_direction = (numpy.arctan2(ky, kx) * 180 / numpy.pi) % 360
 
-    spec2d = spectrum.as_frequency_direction_spectrum(36)
-    dissipation = balance.dissipation.bulk_rate(spec2d)
-
+    # Define the iteration function
     def func(u10):
-        return balance.generation.bulk_rate(u10, wind_direction, spec2d) + dissipation
+        return (
+            balance.generation.bulk_rate(u10, wind_direction, spec2d) + dissipation_bulk
+        )
 
-    cur_func = func(cur_iter)
+    # Our first guess is the wind estimate based on the peak equilibriun range approximation
+    cur_iter = estimate_u10_from_spectrum(
+        spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
+    )["U10"]
+    prev_iter = cur_iter + 0.01
 
+    numerical_wind_speed_delta = 0.01
+    logger.info("Estimating U10 from balance.")
+    max_iter = 20
     for ii in range(0, max_iter):
-        delta = cur_iter * 0.01
+        # Evalute the function at the current iterate
+        cur_func = func(cur_iter)
 
         # Note- actually numerically evaluating the derivative is more stable than a
-        # newton-raphson iteration
-        derivative = (func(cur_iter + delta) - cur_func) / delta / 2
+        # newton-raphson iteration. This does slow things down though.
+        derivative = (
+            func(cur_iter + numerical_wind_speed_delta) - cur_func
+        ) / numerical_wind_speed_delta
 
-        updated_guess = cur_iter - cur_func / derivative
+        # only update where the derivate is not equal to zero (points with no dissipation)
+        updated_guess = where(
+            derivative == 0, cur_iter, cur_iter - cur_func / derivative
+        )
+
+        # if the updated guess is negative- put the next iterate half way between 0 and the current iterate
         updated_guess = where(updated_guess > 0, updated_guess, 0.5 * cur_iter)
 
+        # Ignore points where dissipation is zero
+        updated_guess = where(numpy.abs(dissipation_bulk) == 0.0, 0, updated_guess)
+
+        # Update current/previous iterate labels
         prev_iter = cur_iter
         cur_iter = updated_guess
 
-        cur_func = func(cur_iter)
-        delta = (cur_iter - prev_iter) / cur_iter
-
-        msk = numpy.isfinite(cur_func)
-        if numpy.all(
+        # Check for convergence, but only for points with finite values
+        relative_update = numpy.abs(cur_iter - prev_iter) / cur_iter
+        msk = numpy.isfinite(cur_func.values)
+        converged = (
             (numpy.abs(cur_func.values[msk]) < atol)
             & (
-                numpy.abs(cur_func.values[msk]) / numpy.abs(dissipation.values[msk])
-                < rtol
+                numpy.abs(cur_func.values[msk])
+                <= numpy.abs(dissipation_bulk.values[msk]) * rtol
             )
-        ):
+        ) | (numpy.abs(relative_update.values[msk]) < rtol)
+        if numpy.all(converged):
+            msg = f" - iteration {ii + 1:03d} out of {max_iter}, converged."
+            logger.info(msg)
             break
 
-        if numpy.all(numpy.abs(delta) < rtol):
-            break
-
+        else:
+            msg = f" - iteration {ii+1:03d} out of {max_iter}, converged in {numpy.sum(converged)/len(converged) * 100} percent of points."
+            # print( cur_iter.values,cur_func.values)
+            logger.info(msg)
+            # index = numpy.arange(len(converged))[~converged.flatten()]
+            # indices = numpy.unravel_index(index, cur_iter.shape)
+            # if ii==max_iter-1:
+            #     spc = spectrum[indices[0][0],indices[1][0],:].save_as_netcdf('temp4.nc')
     else:
         # raise ValueError(f'No convergence after {max_iter} iterations')
         pass

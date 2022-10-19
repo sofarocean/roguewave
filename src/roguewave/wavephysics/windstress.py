@@ -2,7 +2,7 @@ from roguewave import WaveSpectrum
 from xarray import DataArray
 from .roughnesslength import RoughnessLength
 from .fluidproperties import AIR, WATER, FluidProperties, GRAVITATIONAL_ACCELERATION
-from .generation import wind_source_term
+from .generation import st6_wind_source_term
 from .loglaw import friction_velocity_from_windspeed
 
 
@@ -46,7 +46,7 @@ def wave_supported_stress(
     :return:
     """
     coef = 1
-    wind_input = wind_source_term(spectrum, u10, wind_direction, air, water)
+    wind_input = st6_wind_source_term(spectrum, u10, wind_direction, air, water)
     return (
         water.density
         * coef

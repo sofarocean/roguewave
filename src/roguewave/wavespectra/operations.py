@@ -1,9 +1,9 @@
 from roguewave.wavespectra.spectrum import (
     FrequencyDirectionSpectrum,
     FrequencySpectrum,
-    _NAME_D,
-    _NAME_F,
-    _SPECTRAL_DIMS,
+    NAME_D,
+    NAME_F,
+    SPECTRAL_DIMS,
 )
 from roguewave.tools.math import wrapped_difference
 from typing import Sequence, TypeVar, Union, Literal
@@ -50,9 +50,9 @@ def integrate_spectral_data(
         dims = [dims]
 
     for dim in dims:
-        if dim not in _SPECTRAL_DIMS:
+        if dim not in SPECTRAL_DIMS:
             raise ValueError(
-                f"Dimension {dim} is not a spectral dimension, options are {_NAME_F} or {_NAME_D}"
+                f"Dimension {dim} is not a spectral dimension, options are {NAME_F} or {NAME_D}"
             )
 
         if dim not in dataset.coords:
@@ -61,17 +61,17 @@ def integrate_spectral_data(
             )
 
     out = dataset
-    if _NAME_F in dims:
-        out = out.integrate(coord=_NAME_F)
+    if NAME_F in dims:
+        out = out.fillna(0).integrate(coord=NAME_F)
 
-    if _NAME_D in dims:
+    if NAME_D in dims:
         difference = DataArray(
             data=wrapped_difference(
                 diff(dataset.direction.values, append=dataset.direction[0]), period=360
             ),
-            coords={_NAME_D: dataset.direction.values},
-            dims=[_NAME_D],
+            coords={NAME_D: dataset.direction.values},
+            dims=[NAME_D],
         )
-        out = (out * difference).sum(dim=_NAME_D)
+        out = (out * difference).sum(dim=NAME_D)
 
     return out

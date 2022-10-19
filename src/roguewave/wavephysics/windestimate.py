@@ -1,6 +1,4 @@
 """
-This file is part of pysofar: A client for interfacing with Sofar Oceans Spotter API
-
 Contents: Wind Estimater
 
 Copyright (C) 2022
@@ -15,7 +13,7 @@ from roguewave import FrequencySpectrum
 from roguewave.wavephysics.balance import SourceTermBalance
 from roguewave.wavespectra import integrate_spectral_data
 from roguewave.wavespectra.spectrum import NAME_F, NAME_D
-from xarray import Dataset, ones_like, DataArray, where
+from xarray import Dataset, DataArray, where
 from multiprocessing import get_context, cpu_count
 from copy import deepcopy
 from scipy.optimize import brentq
@@ -44,6 +42,19 @@ def friction_velocity(
     grav=9.81,
     numberOfBins=20,
 ) -> Dataset:
+    """
+
+    :param spectrum:
+    :param method:
+    :param fmin:
+    :param fmax:
+    :param power:
+    :param directional_spreading_constant:
+    :param beta:
+    :param grav:
+    :param numberOfBins:
+    :return:
+    """
     e, a1, b1 = equilibrium_range_values(
         spectrum,
         method=method,
@@ -58,7 +69,7 @@ def friction_velocity(
     # Get friction velocity from spectrum
     Ustar = Emean / grav / directional_spreading_constant / beta / 4
 
-    # Convert directions to where the wind is coming from, measured positive clockwise from North
+    # Estimate direction from tail
     dir = (180.0 / numpy.pi * numpy.arctan2(b1, a1)) % 360
     coords = {x: spectrum.dataset[x].values for x in spectrum.dims_space_time}
     return Dataset(
@@ -149,26 +160,6 @@ def estimate_u10_from_spectrum(
     return dataset.assign(
         {"U10": dataset.friction_velocity / vonkarman_constant * numpy.log(10.0 / z0)}
     )
-
-
-def charnock_constant_estimate(
-    spectrum: FrequencySpectrum,
-    charnock_constant,
-    ustar,
-    charnock_parametrization: _charnock_parametrization = "constant",
-) -> DataArray:
-    hm0 = spectrum.hm0()
-    if charnock_parametrization == "constant":
-        return charnock_constant * ones_like(hm0)
-
-    elif charnock_parametrization == "voermans15":
-        kp = spectrum.peak_wavenumber
-        return 0.06 * (hm0 * kp) ** 0.7
-    elif charnock_parametrization == "voermans16":
-        kp = spectrum.peak_wavenumber
-        fp = spectrum.peak_frequency()
-        cp = numpy.pi * 2 * fp / kp
-        return 0.14 * (ustar / cp) ** 0.61
 
 
 def equilibrium_range_values(

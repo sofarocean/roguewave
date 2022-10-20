@@ -23,6 +23,7 @@ setuptools.setup(
         "xarray",
         "requests",
         "cfgrib",
+        "numba",
     ],
     description="Python package to interact with Sofar wave data",
     long_description=readme_contents,
@@ -34,7 +35,7 @@ setuptools.setup(
     packages=setuptools.find_packages("src"),
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],

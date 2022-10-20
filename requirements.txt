@@ -16,3 +16,4 @@ cfgrib
 flake8
 pre-commit
 black
+numba

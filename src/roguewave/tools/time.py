@@ -84,6 +84,7 @@ def to_datetime64(
     elif isinstance(time, datetime64):
         return datetime64(time, "s")
     elif isinstance(time, datetime):
+        time = time.replace(tzinfo=timezone.utc)
         return datetime64(int(time.timestamp()), "s")
     else:
         raise ValueError("unknown time type")

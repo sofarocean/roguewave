@@ -23,20 +23,22 @@ import xarray
 from typing import List, Union, Iterable
 from .modelinformation import _get_resource_specification
 from os import remove, rename
-from roguewave.tools.time import to_datetime_utc
+from roguewave.tools.time import to_datetime_utc, to_datetime64
 from glob import glob
 from .timebase import TimeSlice
 from .keygeneration import generate_uris
 import numpy
+import pygrib
 
 
 # Main functions to interact with module
 # =============================================================================
 def open_remote_dataset(
-        variable: Union[List[str], str],
-        time_slice: TimeSlice,
-        model_name: str,
-        cache_name: str = None )-> xarray.Dataset:
+    variable: Union[List[str], str],
+    time_slice: TimeSlice,
+    model_name: str,
+    cache_name: str = None,
+) -> xarray.Dataset:
     """
     Get a local dataset associated with a forecast for a given
     model.
@@ -55,21 +57,22 @@ def open_remote_dataset(
         variable,
         lambda x: generate_uris(x, time_slice, model_name),
         model_name=model_name,
-        cache_name=cache_name
+        cache_name=cache_name,
     )
+
 
 # Functions internal to the module.
 # =============================================================================
 
 
 def _open_uris_as_dataset(
-        aws_keys: List[str],
-        model_variables: List[str],
-        single_variables_per_file:bool,
-        filetype='netcdf',
-        cache_name: str = None,
-        concatenation_dimension='time',
-        ) -> xarray.Dataset:
+    aws_keys: List[str],
+    model_variables: List[str],
+    single_variables_per_file: bool,
+    filetype="netcdf",
+    cache_name: str = None,
+    concatenation_dimension="time",
+) -> xarray.Dataset:
     """
     Open a set of remote resources as a single local dataset using a local
     Cache. Datasets will be concatenated along the given concatenation
@@ -87,12 +90,12 @@ def _open_uris_as_dataset(
     # the latter to do a conversion from grib to netcdf for a freshly
     # downloaded file so we can use a unified netcdf interface and because
     # Grib == Slow.
-    def postprocess(filepath:str):
-        _convert_grib_to_netcdf(filepath, model_variables)
+    def postprocess(filepath: str):
+        _convert_grib_to_netcdf_pygrib(filepath, model_variables)
 
-    def validate(filepath:str) -> bool:
+    def validate(filepath: str) -> bool:
         if not single_variables_per_file:
-            ds = xarray.open_dataset(filepath,engine='netcdf4')
+            ds = xarray.open_dataset(filepath, engine="netcdf4")
             for variable in model_variables:
                 if variable not in ds:
                     ds.close()
@@ -100,41 +103,43 @@ def _open_uris_as_dataset(
             ds.close()
         return True
 
-    if filetype == 'grib':
+    if filetype == "grib":
         # Add processing for grib files
-        filecache.set_directive_function('postprocess', 'grib', postprocess)
-        filecache.set_directive_function('validate', 'grib', validate)
-        aws_keys = [ f'validate=grib;postprocess=grib:{x}' for x in aws_keys ]
+        filecache.set_directive_function("postprocess", "grib", postprocess)
+        filecache.set_directive_function("validate", "grib", validate)
+        aws_keys = [f"validate=grib;postprocess=grib:{x}" for x in aws_keys]
 
     # Load data into cache and get filenames
-    filepaths = filecache.filepaths(aws_keys, cache_name )
+    filepaths = filecache.filepaths(aws_keys, cache_name)
 
-    if filetype == 'grib':
+    if filetype == "grib":
         # Remove processing so that the cache is in the same state as before
-        filecache.remove_directive_function('postprocess', 'grib')
-        filecache.remove_directive_function('validate', 'grib')
+        filecache.remove_directive_function("postprocess", "grib")
+        filecache.remove_directive_function("validate", "grib")
 
     datasets = [
-        xarray.open_dataset(file,engine='netcdf4', decode_times=False)
-            for file in filepaths ]
+        xarray.open_dataset(file, engine="netcdf4", decode_times=False)
+        for file in filepaths
+    ]
 
     # Convert time etc to cf conventions
-    datasets = [xarray.decode_cf(dataset) for dataset in datasets ]
+    datasets = [xarray.decode_cf(dataset) for dataset in datasets]
     for dataset in datasets:
-        init_time = to_datetime_utc(dataset.attrs.get('init_time'))
+        init_time = to_datetime_utc(dataset.attrs.get("init_time"))
         if init_time is not None:
-            dataset['init_time'] = [numpy.datetime64(init_time)]
+            dataset["init_time"] = [numpy.datetime64(init_time)]
 
     # Concatenate and return resulting dataset
     return xarray.concat(datasets, dim=concatenation_dimension)
 
 
-def _open_variables(variables,
-                    key_generation_function,
-                    model_name,
-                    cache_name,
-                    map_to_sofar_variable_names=True
-                    ) -> xarray.Dataset:
+def _open_variables(
+    variables,
+    key_generation_function,
+    model_name,
+    cache_name,
+    map_to_sofar_variable_names=True,
+) -> xarray.Dataset:
     """
     Open the datasets corresponding to the given variables and return as a
     single variable.
@@ -149,7 +154,7 @@ def _open_variables(variables,
     :return: Dataset
     """
 
-    if not isinstance(variables, Iterable) or isinstance(variables,str):
+    if not isinstance(variables, Iterable) or isinstance(variables, str):
         variables = [variables]
 
     # Get the model description.
@@ -159,14 +164,13 @@ def _open_variables(variables,
     # name. Here we remap the variable names to make sure they are all
     # specified as model specific names for querying.
     if aws_layout.mapping_variable_name_model_to_sofar is not None:
-        model_variable_names = [aws_layout.to_model_variable_name(x)
-                                for x in variables]
+        model_variable_names = [aws_layout.to_model_variable_name(x) for x in variables]
     else:
         # If no mapping is available, we assume variables already correspond
         # to model names (specifically Sofar variable name conventions).
         model_variable_names = variables
 
-    concatenation_dimension = aws_layout.to_model_variable_name('time')
+    concatenation_dimension = aws_layout.to_model_variable_name("time")
     if not aws_layout.single_variable_per_file or len(model_variable_names) == 1:
         # For a single variable there is no need to merge datasets. Further,
         # if all variables per valid_time are stored in a the same file
@@ -180,7 +184,7 @@ def _open_variables(variables,
             single_variables_per_file=aws_layout.single_variable_per_file,
             cache_name=cache_name,
             concatenation_dimension=concatenation_dimension,
-            model_variables=model_variable_names
+            model_variables=model_variable_names,
         )
     else:
         datasets = []
@@ -189,13 +193,14 @@ def _open_variables(variables,
         # variable and merge the dataset at the end.
         for variable in model_variable_names:
             aws_keys = key_generation_function(variable)
-            datasets.append( _open_uris_as_dataset(
-                aws_keys=aws_keys,
-                filetype=aws_layout.filetype,
-                single_variables_per_file=aws_layout.single_variable_per_file,
-                cache_name=cache_name,
-                concatenation_dimension=concatenation_dimension,
-                model_variables=model_variable_names
+            datasets.append(
+                _open_uris_as_dataset(
+                    aws_keys=aws_keys,
+                    filetype=aws_layout.filetype,
+                    single_variables_per_file=aws_layout.single_variable_per_file,
+                    cache_name=cache_name,
+                    concatenation_dimension=concatenation_dimension,
+                    model_variables=model_variable_names,
                 )
             )
         dataset = xarray.merge(datasets)
@@ -207,18 +212,22 @@ def _open_variables(variables,
     dataset = dataset[model_variable_names]
 
     # Remap to Sofar variable naming conventions if requested (and needed).
-    if aws_layout.mapping_variable_name_model_to_sofar is not None and \
-            map_to_sofar_variable_names:
+    if (
+        aws_layout.mapping_variable_name_model_to_sofar is not None
+        and map_to_sofar_variable_names
+    ):
         # we may not have downloaded all variables, make sure we only rename
         # those available in the dataset.
-        _map = {key: value for key, value in
-                aws_layout.mapping_variable_name_model_to_sofar.items()
-                if key in dataset
-                }
+        _map = {
+            key: value
+            for key, value in aws_layout.mapping_variable_name_model_to_sofar.items()
+            if (key in dataset)
+        }
         dataset = dataset.rename(_map)
 
     # return the dataset
     return dataset
+
 
 # Helper Functions
 # =============================================================================
@@ -232,19 +241,68 @@ def _convert_grib_to_netcdf(filepath: str, model_variables) -> None:
     :return: None
     """
     # open the dataset
-    dataset = xarray.open_dataset(filepath, engine="cfgrib",decode_times=False)
+    dataset = xarray.open_dataset(filepath, engine="cfgrib", decode_times=False)
     dataset = dataset[model_variables]
 
-
     # convert the dataset and close
-    dataset.to_netcdf(filepath + '.nc')
+    dataset.to_netcdf(filepath + ".nc")
     dataset.close()
 
     # delete old file and any lingering idx files
     remove(filepath)
-    if grib_idx_file := glob(filepath + '*' + '.idx'):
+    if grib_idx_file := glob(filepath + "*" + ".idx"):
         remove(grib_idx_file[0])
 
     # rename to old file name to ensure consistency.
-    rename(filepath + '.nc', filepath)
+    rename(filepath + ".nc", filepath)
+    return None
+
+
+def _convert_grib_to_netcdf_pygrib(filepath: str, model_variables) -> None:
+    """
+    Convert a grib file to a netcdf file
+
+    :param filepath: filepath of the grib file
+    :return: None
+    """
+    grib = pygrib.open(filepath)
+    dataset = xarray.Dataset()
+    for variable in model_variables:
+        message = grib.select(shortName=variable)[0]
+        latitude, longitude = message.latlons()
+        latitude = latitude[:, 0]
+        longitude = longitude[0, :]
+        data = message.values.filled(numpy.nan)
+
+        valid_time = numpy.array([to_datetime64(message.validDate)])
+        time = numpy.array([to_datetime64(message.analDate)])
+        step = message["step"]
+
+        dataset = dataset.assign_coords(
+            {
+                "longitude": longitude,
+                "latitude": latitude,
+                "validtime": valid_time,
+                "time": time,
+                "step": step,
+            }
+        )
+        dataarray = xarray.DataArray(
+            name=variable,
+            data=data.astype("float32"),
+            dims=["latitude", "longitude"],
+            coords={"longitude": longitude, "latitude": latitude},
+        )
+        dataset = dataset.assign({variable: dataarray})
+
+    dataset.to_netcdf(filepath + ".nc")
+    dataset.close()
+
+    # delete old file and any lingering idx files
+    remove(filepath)
+    if grib_idx_file := glob(filepath + "*" + ".idx"):
+        remove(grib_idx_file[0])
+
+    # rename to old file name to ensure consistency.
+    rename(filepath + ".nc", filepath)
     return None

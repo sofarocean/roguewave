@@ -12,8 +12,8 @@ tqdm
 boto3
 xarray
 requests
-cfgrib
 flake8
 pre-commit
 black
 numba
+pygrib

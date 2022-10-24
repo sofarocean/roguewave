@@ -66,7 +66,12 @@ def mem2(
     b2 = b2.reshape(input_shape)
 
     number_of_iterations = a1.shape[0]
-    with ProgressBar(total=number_of_iterations) as progress:
+    if number_of_iterations < 1000:
+        disable = True
+    else:
+        disable = False
+
+    with ProgressBar(total=number_of_iterations, disable=disable) as progress:
         res = func(directions_radians, a1, b1, a2, b2, progress, **kwargs)
 
     return res.reshape(output_shape)
@@ -280,7 +285,7 @@ def mem2_newton(
     a2: typing.Union[numpy.ndarray, float],
     b2: typing.Union[numpy.ndarray, float],
     progress,
-    max_iter=500,
+    max_iter=100,
     atol=1e-2,
     rcond=1e-6,
     approximate=False,
@@ -401,9 +406,9 @@ def estimate_distribution_newton(
     direction_increment: numpy.ndarray,
     twiddle_factors: numpy.ndarray,
     max_iter: int = 100,
-    rcond: float = 1e-6,
+    rcond: float = 1e-3,
     atol: float = 1e-3,
-    max_line_search_depth=32,
+    max_line_search_depth=8,
     approximate=False,
 ) -> numpy.ndarray:
     """
@@ -457,10 +462,12 @@ def estimate_distribution_newton(
         jacobian = _jacobian(
             current_lagrange_multiplier_iterate, twiddle_factors, direction_increment
         )
-        lagrange_multiplier_delta = numpy.linalg.lstsq(
-            jacobian, -current_iterate_func_eval, rcond=rcond
-        )[0]
-        # lagrange_multiplier_delta = numpy.linalg.solve(jacobian, -current_iterate_func_eval)
+        # lagrange_multiplier_delta = numpy.linalg.lstsq(
+        #     jacobian, -current_iterate_func_eval, rcond=rcond
+        # )[0]
+        lagrange_multiplier_delta = numpy.linalg.solve(
+            jacobian, -current_iterate_func_eval
+        )
 
         line_search_factor = 1
 

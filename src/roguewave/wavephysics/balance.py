@@ -1,4 +1,8 @@
-from .generation import WindGeneration, wind_parametrizations, create_wind_source_term
+from roguewave.wavephysics.generation import (
+    WindGeneration,
+    wind_parametrizations,
+    create_wind_source_term,
+)
 from .dissipation import (
     WaveBreaking,
     breaking_parametrization,

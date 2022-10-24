@@ -1,5 +1,5 @@
 """
-Contents: Wind Estimater
+Contents: Wind Estimator
 
 Copyright (C) 2022
 Sofar Ocean Technologies
@@ -9,17 +9,12 @@ Authors: Pieter Bart Smit
 import typing
 import numpy
 from typing import Literal
-from roguewave import FrequencySpectrum
+from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectrum
 from roguewave.wavephysics.balance import SourceTermBalance
-from roguewave.wavespectra import integrate_spectral_data
-from roguewave.wavespectra.spectrum import NAME_F, NAME_D
-from xarray import Dataset, DataArray, where
-from multiprocessing import get_context, cpu_count
-from copy import deepcopy
-from scipy.optimize import brentq
-from tqdm import tqdm
+from xarray import Dataset, where
 from roguewave import logger
-from roguewave.wavephysics.roughnesslength import (
+from roguewave.wavephysics.fluidproperties import AIR
+from roguewave.wavephysics.momentumflux import (
     RoughnessLength,
     create_roughness_length_estimator,
 )
@@ -34,57 +29,55 @@ _direction_convention = Literal[
 def friction_velocity(
     spectrum: FrequencySpectrum,
     method: _methods = "peak",
-    fmin=-1.0,
     fmax=0.5,
     power=4,
     directional_spreading_constant=2.5,
     beta=0.012,
     grav=9.81,
-    numberOfBins=20,
+    number_of_bins=20,
 ) -> Dataset:
     """
 
     :param spectrum:
     :param method:
-    :param fmin:
     :param fmax:
     :param power:
     :param directional_spreading_constant:
     :param beta:
     :param grav:
-    :param numberOfBins:
+    :param number_of_bins:
     :return:
     """
     e, a1, b1 = equilibrium_range_values(
         spectrum,
         method=method,
-        fmin=fmin,
         fmax=fmax,
         power=power,
-        number_of_bins=numberOfBins,
+        number_of_bins=number_of_bins,
     )
 
-    Emean = 8.0 * numpy.pi**3 * e
+    emean = 8.0 * numpy.pi**3 * e
 
     # Get friction velocity from spectrum
-    Ustar = Emean / grav / directional_spreading_constant / beta / 4
+    friction_velocity_estimate = (
+        emean / grav / directional_spreading_constant / beta / 4
+    )
 
     # Estimate direction from tail
-    dir = (180.0 / numpy.pi * numpy.arctan2(b1, a1)) % 360
+    direction = (180.0 / numpy.pi * numpy.arctan2(b1, a1)) % 360
     coords = {x: spectrum.dataset[x].values for x in spectrum.dims_space_time}
     return Dataset(
         data_vars={
-            "friction_velocity": (spectrum.dims_space_time, Ustar),
-            "direction": (spectrum.dims_space_time, dir),
+            "friction_velocity": (spectrum.dims_space_time, friction_velocity_estimate),
+            "direction": (spectrum.dims_space_time, direction),
         },
         coords=coords,
     )
 
 
 def estimate_u10_from_spectrum(
-    spectrum: FrequencySpectrum,
+    spectrum: WaveSpectrum,
     method: _methods = "peak",
-    fmin=-1.0,
     fmax=0.5,
     power=4,
     directional_spreading_constant=2.5,
@@ -93,7 +86,7 @@ def estimate_u10_from_spectrum(
     grav=9.81,
     number_of_bins=20,
     roughness_parametrization: RoughnessLength = None,
-    direction_convention: _direction_convention = "coming_from_clockwise_north",
+    direction_convention: _direction_convention = "going_to_counter_clockwise_east",
 ) -> Dataset:
     #
     # =========================================================================
@@ -132,11 +125,13 @@ def estimate_u10_from_spectrum(
     if roughness_parametrization is None:
         roughness_parametrization = create_roughness_length_estimator()
 
+    if isinstance(spectrum, FrequencyDirectionSpectrum):
+        spectrum = spectrum.as_frequency_spectrum()
+
     # Get friction velocity from spectrum
     dataset = friction_velocity(
         spectrum,
         method,
-        fmin,
         fmax,
         power,
         directional_spreading_constant,
@@ -145,8 +140,8 @@ def estimate_u10_from_spectrum(
         number_of_bins,
     )
     # Find z0 from Charnock Relation
-    z0 = roughness_parametrization.z0(
-        dataset.friction_velocity, spectrum, dataset.direction
+    z0 = roughness_parametrization.roughness(
+        dataset.friction_velocity, spectrum, AIR, dataset.direction
     )
 
     if direction_convention == "coming_from_clockwise_north":
@@ -158,14 +153,13 @@ def estimate_u10_from_spectrum(
 
     # Get the wind speed at U10 from loglaw
     return dataset.assign(
-        {"U10": dataset.friction_velocity / vonkarman_constant * numpy.log(10.0 / z0)}
+        {"u10": dataset.friction_velocity / vonkarman_constant * numpy.log(10.0 / z0)}
     )
 
 
 def equilibrium_range_values(
     spectrum: FrequencySpectrum,
     method: _methods,
-    fmin=0.0293,
     fmax=1.25,
     power=4,
     number_of_bins=20,
@@ -174,7 +168,6 @@ def equilibrium_range_values(
 
     :param spectrum:
     :param method:
-    :param fmin:
     :param fmax:
     :param power:
     :param number_of_bins:
@@ -194,47 +187,47 @@ def equilibrium_range_values(
 
         # Find fmin/fmax
         fmin = 0
-        iMin = numpy.argmin(numpy.abs(spectrum.frequency.values - fmin), axis=-1)
-        iMax = numpy.argmin(numpy.abs(spectrum.frequency.values - fmax), axis=-1)
+        i_min = numpy.argmin(numpy.abs(spectrum.frequency.values - fmin), axis=-1)
+        i_max = numpy.argmin(numpy.abs(spectrum.frequency.values - fmax), axis=-1)
         nf = spectrum.number_of_frequencies
 
-        iMax = iMax + 1 - number_of_bins
-        iMax = numpy.max((iMin + 1, iMax))
-        iMax = numpy.min((iMax, nf - number_of_bins))
+        i_max = i_max + 1 - number_of_bins
+        i_max = numpy.max((i_min + 1, i_max))
+        i_max = numpy.min((i_max, nf - number_of_bins))
 
-        iCounter = 0
+        i_counter = 0
         shape = list(spectrum.shape())
-        shape[-1] = iMax - iMin
-        Variance = numpy.zeros(shape) + numpy.inf
+        shape[-1] = i_max - i_min
+        variance = numpy.zeros(shape) + numpy.inf
 
         #
         # Calculate the variance with respect to a running average mean of numberOfBins
         #
-        for iFreq in range(iMin, iMax):
+        for iFreq in range(i_min, i_max):
             #
             # Ensure we do not go out of bounds
             iiu = numpy.min((iFreq + number_of_bins, nf))
 
             # Ensure there are no 0 contributions (essentially no data)
-            M = scaled_spec[..., iFreq:iiu].mean(dim="frequency")
-            Variance[..., iCounter] = ((scaled_spec[..., iFreq:iiu] - M) ** 2).mean(
+            m = scaled_spec[..., iFreq:iiu].mean(dim="frequency")
+            variance[..., i_counter] = ((scaled_spec[..., iFreq:iiu] - m) ** 2).mean(
                 dim="frequency"
-            ) / (M**2)
-            iCounter = iCounter + 1
+            ) / (m**2)
+            i_counter = i_counter + 1
             #
         #
-        iMinVariance = numpy.argmin(Variance, axis=-1) + iMin
+        i_min_variance = numpy.argmin(variance, axis=-1) + i_min
 
-        e = numpy.zeros(iMinVariance.shape)
-        a1 = numpy.zeros(iMinVariance.shape)
-        b1 = numpy.zeros(iMinVariance.shape)
+        e = numpy.zeros(i_min_variance.shape)
+        a1 = numpy.zeros(i_min_variance.shape)
+        b1 = numpy.zeros(i_min_variance.shape)
 
         index = numpy.array(list(range(0, spectrum.number_of_spectra)))
-        index = numpy.unravel_index(index, iMinVariance.shape)
-        iMinVariance = iMinVariance.flatten()
+        index = numpy.unravel_index(index, i_min_variance.shape)
+        i_min_variance = i_min_variance.flatten()
 
         for ii in range(0, number_of_bins):
-            jj = numpy.clip(iMinVariance + ii, a_min=0, a_max=nf - 1 - number_of_bins)
+            jj = numpy.clip(i_min_variance + ii, a_min=0, a_max=nf - 1 - number_of_bins)
 
             indexer = tuple([ind for ind in index] + [jj])
 
@@ -249,115 +242,55 @@ def equilibrium_range_values(
         return e, a1, b1
 
 
-def _worker(args):
-    balance: SourceTermBalance = args[0]
-    spec: FrequencySpectrum = args[1]
-    direction: DataArray = args[2]
-
-    spec2d = spec.as_frequency_direction_spectrum(36)
-
-    def func(U10):
-        return balance.evaluate_bulk_imbalance(U10, direction, spec2d).values[0]
-
-    lower_bound = 0
-    upper_bound = 100
-    if func(0) * func(100) > 0:
-        return numpy.nan
-    return brentq(func, a=lower_bound, b=upper_bound)
-
-
 def estimate_u10_from_source_terms(
-    spectrum: FrequencySpectrum, balance: SourceTermBalance, method="newton", **kwargs
+    spectrum: FrequencyDirectionSpectrum,
+    balance: SourceTermBalance,
+    roughness: RoughnessLength,
+    method="newton",
+    **kwargs,
 ) -> Dataset:
     if method == "newton":
-        return _estimate_u10_from_source_terms_newton(spectrum, balance, **kwargs)
-    elif method == "brentq":
-        return _estimate_u10_from_source_terms_brentq(spectrum, balance, **kwargs)
+        return _estimate_u10_from_source_terms_newton(
+            spectrum, balance, roughness, **kwargs
+        )
     else:
         raise ValueError("unknown method")
 
 
-def _estimate_u10_from_source_terms_brentq(
-    spectrum: FrequencySpectrum, balance: SourceTermBalance, parallel=False
-):
-    observed = estimate_u10_from_spectrum(
-        spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
-    )
-    wind_direction = observed["direction"]
-
-    if parallel:
-        # We have to force a load from disc if we want to use multiprocessing.
-        spectrum.dataset.load()
-
-    number_of_spectra = spectrum.number_of_spectra
-    work = []
-    for ii in range(number_of_spectra):
-        spec = spectrum[slice(ii, ii + 1, 1), :]
-        work.append((deepcopy(balance), spec, wind_direction[ii]))
-    if parallel:
-        with get_context("spawn").Pool(processes=cpu_count()) as pool:
-            out = list(tqdm(pool.imap(_worker, work), total=number_of_spectra))
-    else:
-        out = list(tqdm(map(_worker, work), total=number_of_spectra))
-
-    u10 = DataArray(
-        data=numpy.array(out),
-        dims=spectrum.dims_space_time,
-        coords={x: spectrum.dataset[x].values for x in spectrum.dims_space_time},
-    )
-    dataset = Dataset()
-    return dataset.assign({"U10": u10, "direction": wind_direction})
-
-
 def _estimate_u10_from_source_terms_newton(
-    spectrum: FrequencySpectrum,
+    spectrum: FrequencyDirectionSpectrum,
     balance: SourceTermBalance,
+    roughness: RoughnessLength,
     atol=1e-3,
     rtol=1e-3,
     max_iter=100,
 ):
-    # Create two-dimensional spectra
-    spec2d = spectrum.as_frequency_direction_spectrum(36, method="approximate")
-
-    # Estimate the dissipation
-    dissipation_2d = balance.dissipation.rate(spec2d)
-    dissipation_bulk = integrate_spectral_data(dissipation_2d, dims=[NAME_F, NAME_D])
-
-    # Disspation weighted average wave number to guestimate the wind direction. Note dissipation is negative- hence the
-    # minus signs.
-    kx = -integrate_spectral_data(
-        balance.dissipation.rate(spec2d)
-        * spec2d.wavenumber
-        * numpy.cos(spec2d.radian_direction),
-        dims=[NAME_F, NAME_D],
-    )
-    ky = -integrate_spectral_data(
-        balance.dissipation.rate(spec2d)
-        * spec2d.wavenumber
-        * numpy.sin(spec2d.radian_direction),
-        dims=[NAME_F, NAME_D],
-    )
-
     # Estimate the wind direction. Note this is our _final_ estimate of the wind direction.
-    wind_direction = (numpy.arctan2(ky, kx) * 180 / numpy.pi) % 360
+    wind_direction = balance.dissipation.mean_direction_degrees(spectrum)
+
+    dissipation_bulk = balance.dissipation.bulk_rate(spectrum)
 
     # Define the iteration function
     def func(u10):
+        roughness_length = roughness.roughness_from_speed(
+            u10, 10, spectrum, wind_direction
+        )
         return (
-            balance.generation.bulk_rate(u10, wind_direction, spec2d) + dissipation_bulk
+            balance.generation.bulk_rate(
+                u10, wind_direction, spectrum, roughness_length
+            )
+            + dissipation_bulk
         )
 
-    # Our first guess is the wind estimate based on the peak equilibriun range approximation
+    # Our first guess is the wind estimate based on the peak equilibrium range approximation
     cur_iter = estimate_u10_from_spectrum(
         spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
-    )["U10"]
-    prev_iter = cur_iter + 0.01
+    )["u10"]
 
     numerical_wind_speed_delta = 0.01
     logger.info("Estimating U10 from balance.")
-    max_iter = 20
     for ii in range(0, max_iter):
-        # Evalute the function at the current iterate
+        # Evaluate the function at the current iterate
         cur_func = func(cur_iter)
 
         # Note- actually numerically evaluating the derivative is more stable than a
@@ -366,7 +299,7 @@ def _estimate_u10_from_source_terms_newton(
             func(cur_iter + numerical_wind_speed_delta) - cur_func
         ) / numerical_wind_speed_delta
 
-        # only update where the derivate is not equal to zero (points with no dissipation)
+        # only update where the derivative is not equal to zero (points with no dissipation)
         updated_guess = where(
             derivative == 0, cur_iter, cur_iter - cur_func / derivative
         )
@@ -397,16 +330,14 @@ def _estimate_u10_from_source_terms_newton(
             break
 
         else:
-            msg = f" - iteration {ii+1:03d} out of {max_iter}, converged in {numpy.sum(converged)/len(converged) * 100} percent of points."
-            # print( cur_iter.values,cur_func.values)
+            msg = (
+                f" - iteration {ii + 1:03d} out of {max_iter}, converged in "
+                f"{numpy.sum(converged) / len(converged) * 100} percent of points."
+            )
             logger.info(msg)
-            # index = numpy.arange(len(converged))[~converged.flatten()]
-            # indices = numpy.unravel_index(index, cur_iter.shape)
-            # if ii==max_iter-1:
-            #     spc = spectrum[indices[0][0],indices[1][0],:].save_as_netcdf('temp4.nc')
+
     else:
-        # raise ValueError(f'No convergence after {max_iter} iterations')
-        pass
+        raise ValueError(f"No convergence after {max_iter} iterations")
 
     dataset = Dataset()
-    return dataset.assign({"U10": cur_iter, "direction": wind_direction})
+    return dataset.assign({"u10": cur_iter, "direction": wind_direction})

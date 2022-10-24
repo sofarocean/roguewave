@@ -36,6 +36,7 @@ from roguewave.wavespectra import (
     load_spectrum_from_netcdf,
     WaveSpectrum,
     integrate_spectral_data,
+    SPECTRAL_DIMS,
 )
 
 # IO

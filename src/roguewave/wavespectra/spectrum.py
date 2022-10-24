@@ -937,7 +937,7 @@ class FrequencySpectrum(WaveSpectrum):
         return FrequencySpectrum(interpolated_data)
 
     def as_frequency_direction_spectrum(
-        self, number_of_directions, method="newton"
+        self, number_of_directions, method="approximate"
     ) -> "FrequencyDirectionSpectrum":
 
         direction = numpy.linspace(0, 360, number_of_directions, endpoint=False)

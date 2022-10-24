@@ -80,7 +80,6 @@ def colocate_model_spotter(
         cache_name=cache_name,
     )
 
-    model_time = None
     for spotter_id in spotters:
         s = spotters[spotter_id]  # type: DataFrame
         m = model[spotter_id]  # type: DataFrame

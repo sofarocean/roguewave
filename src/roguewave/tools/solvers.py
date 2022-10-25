@@ -3,7 +3,7 @@ from xarray import DataArray
 from numpy import inf, isfinite, abs, all, sum, max
 import xarray
 import numpy
-from typing import TypeVar, Callable
+from typing import TypeVar, Callable, List
 from roguewave.log import logger
 
 _T = TypeVar("_T", ArrayLike, DataArray)
@@ -12,6 +12,37 @@ _T = TypeVar("_T", ArrayLike, DataArray)
 def fixed_point_iteration(
     function: Callable[[_T], _T],
     guess: _T,
+    bounds=(-inf, inf),
+    max_iter=100,
+    atol: float = 1e-4,
+    rtol: float = 1e-4,
+    caller: str = None,
+    aitken_accelerate=True,
+    fraction_of_points=1,
+    error_if_not_converged=True,
+) -> _T:
+    iterates = [guess, guess, guess]
+
+    def _func(iterates):
+        return function(iterates[2])
+
+    return _fixed_point_iteration(
+        _func,
+        iterates,
+        bounds,
+        max_iter,
+        atol,
+        rtol,
+        caller,
+        aitken_accelerate,
+        fraction_of_points,
+        error_if_not_converged,
+    )
+
+
+def _fixed_point_iteration(
+    function: Callable[[List[_T]], _T],
+    iterates: List[_T],
     bounds=(-inf, inf),
     max_iter=100,
     atol: float = 1e-4,
@@ -35,8 +66,8 @@ def fixed_point_iteration(
     :param caller:
     :return:
     """
+    guess = iterates[2]
     msk = numpy.isfinite(guess)
-    iterates = [guess, guess, guess]
     is_dataarray = isinstance(guess, DataArray)
     if is_dataarray:
         where = xarray.where
@@ -48,6 +79,7 @@ def fixed_point_iteration(
 
     msg = "Starting solver"
     logger.info(msg)
+
     for current_iteration in range(1, max_iter + 1):
         # Update iterate
         aitken_step = aitken_accelerate and current_iteration % 3 == 0
@@ -58,8 +90,7 @@ def fixed_point_iteration(
                 iterates[2] - iterates[1]
             )
         else:
-            # Fixed point iteration
-            next_iterate = function(iterates[2])
+            next_iterate = function(iterates)
 
         # Bounds check
         if isfinite(bounds[0]):
@@ -82,7 +113,9 @@ def fixed_point_iteration(
 
         # Convergence check
         absolute_difference = (abs(iterates[2] - iterates[1]))[msk]
-        relative_difference = absolute_difference / abs(iterates[2][msk])
+
+        scale = numpy.maximum(abs(iterates[1][msk]), atol)
+        relative_difference = absolute_difference / scale
         converged = (absolute_difference < atol) & (relative_difference < rtol)
 
         max_abs_error = max(absolute_difference)
@@ -120,3 +153,45 @@ def fixed_point_iteration(
             logger.info(msg)
 
     return iterates[2]
+
+
+def secant(
+    function: Callable[[_T], _T],
+    guess: _T,
+    bounds=(-inf, inf),
+    max_iter=100,
+    atol: float = 1e-4,
+    rtol: float = 1e-4,
+    caller: str = None,
+    aitken_accelerate=True,
+    fraction_of_points=1,
+    error_if_not_converged=True,
+) -> _T:
+
+    iterates = [guess, guess + 0.00001, guess]
+    func_evals = [(iterates[1], function(iterates[1]))]
+
+    def _func(iterates):
+        prev_val, prev_func = func_evals.pop()
+
+        # Ensure the iterate and the prev func are in sync. During an Aitken update they may go out of sync
+        if prev_val is not iterates[1]:
+            prev_func = function(iterates[1])
+
+        cur_func = function(iterates[2])
+        derivative = (cur_func - prev_func) / (iterates[2] - iterates[1])
+        func_evals.append((iterates[2], cur_func))
+        return iterates[2] - cur_func / derivative
+
+    return _fixed_point_iteration(
+        _func,
+        iterates,
+        bounds,
+        max_iter,
+        atol,
+        rtol,
+        caller,
+        aitken_accelerate,
+        fraction_of_points,
+        error_if_not_converged,
+    )

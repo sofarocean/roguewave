@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewave",
-    version="0.1.77",
+    version="0.1.78",
     license="Apache 2 License",
     install_requires=[
         "pysofar>=0.1.13",

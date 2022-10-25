@@ -17,3 +17,5 @@ pre-commit
 black
 numba
 pygrib
+numba_progress
+scipy

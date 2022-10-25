@@ -1,8 +1,17 @@
-from roguewave.wavespectra.spectrum import FrequencyDirectionSpectrum, FrequencySpectrum
-from typing import Sequence, TypeVar
-from xarray import concat, Dataset
+from roguewave.wavespectra.spectrum import (
+    FrequencyDirectionSpectrum,
+    FrequencySpectrum,
+    NAME_D,
+    NAME_F,
+    SPECTRAL_DIMS,
+)
+from roguewave.tools.math import wrapped_difference
+from typing import Sequence, TypeVar, Union, Literal
+from xarray import concat, Dataset, DataArray
+from numpy import diff
 
 _T = TypeVar("_T", FrequencySpectrum, FrequencyDirectionSpectrum)
+spec_dims = Literal["frequency", "direction"]
 
 
 def concatenate_spectra(spectra: Sequence[_T], dim, **kwargs) -> _T:
@@ -32,3 +41,37 @@ def concatenate_spectra(spectra: Sequence[_T], dim, **kwargs) -> _T:
 
     # Return a class instance.
     return cls(dataset)
+
+
+def integrate_spectral_data(
+    dataset: DataArray, dims: Union[spec_dims, Sequence[spec_dims]]
+):
+    if isinstance(dims, str):
+        dims = [dims]
+
+    for dim in dims:
+        if dim not in SPECTRAL_DIMS:
+            raise ValueError(
+                f"Dimension {dim} is not a spectral dimension, options are {NAME_F} or {NAME_D}"
+            )
+
+        if dim not in dataset.coords:
+            raise ValueError(
+                f"Dataset has no {dim} dimension, dimensions are: {list(dataset.dims)}"
+            )
+
+    out = dataset
+    if NAME_F in dims:
+        out = out.fillna(0).integrate(coord=NAME_F)
+
+    if NAME_D in dims:
+        difference = DataArray(
+            data=wrapped_difference(
+                diff(dataset.direction.values, append=dataset.direction[0]), period=360
+            ),
+            coords={NAME_D: dataset.direction.values},
+            dims=[NAME_D],
+        )
+        out = (out * difference).sum(dim=NAME_D)
+
+    return out

@@ -439,12 +439,12 @@ def estimate_distribution_newton(
         jacobian = _jacobian(
             current_lagrange_multiplier_iterate, twiddle_factors, direction_increment
         )
-        # lagrange_multiplier_delta = numpy.linalg.lstsq(
-        #     jacobian, -current_iterate_func_eval, rcond=rcond
-        # )[0]
-        lagrange_multiplier_delta = numpy.linalg.solve(
-            jacobian, -current_iterate_func_eval
-        )
+        lagrange_multiplier_delta = numpy.linalg.lstsq(
+            jacobian, -current_iterate_func_eval, rcond=rcond
+        )[0]
+        # lagrange_multiplier_delta = numpy.linalg.solve(
+        #     jacobian, -current_iterate_func_eval
+        # )
 
         line_search_factor = 1
 

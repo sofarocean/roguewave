@@ -943,7 +943,7 @@ class FrequencySpectrum(WaveSpectrum):
         self,
         number_of_directions,
         method: Estimators = "mem2",
-        solution_method="newton",
+        solution_method="scipy",
     ) -> "FrequencyDirectionSpectrum":
 
         direction = numpy.linspace(0, 360, number_of_directions, endpoint=False)

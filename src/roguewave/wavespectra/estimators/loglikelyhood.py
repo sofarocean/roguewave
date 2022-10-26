@@ -2,8 +2,39 @@ import numpy
 from qpsolvers import solve_ls
 from .utils import get_direction_increment, get_rhs, get_constraint_matrix
 
-def log_likelyhood(directions_radians: numpy.ndarray, a1, b1, a2,
-                     b2) -> numpy.ndarray:
+
+def log_likelyhood(
+    directions_radians: numpy.ndarray,
+    a1: numpy.ndarray,
+    b1: numpy.ndarray,
+    a2: numpy.ndarray,
+    b2: numpy.ndarray,
+    progress,
+    **kwargs
+) -> numpy.ndarray:
+    number_of_frequencies = a1.shape[-1]
+    number_of_points = a1.shape[0]
+
+    directional_distribution = numpy.zeros(
+        (number_of_points, number_of_frequencies, len(directions_radians))
+    )
+
+    for ipoint in range(0, number_of_points):
+        progress.update(1)
+        directional_distribution[ipoint, :, :] = _log_likelyhood(
+            directions_radians,
+            a1[
+                ipoint,
+                :,
+            ],
+            b1[ipoint, :],
+            a2[ipoint, :],
+            b2[ipoint, :],
+        )
+    return directional_distribution
+
+
+def _log_likelyhood(directions_radians: numpy.ndarray, a1, b1, a2, b2) -> numpy.ndarray:
     """
     Return the directional distribution that minimizes the variance (D**2)
     constrained by given observed directional moments,
@@ -44,7 +75,8 @@ def log_likelyhood(directions_radians: numpy.ndarray, a1, b1, a2,
 
     number_of_frequencies = len(a1)
     directional_distribution = numpy.zeros(
-        (number_of_frequencies, len(directions_radians)))
+        (number_of_frequencies, len(directions_radians))
+    )
 
     constraint_matrix = get_constraint_matrix(directions_radians)
     rhs = get_rhs(a1, b1, a2, b2)
@@ -52,20 +84,24 @@ def log_likelyhood(directions_radians: numpy.ndarray, a1, b1, a2,
 
     zeros = numpy.zeros_like(directions_radians)
     direction_increment = get_direction_increment(directions_radians)
-    upperbound = numpy.ones_like(
-        directions_radians) / direction_increment.min()
+    upperbound = numpy.ones_like(directions_radians) / direction_increment.min()
 
     for ifreq in range(0, number_of_frequencies):
-        res = solve_ls(R=identity_matrix, s=zeros,
-                       # minimizing |Rx-b|**2
-                       lb=zeros, ub=upperbound,
-                       # lb: non-negative; ub: binwidth * ub = 1
-                       A=constraint_matrix, b=rhs[ifreq, :], verbose=False
-                       # with hard constraint that Ax=b
-                       )
+        res = solve_ls(
+            R=identity_matrix,
+            s=zeros,
+            # minimizing |Rx-b|**2
+            lb=zeros,
+            ub=upperbound,
+            # lb: non-negative; ub: binwidth * ub = 1
+            A=constraint_matrix,
+            b=rhs[ifreq, :],
+            verbose=False
+            # with hard constraint that Ax=b
+        )
 
         if res is None:
-            raise Exception('No solution')
+            raise Exception("No solution")
 
         directional_distribution[ifreq, :] = res
 

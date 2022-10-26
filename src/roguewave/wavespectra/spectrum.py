@@ -9,7 +9,10 @@ from roguewave.wavetheory.lineardispersion import (
     inverse_intrinsic_dispersion_relation,
     intrinsic_group_velocity,
 )
-from roguewave.wavespectra.estimators import mem2
+from roguewave.wavespectra.estimators import (
+    estimate_directional_distribution,
+    Estimators,
+)
 from typing import Iterator, Hashable, TypeVar, Union, List, Literal
 from xarray import Dataset, DataArray, open_dataset, concat, ones_like, where
 from xarray.core.coordinates import DatasetCoordinates
@@ -937,23 +940,24 @@ class FrequencySpectrum(WaveSpectrum):
         return FrequencySpectrum(interpolated_data)
 
     def as_frequency_direction_spectrum(
-        self, number_of_directions, method="approximate"
+        self,
+        number_of_directions,
+        method: Estimators = "mem2",
+        solution_method="newton",
     ) -> "FrequencyDirectionSpectrum":
 
         direction = numpy.linspace(0, 360, number_of_directions, endpoint=False)
-        radian_direction = direction * numpy.pi / 180
 
         output_array = (
-            mem2(
-                radian_direction,
+            estimate_directional_distribution(
                 self.a1.values,
                 self.b1.values,
                 self.a2.values,
                 self.b2.values,
+                direction,
                 method=method,
+                solution_method=solution_method,
             )
-            * numpy.pi
-            / 180
             * self.e.values[..., None]
         )
 

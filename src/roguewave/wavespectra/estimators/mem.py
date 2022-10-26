@@ -1,9 +1,42 @@
 import numpy
-import typing
 
-def mem(directions_radians: numpy.ndarray, a1: numpy.ndarray,
-        b1: numpy.ndarray, a2: numpy.ndarray,
-        b2: numpy.ndarray) -> numpy.ndarray:
+
+def mem(
+    directions_radians: numpy.ndarray,
+    a1: numpy.ndarray,
+    b1: numpy.ndarray,
+    a2: numpy.ndarray,
+    b2: numpy.ndarray,
+    progress,
+    **kwargs
+) -> numpy.ndarray:
+
+    number_of_frequencies = a1.shape[-1]
+    number_of_points = a1.shape[0]
+
+    directional_distribution = numpy.zeros(
+        (number_of_points, number_of_frequencies, len(directions_radians))
+    )
+
+    for ipoint in range(0, number_of_points):
+        progress.update(1)
+        directional_distribution[ipoint, :, :] = _mem(
+            directions_radians,
+            a1[ipoint, :],
+            b1[ipoint, :],
+            a2[ipoint, :],
+            b2[ipoint, :],
+        )
+    return directional_distribution
+
+
+def _mem(
+    directions_radians: numpy.ndarray,
+    a1: numpy.ndarray,
+    b1: numpy.ndarray,
+    a2: numpy.ndarray,
+    b2: numpy.ndarray,
+) -> numpy.ndarray:
     """
     This function uses the maximum entropy method by Lygre and Krogstadt (1986,JPO)
     to estimate the directional shape of the spectrum. Enthropy is defined in the
@@ -42,12 +75,6 @@ def mem(directions_radians: numpy.ndarray, a1: numpy.ndarray,
     d1 = a1; d2 =b1; d3 = a2 and d4=b2 in the defining equations 10.
     """
 
-    # Ensure that these are numpy arrays
-    a1 = numpy.atleast_1d(a1)
-    b1 = numpy.atleast_1d(b1)
-    a2 = numpy.atleast_1d(a2)
-    b2 = numpy.atleast_1d(b2)
-
     number_of_directions = len(directions_radians)
 
     c1 = a1 + 1j * b1
@@ -61,15 +88,15 @@ def mem(directions_radians: numpy.ndarray, a1: numpy.ndarray,
     e1 = numpy.exp(-directions_radians * 1j)
     e2 = numpy.exp(-directions_radians * 2j)
 
-    numerator = (1 - Phi1 * numpy.conj(c1) - Phi2 * numpy.conj(c2))
-    denominator = numpy.abs(1 - Phi1[:, None] * e1[None, :]
-                            - Phi2[:, None] * e2[None, :]) ** 2
+    numerator = 1 - Phi1 * numpy.conj(c1) - Phi2 * numpy.conj(c2)
+    denominator = (
+        numpy.abs(1 - Phi1[:, None] * e1[None, :] - Phi2[:, None] * e2[None, :]) ** 2
+    )
 
     D = numpy.real(numerator[:, None] / denominator) / numpy.pi / 2
 
     # Normalize to 1. in discrete sense
-    integralApprox = numpy.sum(D,
-                               axis=-1) * numpy.pi * 2. / number_of_directions
+    integralApprox = numpy.sum(D, axis=-1) * numpy.pi * 2.0 / number_of_directions
     D = D / integralApprox[:, None]
 
     return numpy.squeeze(D)

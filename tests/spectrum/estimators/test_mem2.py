@@ -78,8 +78,12 @@ def test_mem2():
 
     spec2d = get_2d_spec()
     spec1d = spec2d.as_frequency_spectrum()
-    reconstructed_scipy = spec1d.as_frequency_direction_spectrum(36, method="scipy")
-    reconstructed_newton = spec1d.as_frequency_direction_spectrum(36, method="newton")
+    reconstructed_scipy = spec1d.as_frequency_direction_spectrum(
+        36, method="mem2", solution_method="scipy"
+    )
+    reconstructed_newton = spec1d.as_frequency_direction_spectrum(
+        36, method="mem2", solution_method="newton"
+    )
     for moment in moments:
         x = getattr(spec2d, moment)
         y = getattr(reconstructed_scipy, moment)
@@ -98,7 +102,7 @@ def test_mem2():
 
 
 def test_estimate_distribution_newton():
-    for icase in range(0, 5):
+    for icase in range(0, 4):
         moments, directions_radians, direction_increment, twiddle_factors = get_case(
             icase
         )

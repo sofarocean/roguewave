@@ -17,7 +17,6 @@ from scipy.optimize import root
 import typing
 from roguewave.wavespectra.estimators.utils import get_direction_increment
 from numba import njit, generated_jit, types, prange
-from numba_progress import ProgressBar
 
 
 def mem2(
@@ -26,7 +25,8 @@ def mem2(
     b1: typing.Union[numpy.ndarray, float],
     a2: typing.Union[numpy.ndarray, float],
     b2: typing.Union[numpy.ndarray, float],
-    method="newton",
+    progress,
+    solution_method="newton",
 ) -> numpy.ndarray:
     """
 
@@ -35,46 +35,26 @@ def mem2(
     :param b1:
     :param a2:
     :param b2:
-    :param method:
+    :param solution_method:
     :return:
     """
 
-    if method == "scipy":
+    if solution_method == "scipy":
         func = mem2_scipy_root_finder
         kwargs = {}
 
-    elif method == "newton":
+    elif solution_method == "newton":
         func = mem2_newton
         kwargs = {}
 
-    elif method == "approximate":
+    elif solution_method == "approximate":
         func = mem2_newton
         kwargs = {"approximate": True}
 
     else:
         raise ValueError("Unknown method")
 
-    output_shape = list(a1.shape) + [len(directions_radians)]
-    if a1.ndim == 1:
-        input_shape = [1, a1.shape[-1]]
-    else:
-        input_shape = [numpy.prod(a1.shape[0:-1]), a1.shape[-1]]
-
-    a1 = a1.reshape(input_shape)
-    b1 = b1.reshape(input_shape)
-    a2 = a2.reshape(input_shape)
-    b2 = b2.reshape(input_shape)
-
-    number_of_iterations = a1.shape[0]
-    if number_of_iterations < 1000:
-        disable = True
-    else:
-        disable = False
-
-    with ProgressBar(total=number_of_iterations, disable=disable) as progress:
-        res = func(directions_radians, a1, b1, a2, b2, progress, **kwargs)
-
-    return res.reshape(output_shape)
+    return func(directions_radians, a1, b1, a2, b2, progress, **kwargs)
 
 
 @njit(cache=True)
@@ -84,10 +64,7 @@ def moment_constraints(lambdas, twiddle_factors, moments, direction_increment):
 
     :param lambdas:
     :param twiddle_factors:
-    :param a1:
-    :param b1:
-    :param a2:
-    :param b2:
+    :param moments
     :param direction_increment:
     :return:
     """

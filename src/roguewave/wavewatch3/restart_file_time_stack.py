@@ -225,7 +225,7 @@ class RestartFileTimeStack:
             mask = index >= 0
 
             output[mask, :, :] = numpy.squeeze(
-                self.__getitem__((time_index[mask], index[mask]))["variance_density"]
+                self.__getitem__((time_index[mask], index[mask])).variance_density
             )
             output[~mask, :, :] = numpy.nan
             return output

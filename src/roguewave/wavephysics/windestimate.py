@@ -11,13 +11,13 @@ import numpy
 from typing import Literal
 from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectrum
 from roguewave.wavephysics.balance import SourceTermBalance
-from xarray import Dataset, where
-from roguewave import logger
+from xarray import Dataset
 from roguewave.wavephysics.fluidproperties import AIR
 from roguewave.wavephysics.momentumflux import (
     RoughnessLength,
     create_roughness_length_estimator,
 )
+from roguewave.tools.solvers import newton_raphson, Configuration
 
 _methods = Literal["peak", "mean"]
 _charnock_parametrization = Literal["constant", "voermans15", "voermans16"]
@@ -247,11 +247,12 @@ def estimate_u10_from_source_terms(
     balance: SourceTermBalance,
     roughness: RoughnessLength,
     method="newton",
+    solver_configuration: Configuration = None,
     **kwargs,
 ) -> Dataset:
     if method == "newton":
         return _estimate_u10_from_source_terms_newton(
-            spectrum, balance, roughness, **kwargs
+            spectrum, balance, roughness, solver_configuration, **kwargs
         )
     else:
         raise ValueError("unknown method")
@@ -261,83 +262,40 @@ def _estimate_u10_from_source_terms_newton(
     spectrum: FrequencyDirectionSpectrum,
     balance: SourceTermBalance,
     roughness: RoughnessLength,
-    atol=1e-3,
-    rtol=1e-3,
-    max_iter=100,
+    solver_configuration: Configuration = None,
+    **kwargs,
 ):
     # Estimate the wind direction. Note this is our _final_ estimate of the wind direction.
     wind_direction = balance.dissipation.mean_direction_degrees(spectrum)
-
     dissipation_bulk = balance.dissipation.bulk_rate(spectrum)
 
+    if solver_configuration is None:
+        solver_configuration = Configuration(atol=1.0e-2, rtol=1.0e-3)
+
+    guess = None
     # Define the iteration function
+    memoize = {}
+
     def func(u10):
+        nonlocal guess
         roughness_length = roughness.roughness_from_speed(
-            u10, 10, spectrum, wind_direction
+            u10, 10, spectrum, wind_direction, guess=guess
         )
+        guess = roughness_length
         return (
             balance.generation.bulk_rate(
-                u10, wind_direction, spectrum, roughness_length
+                u10, wind_direction, spectrum, roughness_length, memoized=memoize
             )
             + dissipation_bulk
         )
 
     # Our first guess is the wind estimate based on the peak equilibrium range approximation
-    cur_iter = estimate_u10_from_spectrum(
+    guess = estimate_u10_from_spectrum(
         spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
     )["u10"]
-
-    numerical_wind_speed_delta = 0.01
-    logger.info("Estimating U10 from balance.")
-    for ii in range(0, max_iter):
-        # Evaluate the function at the current iterate
-        cur_func = func(cur_iter)
-
-        # Note- actually numerically evaluating the derivative is more stable than a
-        # newton-raphson iteration. This does slow things down though.
-        derivative = (
-            func(cur_iter + numerical_wind_speed_delta) - cur_func
-        ) / numerical_wind_speed_delta
-
-        # only update where the derivative is not equal to zero (points with no dissipation)
-        updated_guess = where(
-            derivative == 0, cur_iter, cur_iter - cur_func / derivative
-        )
-
-        # if the updated guess is negative- put the next iterate half way between 0 and the current iterate
-        updated_guess = where(updated_guess > 0, updated_guess, 0.5 * cur_iter)
-
-        # Ignore points where dissipation is zero
-        updated_guess = where(numpy.abs(dissipation_bulk) == 0.0, 0, updated_guess)
-
-        # Update current/previous iterate labels
-        prev_iter = cur_iter
-        cur_iter = updated_guess
-
-        # Check for convergence, but only for points with finite values
-        relative_update = numpy.abs(cur_iter - prev_iter) / cur_iter
-        msk = numpy.isfinite(cur_func.values)
-        converged = (
-            (numpy.abs(cur_func.values[msk]) < atol)
-            & (
-                numpy.abs(cur_func.values[msk])
-                <= numpy.abs(dissipation_bulk.values[msk]) * rtol
-            )
-        ) | (numpy.abs(relative_update.values[msk]) < rtol)
-        if numpy.all(converged):
-            msg = f" - iteration {ii + 1:03d} out of {max_iter}, converged."
-            logger.info(msg)
-            break
-
-        else:
-            msg = (
-                f" - iteration {ii + 1:03d} out of {max_iter}, converged in "
-                f"{numpy.sum(converged) / len(converged) * 100} percent of points."
-            )
-            logger.info(msg)
-
-    else:
-        raise ValueError(f"No convergence after {max_iter} iterations")
+    u10_estimate = newton_raphson(
+        func, guess, bounds=(0, numpy.inf), configuration=solver_configuration
+    )
 
     dataset = Dataset()
-    return dataset.assign({"u10": cur_iter, "direction": wind_direction})
+    return dataset.assign({"u10": u10_estimate, "direction": wind_direction})

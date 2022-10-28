@@ -90,6 +90,7 @@ class Janssen(RoughnessLength):
         direction_degrees=None,
         air: FluidProperties = AIR,
         water: FluidProperties = WATER,
+        guess=None,
         **kwargs
     ) -> DataArray:
 
@@ -99,10 +100,13 @@ class Janssen(RoughnessLength):
         if not isinstance(spectrum, FrequencyDirectionSpectrum):
             raise ValueError("2D spectrum must be specified")
 
-        friction_velocity_guess = sqrt(self.drag_coefficient_estimate(speed)) * speed
-        roughness_length_guess = self._charnock.roughness(
-            friction_velocity_guess, spectrum, air, direction_degrees
-        )
+        if guess is None:
+            friction_velocity_guess = (
+                sqrt(self.drag_coefficient_estimate(speed)) * speed
+            )
+            guess = self._charnock.roughness(
+                friction_velocity_guess, spectrum, air, direction_degrees
+            )
 
         def iteration_function(roughness_length):
             friction_velocity = (
@@ -120,14 +124,11 @@ class Janssen(RoughnessLength):
                 self.gravitational_acceleration,
             )
             stress_ratio = wave_stress / (air.density * friction_velocity**2)
-
             return self._charnock.form_drag(
                 friction_velocity, spectrum, direction_degrees
             ) / sqrt(1 - stress_ratio) + self.smooth(friction_velocity, air)
 
-        return fixed_point_iteration(
-            iteration_function, roughness_length_guess, bounds=(0, inf)
-        )
+        return fixed_point_iteration(iteration_function, guess, bounds=(0, inf))
 
     def wave_supported_stress(
         self,

@@ -7,7 +7,7 @@ from roguewave.wavephysics.fluidproperties import (
 )
 from roguewave.tools.solvers import fixed_point_iteration
 from xarray import DataArray, zeros_like
-from numpy import log, inf
+from numpy import log, inf, sqrt, exp
 from abc import ABC, abstractmethod
 
 
@@ -42,12 +42,15 @@ class RoughnessLength(ABC):
         direction_degrees=None,
         air: FluidProperties = AIR,
         water: FluidProperties = WATER,
+        guess=None,
         **kwargs
     ) -> DataArray:
         if issubclass(type(spectrum), FrequencySpectrum):
             spectrum = spectrum.as_frequency_direction_spectrum(36)
 
-        guess = elevation / 100 + 0 * speed
+        if guess is None:
+            drag = sqrt(self.drag_coefficient_estimate(speed))
+            guess = 10 / exp(air.vonkarman_constant / drag)
 
         def _func(roughness):
             friction_velocity = (

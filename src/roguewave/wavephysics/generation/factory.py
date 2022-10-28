@@ -2,7 +2,7 @@ from typing import Literal
 from roguewave.wavephysics.generation.st4 import ST4
 from roguewave.wavephysics.generation.st6 import ST6
 
-wind_parametrizations = Literal["st6", "st4"]
+wind_parametrizations = Literal["st6", "st4", "st4_swell"]
 
 
 def create_wind_source_term(

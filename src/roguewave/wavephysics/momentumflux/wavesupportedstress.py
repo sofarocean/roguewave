@@ -11,7 +11,7 @@ from roguewave.wavephysics.fluidproperties import (
     FluidProperties,
     GRAVITATIONAL_ACCELERATION,
 )
-from numpy import cos, pi
+from numpy import cos, pi, sqrt, sin
 
 
 def wave_supported_stress(
@@ -57,7 +57,8 @@ def wave_supported_stress(
         water,
         memoized,
     )
-    return (
+
+    stress_downwind = (
         gravitational_acceleration
         * water.density
         * integrate_spectral_data(
@@ -65,3 +66,15 @@ def wave_supported_stress(
             dims=SPECTRAL_DIMS,
         )
     )
+
+    stress_crosswind = (
+        gravitational_acceleration
+        * water.density
+        * integrate_spectral_data(
+            sin(memoized["wind_mutual_angle"]) * wind_input / memoized["wave_speed"],
+            dims=SPECTRAL_DIMS,
+        )
+    )
+
+    total_stress = sqrt(stress_crosswind**2 + stress_downwind**2)
+    return total_stress

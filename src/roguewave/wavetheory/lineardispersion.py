@@ -32,8 +32,7 @@ def inverse_intrinsic_dispersion_relation(
     :return:
     """
 
-    # Numba does not recognize "atleast_1d" for scalars - hence the weird
-    # call to array first.
+    # Numba does not recognize "atleast_1d" for scalars
     w = atleast_1d(angular_frequency)
 
     k_deep_water_estimate = w**2 / grav

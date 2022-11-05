@@ -126,11 +126,13 @@ def estimate_u10_from_spectrum(
         roughness_parametrization = create_roughness_length_estimator()
 
     if isinstance(spectrum, FrequencyDirectionSpectrum):
-        spectrum = spectrum.as_frequency_spectrum()
+        spectrum_1d = spectrum.as_frequency_spectrum()
+    else:
+        spectrum_1d = spectrum
 
     # Get friction velocity from spectrum
     dataset = friction_velocity(
-        spectrum,
+        spectrum_1d,
         method,
         fmax,
         power,
@@ -266,11 +268,14 @@ def _estimate_u10_from_source_terms_newton(
     **kwargs,
 ):
     # Estimate the wind direction. Note this is our _final_ estimate of the wind direction.
-    wind_direction = balance.dissipation.mean_direction_degrees(spectrum)
-    dissipation_bulk = balance.dissipation.bulk_rate(spectrum)
+    memoize = {}
+    wind_direction = balance.dissipation.mean_direction_degrees(
+        spectrum, memoize=memoize
+    )
+    dissipation_bulk = balance.dissipation.bulk_rate(spectrum, memoize=memoize)
 
     if solver_configuration is None:
-        solver_configuration = Configuration(atol=1.0e-2, rtol=1.0e-3)
+        solver_configuration = Configuration(atol=1.0e-2, rtol=1.0e-3, use_numba=True)
 
     guess = None
     # Define the iteration function
@@ -278,13 +283,14 @@ def _estimate_u10_from_source_terms_newton(
 
     def func(u10):
         nonlocal guess
-        roughness_length = roughness.roughness_from_speed(
-            u10, 10, spectrum, wind_direction, guess=guess
+
+        roughness_length = balance.generation.roughness(
+            u10, wind_direction, spectrum, roughness_length_guess=guess
         )
         guess = roughness_length
         return (
             balance.generation.bulk_rate(
-                u10, wind_direction, spectrum, roughness_length, memoized=memoize
+                u10, wind_direction, spectrum, roughness_length
             )
             + dissipation_bulk
         )
@@ -293,9 +299,15 @@ def _estimate_u10_from_source_terms_newton(
     guess = estimate_u10_from_spectrum(
         spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
     )["u10"]
-    u10_estimate = newton_raphson(
-        func, guess, bounds=(0, numpy.inf), configuration=solver_configuration
-    )
+
+    if solver_configuration.use_numba:
+        u10_estimate = balance.generation.u10_from_bulk_rate(
+            -dissipation_bulk, guess, wind_direction, spectrum
+        )
+    else:
+        u10_estimate = newton_raphson(
+            func, guess, bounds=(0, numpy.inf), configuration=solver_configuration
+        )
 
     dataset = Dataset()
     return dataset.assign({"u10": u10_estimate, "direction": wind_direction})

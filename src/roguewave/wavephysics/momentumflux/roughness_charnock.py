@@ -13,7 +13,7 @@ class CharnockConstant(RoughnessLength):
     ):
         self._charnock_constant = charnock_constant
         self.gravitational_acceleration = gravitational_acceleration
-        self.charnock_maximum = 10 * numpy.exp(-0.4 / numpy.sqrt(2e-3))
+        self.charnock_maximum = numpy.inf
 
     def charnock_constant(self, friction_velocity, spectrum: WaveSpectrum) -> DataArray:
         return self._charnock_constant * ones_like(spectrum.depth)

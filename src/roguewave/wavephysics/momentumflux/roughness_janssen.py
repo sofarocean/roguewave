@@ -15,9 +15,8 @@ from roguewave.wavephysics.generation import (
     create_wind_source_term,
     wind_parametrizations,
 )
-from roguewave.tools.solvers import fixed_point_iteration
 from xarray import DataArray
-from numpy import sqrt, log, inf
+from numpy import log
 
 
 class Janssen(RoughnessLength):
@@ -52,34 +51,14 @@ class Janssen(RoughnessLength):
         if direction_degrees is None:
             raise ValueError("direction must be specified")
 
-        if isinstance(spectrum, FrequencyDirectionSpectrum):
-            roughness_length_guess = self._charnock.form_drag(
-                friction_velocity, spectrum, direction_degrees
-            )
-            spectrum: FrequencyDirectionSpectrum
-
-            def iteration_function(roughness_length):
-                wave_stress = wave_supported_stress(
-                    spectrum,
-                    friction_velocity,
-                    direction_degrees,
-                    roughness_length,
-                    self.generation,
-                    "friction_velocity",
-                    air,
-                    water,
-                    self.gravitational_acceleration,
-                )
-                stress_ratio = abs(wave_stress / (air.density * friction_velocity**2))
-                return self._charnock.form_drag(
-                    friction_velocity, spectrum, direction_degrees
-                ) / sqrt(1 - stress_ratio)
-
-        else:
+        if not isinstance(spectrum, FrequencyDirectionSpectrum):
             raise ValueError("2D spectrum must be specified")
 
-        return fixed_point_iteration(
-            iteration_function, roughness_length_guess, bounds=(0, inf)
+        return self.generation.roughness(
+            friction_velocity,
+            direction_degrees,
+            spectrum,
+            wind_speed_input_type="friction_velocity",
         )
 
     def roughness_from_speed(
@@ -100,35 +79,9 @@ class Janssen(RoughnessLength):
         if not isinstance(spectrum, FrequencyDirectionSpectrum):
             raise ValueError("2D spectrum must be specified")
 
-        if guess is None:
-            friction_velocity_guess = (
-                sqrt(self.drag_coefficient_estimate(speed)) * speed
-            )
-            guess = self._charnock.roughness(
-                friction_velocity_guess, spectrum, air, direction_degrees
-            )
-
-        def iteration_function(roughness_length):
-            friction_velocity = (
-                speed * air.vonkarman_constant / log(elevation / roughness_length)
-            )
-            wave_stress = wave_supported_stress(
-                spectrum,
-                friction_velocity,
-                direction_degrees,
-                roughness_length,
-                self.generation,
-                "friction_velocity",
-                air,
-                water,
-                self.gravitational_acceleration,
-            )
-            stress_ratio = wave_stress / (air.density * friction_velocity**2)
-            return self._charnock.form_drag(
-                friction_velocity, spectrum, direction_degrees
-            ) / sqrt(1 - stress_ratio) + self.smooth(friction_velocity, air)
-
-        return fixed_point_iteration(iteration_function, guess, bounds=(0, inf))
+        return self.generation.roughness(
+            speed, direction_degrees, spectrum, roughness_length_guess=guess
+        )
 
     def wave_supported_stress(
         self,
@@ -155,20 +108,4 @@ class Janssen(RoughnessLength):
             air,
             water,
             self.gravitational_acceleration,
-        )
-
-    def turbulent_stress(
-        self,
-        speed,
-        elevation,
-        roughness_length,
-        spectrum: FrequencyDirectionSpectrum,
-        direction_degrees=None,
-        air: FluidProperties = AIR,
-        water: FluidProperties = WATER,
-    ):
-        return self.total_stress(
-            speed, elevation, roughness_length
-        ) - self.wave_supported_stress(
-            speed, elevation, roughness_length, spectrum, direction_degrees, air, water
         )

@@ -9,6 +9,8 @@ from roguewave.tools.math import wrapped_difference
 from typing import Sequence, TypeVar, Union, Literal
 from xarray import concat, Dataset, DataArray
 from numpy import diff
+from numpy.typing import NDArray
+from numba import njit
 
 _T = TypeVar("_T", FrequencySpectrum, FrequencyDirectionSpectrum)
 spec_dims = Literal["frequency", "direction"]
@@ -75,3 +77,22 @@ def integrate_spectral_data(
         out = (out * difference).sum(dim=NAME_D)
 
     return out
+
+
+@njit(cache=True, fastmath=True)
+def numba_integrate_spectral_data(data: NDArray, grid):
+
+    frequency_step = grid["frequency_step"]
+    direction_step = grid["direction_step"]
+    number_of_frequencies = data.shape[-2]
+    number_of_directions = data.shape[-1]
+
+    return_value = 0.0
+    for frequency_index in range(number_of_frequencies):
+        for direction_index in range(number_of_directions):
+            return_value += (
+                data[frequency_index, direction_index]
+                * frequency_step[frequency_index]
+                * direction_step[direction_index]
+            )
+    return return_value

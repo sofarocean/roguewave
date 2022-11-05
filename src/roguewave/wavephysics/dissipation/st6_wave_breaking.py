@@ -1,13 +1,13 @@
 from roguewave import FrequencyDirectionSpectrum
 from xarray import DataArray, zeros_like, where
-from numpy import diff
+from numpy import diff, pi
 from typing import Literal
-from roguewave.wavephysics.dissipation.base_class import WaveBreaking
+from roguewave.wavephysics.dissipation.base_class import Dissipation
 
 breaking_parametrization = Literal["st6", "st4"]
 
 
-class ST6(WaveBreaking):
+class ST6WaveBreaking(Dissipation):
     def __init__(
         self,
         p1=4,
@@ -21,6 +21,14 @@ class ST6(WaveBreaking):
         self.p2 = p2
         self.a1 = a1
         self.a2 = a2
+
+    def saturation_spectrum(self, spectrum, cg, k, memoize=None):
+        if memoize is None:
+            memoize = {}
+
+        if "saturation_spectrum" not in memoize:
+            memoize["saturation_spectrum"] = cg * spectrum.e * k**3 / 2 / pi
+        return memoize["saturation_spectrum"]
 
     def rate(self, spectrum: FrequencyDirectionSpectrum, memoize=None) -> DataArray:
 

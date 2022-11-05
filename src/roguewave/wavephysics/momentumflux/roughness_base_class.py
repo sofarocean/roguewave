@@ -125,7 +125,7 @@ class RoughnessLength(ABC):
         water: FluidProperties = WATER,
         **kwargs
     ):
-        return zeros_like(speed)
+        return zeros_like(speed), zeros_like(speed)
 
     def turbulent_stress(
         self,
@@ -137,8 +137,7 @@ class RoughnessLength(ABC):
         air: FluidProperties = AIR,
         water: FluidProperties = WATER,
     ):
-        return self.total_stress(
-            speed, elevation, roughness_length
-        ) - self.wave_supported_stress(
-            speed, elevation, roughness_length, spectrum, direction_degrees, air, water
+        wave_stress, _ = self.wave_supported_stress(
+            speed, elevation, roughness_length, spectrum, direction_degrees
         )
+        return self.total_stress(speed, elevation, roughness_length) - wave_stress

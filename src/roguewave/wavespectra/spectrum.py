@@ -13,7 +13,8 @@ from roguewave.wavespectra.estimators import (
     estimate_directional_distribution,
     Estimators,
 )
-from typing import Iterator, Hashable, TypeVar, Union, List, Literal
+from typing import Iterator, Hashable, TypeVar, Union, List, Literal, Mapping
+from numpy.typing import NDArray
 from xarray import Dataset, DataArray, open_dataset, concat, ones_like, where
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
@@ -198,6 +199,17 @@ class WaveSpectrum(DatasetWrapper):
     def ndims(self):
         return len(self.dims)
 
+    @property
+    def frequency_step(self) -> DataArray:
+        prepend = 2 * self.frequency[0] - self.frequency[1]
+        append = 2 * self.frequency[-1] - self.frequency[-2]
+        diff = numpy.diff(self.frequency, append=append, prepend=prepend)
+        return DataArray(
+            data=(diff[0:-1] * 0.5 + diff[1:] * 0.5),
+            dims=NAME_F,
+            coords={NAME_F: self.frequency},
+        )
+
     def is_invalid(self) -> DataArray:
         return self.variance_density.isnull().all(dim=self.dims_spectral)
 
@@ -309,6 +321,10 @@ class WaveSpectrum(DatasetWrapper):
     @property
     def dims_space_time(self) -> List[str]:
         return [str(x) for x in self.variance_density.dims if x not in (SPECTRAL_DIMS)]
+
+    @property
+    def coords_space_time(self) -> Mapping[str, NDArray]:
+        return {dim: self.dataset[dim] for dim in self.dims_space_time}
 
     @property
     def dims_spectral(self) -> List[str]:
@@ -466,7 +482,13 @@ class WaveSpectrum(DatasetWrapper):
         return self.frequency_moment(1, fmin, fmax)
 
     def wave_speed(self) -> DataArray:
-        return self.radian_frequency / self.wavenumber
+        """
+        :return:
+        """
+
+        # Note we multiply inverse wavenumber with frequency to force xarray to return a number_of_points by
+        # by number of frequencies data structure.
+        return (1 / self.wavenumber) * self.radian_frequency
 
     def peak_wave_speed(self) -> DataArray:
         return 2 * numpy.pi * self.peak_frequency() / self.peak_wavenumber
@@ -737,8 +759,8 @@ class WaveSpectrum(DatasetWrapper):
         tail_power = e.isel(frequency=-1) * (tail_frequency / frequency[-1]) ** power
         tail_a1 = a1.isel(frequency=-1) * ones_like(tail_frequency)
         tail_b1 = b1.isel(frequency=-1) * ones_like(tail_frequency)
-        tail_a2 = a1.isel(frequency=-1) * ones_like(tail_frequency)
-        tail_b2 = b1.isel(frequency=-1) * ones_like(tail_frequency)
+        tail_a2 = a2.isel(frequency=-1) * ones_like(tail_frequency)
+        tail_b2 = b2.isel(frequency=-1) * ones_like(tail_frequency)
 
         e = concat((e, tail_power), dim="frequency")
         a1 = concat((a1, tail_a1), dim="frequency")
@@ -806,6 +828,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
     def __len__(self):
         return int(numpy.prod(self.spectral_values.shape[:-2]))
 
+    @property
     def direction_step(self) -> DataArray:
         difference = wrapped_difference(
             numpy.diff(self.direction.values, append=self.direction[0]), period=360
@@ -821,7 +844,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
         return data_array
 
     def _directionally_integrate(self, data_array: DataArray) -> DataArray:
-        return (data_array * self.direction_step()).sum(NAME_D, skipna=True)
+        return (data_array * self.direction_step).sum(NAME_D, skipna=True)
 
     @property
     def e(self) -> DataArray:

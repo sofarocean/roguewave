@@ -4,7 +4,7 @@ from roguewave.wavephysics.generation import (
     create_wind_source_term,
 )
 from .dissipation import (
-    WaveBreaking,
+    Dissipation,
     breaking_parametrization,
     create_breaking_dissipation,
 )
@@ -13,7 +13,7 @@ from xarray import DataArray
 
 
 class SourceTermBalance:
-    def __init__(self, generation: WindGeneration, disspipation: WaveBreaking):
+    def __init__(self, generation: WindGeneration, disspipation: Dissipation):
         self.generation = generation
         self.dissipation = disspipation
 
@@ -44,16 +44,16 @@ class SourceTermBalance:
 
 
 def create_balance(
-    wind_par: wind_parametrizations = "st6",
-    wave_par: breaking_parametrization = "st6",
-    wind_args=None,
-    wave_args=None,
+    generation_par: wind_parametrizations = "st6",
+    dissipation_par: breaking_parametrization = "st6",
+    generation_args=None,
+    dissipation_args=None,
 ) -> SourceTermBalance:
 
-    wave_args = {} if wave_args is None else wave_args
-    wind_args = {} if wind_args is None else wind_args
+    dissipation_args = {} if dissipation_args is None else dissipation_args
+    generation_args = {} if generation_args is None else generation_args
 
     return SourceTermBalance(
-        generation=create_wind_source_term(wind_par, **wind_args),
-        disspipation=create_breaking_dissipation(wave_par, **wave_args),
+        generation=create_wind_source_term(generation_par, **generation_args),
+        disspipation=create_breaking_dissipation(dissipation_par, **dissipation_args),
     )

@@ -82,12 +82,18 @@ def estimate_directional_distribution(
     b2 = b2.reshape(input_shape)
 
     number_of_iterations = a1.shape[0]
-    if number_of_iterations < 1000:
+    if number_of_iterations < 100:
         disable = True
     else:
         disable = False
 
-    with ProgressBar(total=number_of_iterations, disable=disable) as progress:
+    if method != "mem2":
+        msg = f"Reconstructing 2d spectrum with {method} using implementation: "
+    else:
+        solution_method = kwargs.get("solution_method", "scipy")
+        msg = f"Reconstructing 2d spectrum with {method} using solution_method {solution_method}"
+
+    with ProgressBar(total=number_of_iterations, disable=disable, desc=msg) as progress:
         res = function(direction_radians, a1, b1, a2, b2, progress, **kwargs)
 
     return res.reshape(output_shape) * Jacobian

@@ -26,7 +26,7 @@ from numba_progress import ProgressBar
 
 # Settings for numba JIT compilation- whether to use fast math and parallel optimizations when possible.
 _FASTMATH = True
-_PARALLEL = True
+_PARALLEL = False
 
 # Numerical settings used in solving for the mem2 distribution
 NUMERICS = {
@@ -173,6 +173,10 @@ def mem2_scipy_root_finder(
                     b2[ipoint, ifreq],
                 ]
             )
+
+            if numpy.any(numpy.isnan(guess[ipoint, ifreq, :])):
+                continue
+
             res = root(
                 moment_constraints,
                 guess[ipoint, ifreq, :],

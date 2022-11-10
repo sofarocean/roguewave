@@ -4,11 +4,11 @@ from roguewave import concatenate_spectra, FrequencyDirectionSpectrum
 from datetime import datetime, timezone
 from numpy.testing import assert_allclose
 from roguewave.wavespectra.estimators.mem2 import (
-    estimate_distribution_newton,
+    mem2_newton_solver,
     initial_value,
     moment_constraints,
     mem2_directional_distribution,
-    _jacobian,
+    mem2_jacobian,
 )
 from roguewave.wavespectra.estimators.utils import get_direction_increment
 from scipy.optimize import root
@@ -110,7 +110,7 @@ def test_estimate_distribution_newton():
         guess = initial_value(
             numpy.array(a1), numpy.array(b1), numpy.array(a2), numpy.array(b2)
         )
-        actual_dist = estimate_distribution_newton(
+        actual_dist = mem2_newton_solver(
             moments, guess, direction_increment, twiddle_factors
         )
 
@@ -132,8 +132,10 @@ def test_jacobian():
         lambdas = initial_value(
             numpy.array(a1), numpy.array(b1), numpy.array(a2), numpy.array(b2)
         )
-
-        jacobian = _jacobian(lambdas, twiddle_factors, direction_increment)
+        jacobian = numpy.zeros((4, 4))
+        jacobian = mem2_jacobian(
+            lambdas, twiddle_factors, direction_increment, jacobian
+        )
 
         def F(x):
             return moment_constraints(x, twiddle_factors, moments, direction_increment)

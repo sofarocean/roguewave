@@ -11,10 +11,7 @@ from roguewave.wavespectra import (
     WaveSpectrum,
     FrequencyDirectionSpectrum,
 )
-from roguewave.wavephysics.generation import (
-    create_wind_source_term,
-    wind_parametrizations,
-)
+from roguewave.wavephysics.balance import wind_parametrizations, create_wind_source_term
 from xarray import DataArray
 from numpy import log
 

@@ -1,7 +1,8 @@
 import numpy
 from roguewave.wavespectra.estimators.mem2 import mem2
 from roguewave.wavespectra.estimators.mem import mem
-from roguewave.wavespectra.estimators.loglikelyhood import log_likelyhood
+
+# from roguewave.wavespectra.estimators.loglikelyhood import log_likelyhood
 from numba_progress import ProgressBar
 from typing import Literal
 
@@ -64,7 +65,8 @@ def estimate_directional_distribution(
         # method.
         function = mem
     elif method.lower() in ["loglikelyhood", "log"]:
-        function = log_likelyhood
+        # function = log_likelyhood
+        raise Exception(f"unsupported spectral estimator method: {method}")
     elif method.lower() in ["maximum_entrophy_method2", "mem2"]:
         function = mem2
     else:

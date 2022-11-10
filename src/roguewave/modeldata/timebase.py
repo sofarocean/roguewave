@@ -31,20 +31,19 @@ from roguewave.tools.time import to_datetime_utc
 # =============================================================================
 
 
-INTERVAL_TYPE = Union[
-    List[tuple[int, timedelta]], Tuple[tuple[int, timedelta]]
-]
+INTERVAL_TYPE = Union[List[tuple[int, timedelta]], Tuple[tuple[int, timedelta]]]
 
 # Classes
 # =============================================================================
 
 
 class ModelTimeConfiguration:
-    def __init__(self,
-                 cycle_time_hours: timedelta = timedelta(hours=6),
-                 cycle_offset_hours: timedelta = timedelta(hours=0),
-                 output_interval: INTERVAL_TYPE = (
-                         (239, timedelta(hours=1)),)):
+    def __init__(
+        self,
+        cycle_time_hours: timedelta = timedelta(hours=6),
+        cycle_offset_hours: timedelta = timedelta(hours=0),
+        output_interval: INTERVAL_TYPE = ((239, timedelta(hours=1)),),
+    ):
 
         self.cycle_time_hours = cycle_time_hours
         self.cycle_offset_hours = cycle_offset_hours
@@ -78,20 +77,23 @@ class ModelTimeConfiguration:
             if isinstance(value[1], timedelta):
                 self._output_interval.append(value)
             else:
-                self._output_interval.append(
-                    (value[0], timedelta(hours=value[1])))
+                self._output_interval.append((value[0], timedelta(hours=value[1])))
 
-    def forecast_hours(self, duration: timedelta = None) -> List[timedelta]:
+    def forecast_hours(
+        self, duration: timedelta = None, endpoint=False
+    ) -> List[timedelta]:
         forecast_hours = [timedelta(hours=0)]
         for interval in self.output_interval:
             base_hour = forecast_hours[-1]
             for index in range(interval[0]):
-                forecast_hours.append(
-                    base_hour + interval[1] * (index + 1)
-                )
+                forecast_hours.append(base_hour + interval[1] * (index + 1))
                 if duration is not None:
-                    if forecast_hours[-1] >= duration:
-                        return forecast_hours
+                    if endpoint:
+                        if forecast_hours[-1] > duration:
+                            return forecast_hours
+                    else:
+                        if forecast_hours[-1] >= duration:
+                            return forecast_hours
         return forecast_hours
 
     def interval_at_lead_time(self, lead_time: timedelta) -> timedelta:
@@ -101,7 +103,7 @@ class ModelTimeConfiguration:
         :return: output interval at the given lead time
         """
         if lead_time > self.duration:
-            raise ValueError('Lead time exceeds duration of the forecast')
+            raise ValueError("Lead time exceeds duration of the forecast")
 
         forecast_hours = [timedelta(hours=0)]
         for interval in self.output_interval:
@@ -115,17 +117,19 @@ class ModelTimeConfiguration:
 
 
 class TimeSlice:
-    def __init__(self, start_time:datetime, end_time:datetime):
+    def __init__(self, start_time: datetime, end_time: datetime, endpoint=False):
         self.start_time = to_datetime_utc(start_time)
         self.end_time = to_datetime_utc(end_time)
+        self.endpoint = endpoint
 
-    def time_base(self, time_configuration:ModelTimeConfiguration)\
-            -> List[Tuple[datetime, timedelta]]:
+    def time_base(
+        self, time_configuration: ModelTimeConfiguration
+    ) -> List[Tuple[datetime, timedelta]]:
         pass
 
 
 class TimeSliceForecast(TimeSlice):
-    def __init__(self, init_time:datetime, duration:timedelta):
+    def __init__(self, init_time: datetime, duration: timedelta, endpoint=False):
         """
         Timeslice for a single forecast
         :param init_time: init time of forecast (datetime)
@@ -133,18 +137,26 @@ class TimeSliceForecast(TimeSlice):
         """
         self.init_time = to_datetime_utc(init_time)
         self.duration = duration
-        super().__init__(self.init_time,self.init_time+duration)
+        super().__init__(self.init_time, self.init_time + duration, endpoint)
 
-    def time_base(self, time_configuration:ModelTimeConfiguration):
+    def time_base(self, time_configuration: ModelTimeConfiguration):
         return timebase_forecast(
             init_time=self.init_time,
             duration=self.duration,
-            time_configuration=time_configuration)
+            time_configuration=time_configuration,
+            endpoint=self.endpoint,
+        )
 
 
 class TimeSliceLead(TimeSlice):
-    def __init__(self,start_time:datetime,end_time:datetime,
-                 lead_time:timedelta,exact=False):
+    def __init__(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        lead_time: timedelta,
+        exact=False,
+        endpoint=False,
+    ):
         """
         Slice at constant lead time
         :param start_time: start time of period of interest (datetime)
@@ -153,74 +165,86 @@ class TimeSliceLead(TimeSlice):
         :param exact: boolean. Do we want data only exactly at the given lead
             time, or as close as possible
         """
-        super().__init__(start_time,end_time)
+        super().__init__(start_time, end_time, endpoint)
         self.lead_time = lead_time
         self.exact = exact
 
-    def time_base(self, time_configuration:ModelTimeConfiguration):
+    def time_base(self, time_configuration: ModelTimeConfiguration):
         return timebase_lead(
-            start_time = self.start_time,
-            end_time = self.end_time,
+            start_time=self.start_time,
+            end_time=self.end_time,
             lead_time=self.lead_time,
             time_configuration=time_configuration,
-            exact=self.exact)
+            exact=self.exact,
+            endpoint=self.endpoint,
+        )
 
 
 class TimeSliceAnalysis(TimeSlice):
-    def __init__(self,start_time:datetime,end_time:datetime):
+    def __init__(self, start_time: datetime, end_time: datetime, endpoint=False):
         """
         Analysis time
         :param start_time: start time of period of interest (datetime)
         :param end_time: end time of period of interest (datetime)
         """
-        super().__init__(start_time,end_time)
+        super().__init__(start_time, end_time, endpoint)
 
-    def time_base(self, time_configuration:ModelTimeConfiguration):
+    def time_base(self, time_configuration: ModelTimeConfiguration):
         return timebase_lead(
-            start_time = self.start_time,
-            end_time = self.end_time,
+            start_time=self.start_time,
+            end_time=self.end_time,
             lead_time=timedelta(hours=0),
             time_configuration=time_configuration,
-            exact=False)
+            exact=False,
+            endpoint=self.endpoint,
+        )
 
 
 class TimeSliceBestForecast(TimeSliceAnalysis):
-    def __init__(self,start_time:datetime,end_time:datetime):
+    def __init__(self, start_time: datetime, end_time: datetime, endpoint=False):
         """
         Analysis time
         :param start_time: start time of period of interest (datetime)
         :param end_time: end time of period of interest (datetime)
         """
-        super().__init__(start_time,end_time)
+        super().__init__(start_time, end_time, endpoint)
 
-    def time_base(self, time_configuration:ModelTimeConfiguration):
+    def time_base(self, time_configuration: ModelTimeConfiguration):
         return super().time_base(time_configuration)
 
+
 class TimeSliceEvaluation(TimeSlice):
-    def __init__(self, evaluation_time:datetime, maximum_lead_time:timedelta):
+    def __init__(
+        self, evaluation_time: datetime, maximum_lead_time: timedelta, endpoint=False
+    ):
         """
         All data for a constant point in time
         :param evaluation_time: evaluation point (datetime)
         :param maximum_lead_time:  maximum lead time considered (timedelta)
         """
-        super().__init__(start_time=evaluation_time,end_time=evaluation_time)
+        super().__init__(
+            start_time=evaluation_time, end_time=evaluation_time, endpoint=endpoint
+        )
         self.evaluation_time = evaluation_time
         self.maximum_lead_time = maximum_lead_time
 
-    def time_base(self, time_configuration:ModelTimeConfiguration):
+    def time_base(self, time_configuration: ModelTimeConfiguration):
         return timebase_evaluation(
             evaluation_time=self.evaluation_time,
             maximum_lead_time=self.maximum_lead_time,
-            time_configuration=time_configuration)
+            time_configuration=time_configuration,
+            endpoint=self.endpoint,
+        )
 
 
 # Main Public Functions
 # =============================================================================
-def find_closet_init_time(evaluation_time: datetime,
-                          cycle_time_hours: timedelta = timedelta(hours=6),
-                          cycle_offset_hours: timedelta = timedelta(hours=0),
-                          lead_time: timedelta = timedelta(hours=0)
-                          ) -> datetime:
+def find_closet_init_time(
+    evaluation_time: datetime,
+    cycle_time_hours: timedelta = timedelta(hours=6),
+    cycle_offset_hours: timedelta = timedelta(hours=0),
+    lead_time: timedelta = timedelta(hours=0),
+) -> datetime:
     """
     Find the model init time that is closest to the evaluation time requested
     so that init_time <= evaluation_time - lead_time
@@ -238,13 +262,11 @@ def find_closet_init_time(evaluation_time: datetime,
 
     # Find the nearest cycle number.
     number_of_cycles = (
-            (evaluation_time_seconds - cycle_offset_seconds
-             - lead_time_seconds) // cycle_time_seconds
-    )
+        evaluation_time_seconds - cycle_offset_seconds - lead_time_seconds
+    ) // cycle_time_seconds
 
     init_time = datetime.fromtimestamp(
-        number_of_cycles * cycle_time_seconds + cycle_offset_seconds,
-        tz=timezone.utc
+        number_of_cycles * cycle_time_seconds + cycle_offset_seconds, tz=timezone.utc
     )
 
     # The delta represents the actual lead time of the evaluation time
@@ -265,9 +287,12 @@ def find_closet_init_time(evaluation_time: datetime,
     return init_time
 
 
-def timebase_forecast(init_time: datetime, duration: timedelta,
-                      time_configuration: ModelTimeConfiguration
-                      ) -> List[Tuple[datetime, timedelta]]:
+def timebase_forecast(
+    init_time: datetime,
+    duration: timedelta,
+    time_configuration: ModelTimeConfiguration,
+    endpoint=False,
+) -> List[Tuple[datetime, timedelta]]:
     """
     Get all the valid times for a given forecast up to the requested duration.
     Valid times are returned as a List of pairs: (init_time, forecast_hour)
@@ -279,14 +304,22 @@ def timebase_forecast(init_time: datetime, duration: timedelta,
         init_time + forecast_hour
     """
 
-    return [(init_time, forecast_hour) for forecast_hour in
-            time_configuration.forecast_hours(duration=duration)]
+    return [
+        (init_time, forecast_hour)
+        for forecast_hour in time_configuration.forecast_hours(
+            duration=duration, endpoint=endpoint
+        )
+    ]
 
 
-def timebase_lead(start_time: datetime, end_time: datetime,
-                  lead_time: timedelta,
-                  time_configuration: ModelTimeConfiguration, exact=True
-                  ) -> List[Tuple[datetime, timedelta]]:
+def timebase_lead(
+    start_time: datetime,
+    end_time: datetime,
+    lead_time: timedelta,
+    time_configuration: ModelTimeConfiguration,
+    exact=True,
+    endpoint=False,
+) -> List[Tuple[datetime, timedelta]]:
     """
     Get all the valid times at a given lead-time in the period of interest.
     Valid times are returned as a List of pairs: (init_time, forecast_hour).
@@ -305,33 +338,36 @@ def timebase_lead(start_time: datetime, end_time: datetime,
 
     # Make sure the lead time does not exceed the duration
     if lead_time > time_configuration.duration:
-        raise ValueError(f'Lead time {lead_time} exceeds maximum forecast '
-                         f'length of {time_configuration.duration}')
+        raise ValueError(
+            f"Lead time {lead_time} exceeds maximum forecast "
+            f"length of {time_configuration.duration}"
+        )
 
-    forecast_hours = time_configuration.forecast_hours()
+    forecast_hours = time_configuration.forecast_hours(endpoint=endpoint)
 
     # If exact, make sure the lead time is part of the forecast.
     if exact and (lead_time not in forecast_hours):
-        raise ValueError(f'Forecast does not have output '
-                         f'exactly at lead time: {lead_time}')
+        raise ValueError(
+            f"Forecast does not have output " f"exactly at lead time: {lead_time}"
+        )
 
     # Get the output interval at the requested lead time
     interval = time_configuration.interval_at_lead_time(lead_time=lead_time)
 
     # Calculate number of instances we will return (upper bound)
-    n = int((end_time - start_time) / interval)
+    n = int((end_time - start_time) / interval) + int(endpoint)
 
     timebase = []
     for index in range(0, n):
         #
-        valid_time = start_time + index * \
-                     time_configuration.output_interval[0][1]
+        valid_time = start_time + index * time_configuration.output_interval[0][1]
 
         init_time = find_closet_init_time(
             valid_time,
             cycle_time_hours=time_configuration.cycle_time_hours,
             cycle_offset_hours=time_configuration.cycle_offset_hours,
-            lead_time=lead_time)
+            lead_time=lead_time,
+        )
 
         forecast_hour = valid_time - init_time
 
@@ -349,10 +385,12 @@ def timebase_lead(start_time: datetime, end_time: datetime,
     return timebase
 
 
-def timebase_evaluation(evaluation_time: datetime,
-                        maximum_lead_time: timedelta,
-                        time_configuration: ModelTimeConfiguration
-                        ) -> List[Tuple[datetime, timedelta]]:
+def timebase_evaluation(
+    evaluation_time: datetime,
+    maximum_lead_time: timedelta,
+    time_configuration: ModelTimeConfiguration,
+    endpoint=False,
+) -> List[Tuple[datetime, timedelta]]:
     """
     Find all init times and forecast hours so that
         init_time + forecast = evaluation_time,
@@ -365,7 +403,8 @@ def timebase_evaluation(evaluation_time: datetime,
     """
 
     forecast_hours = time_configuration.forecast_hours(
-        duration=maximum_lead_time)
+        duration=maximum_lead_time, endpoint=endpoint
+    )
 
     timebase = []
     for forecast_hour in forecast_hours:
@@ -373,7 +412,7 @@ def timebase_evaluation(evaluation_time: datetime,
             evaluation_time=evaluation_time,
             cycle_time_hours=time_configuration.cycle_time_hours,
             cycle_offset_hours=time_configuration.cycle_offset_hours,
-            lead_time=forecast_hour
+            lead_time=forecast_hour,
         )
         if evaluation_time == init_time + forecast_hour:
             timebase.append((init_time, forecast_hour))

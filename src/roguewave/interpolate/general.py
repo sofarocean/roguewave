@@ -46,8 +46,7 @@ def interpolate_periodic(
             fp0[mask] + delta_fp[mask] * delta_x[mask] / delta_xp[mask]
         )
         interpolation[~mask] = fp0[~mask]
-        # interpolation = numpy.where( delta_xp.astype('float64') > 0.0, fp0
-        #                              + delta_fp * delta_x/delta_xp,fp0)
+
         # substitute value if given
         if left is not None:
             interpolation = numpy.where(x < xp[0], left, interpolation)
@@ -113,9 +112,12 @@ def interpolation_weights_1d(
             frac[x < xp[0]] = numpy.nan
 
         if extrapolate_right:
-            frac[x >= xp[-1]] = 0
+            frac[x > xp[-1]] = 0
         else:
-            frac[x >= xp[-1]] = numpy.nan
+            frac[x > xp[-1]] = numpy.nan
+
+        # At the right end point to avoid devision by 0.
+        frac[x == xp[-1]] = 0.0
     else:
         frac = delta_x / delta_xp
 

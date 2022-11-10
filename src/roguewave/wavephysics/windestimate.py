@@ -17,7 +17,7 @@ from roguewave.wavephysics.momentumflux import (
     RoughnessLength,
     create_roughness_length_estimator,
 )
-from roguewave.tools.solvers import newton_raphson, Configuration
+
 
 _methods = Literal["peak", "mean"]
 _charnock_parametrization = Literal["constant", "voermans15", "voermans16"]
@@ -87,6 +87,7 @@ def estimate_u10_from_spectrum(
     number_of_bins=20,
     roughness_parametrization: RoughnessLength = None,
     direction_convention: _direction_convention = "going_to_counter_clockwise_east",
+    **kwargs,
 ) -> Dataset:
     #
     # =========================================================================
@@ -123,7 +124,9 @@ def estimate_u10_from_spectrum(
     # 4) Calculate mean direction over equilibrium range
 
     if roughness_parametrization is None:
-        roughness_parametrization = create_roughness_length_estimator()
+        roughness_parametrization = create_roughness_length_estimator(
+            "charnock_constant", **kwargs
+        )
 
     if isinstance(spectrum, FrequencyDirectionSpectrum):
         spectrum_1d = spectrum.as_frequency_spectrum()
@@ -245,69 +248,21 @@ def equilibrium_range_values(
 
 
 def estimate_u10_from_source_terms(
-    spectrum: FrequencyDirectionSpectrum,
-    balance: SourceTermBalance,
-    roughness: RoughnessLength,
-    method="newton",
-    solver_configuration: Configuration = None,
-    **kwargs,
+    spectrum: FrequencyDirectionSpectrum, balance: SourceTermBalance, **kwargs
 ) -> Dataset:
-    if method == "newton":
-        return _estimate_u10_from_source_terms_newton(
-            spectrum, balance, roughness, solver_configuration, **kwargs
-        )
-    else:
-        raise ValueError("unknown method")
-
-
-def _estimate_u10_from_source_terms_newton(
-    spectrum: FrequencyDirectionSpectrum,
-    balance: SourceTermBalance,
-    roughness: RoughnessLength,
-    solver_configuration: Configuration = None,
-    **kwargs,
-):
-    # Estimate the wind direction. Note this is our _final_ estimate of the wind direction.
-    memoize = {}
-    wind_direction = balance.dissipation.mean_direction_degrees(
-        spectrum, memoize=memoize
-    )
-    dissipation_bulk = balance.dissipation.bulk_rate(spectrum, memoize=memoize)
-
-    if solver_configuration is None:
-        solver_configuration = Configuration(atol=1.0e-2, rtol=1.0e-3, use_numba=True)
-
-    guess = None
-    # Define the iteration function
-    memoize = {}
-
-    def func(u10):
-        nonlocal guess
-
-        roughness_length = balance.generation.roughness(
-            u10, wind_direction, spectrum, roughness_length_guess=guess
-        )
-        guess = roughness_length
-        return (
-            balance.generation.bulk_rate(
-                u10, wind_direction, spectrum, roughness_length
-            )
-            + dissipation_bulk
-        )
+    # wind_direction = balance.dissipation.mean_direction_degrees(
+    #     spectrum
+    # )
+    # dissipation_bulk = balance.dissipation.bulk_rate(spectrum)
 
     # Our first guess is the wind estimate based on the peak equilibrium range approximation
     guess = estimate_u10_from_spectrum(
         spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
     )["u10"]
 
-    if solver_configuration.use_numba:
-        u10_estimate = balance.generation.u10_from_bulk_rate(
-            -dissipation_bulk, guess, wind_direction, spectrum
-        )
-    else:
-        u10_estimate = newton_raphson(
-            func, guess, bounds=(0, numpy.inf), configuration=solver_configuration
-        )
+    u10_estimate = balance.windspeed_and_direction_from_spectra(guess, spectrum)
+    #
+    # u10_estimate = balance.generation.u10_from_bulk_rate(
+    #         -dissipation_bulk, guess, wind_direction, spectrum)
 
-    dataset = Dataset()
-    return dataset.assign({"u10": u10_estimate, "direction": wind_direction})
+    return u10_estimate

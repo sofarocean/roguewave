@@ -263,7 +263,7 @@ def newton_raphson(
     return _fixed_point_iteration(_func, iterates, bounds, configuration, caller)
 
 
-@njit()
+@njit(fastmath=True)
 def numba_fixed_point_iteration(
     function,
     guess,

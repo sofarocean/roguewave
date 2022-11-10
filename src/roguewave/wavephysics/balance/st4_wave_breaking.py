@@ -1,7 +1,5 @@
-from roguewave import FrequencyDirectionSpectrum
-from roguewave.wavespectra.operations import numba_integrate_spectral_data
-from xarray import DataArray
-from roguewave.wavephysics.dissipation.base_class import Dissipation
+from typing import TypedDict
+from roguewave.wavephysics.balance import Dissipation
 from numpy.typing import NDArray
 from numpy import pi, abs, cos, sin, sqrt, empty, max
 from numba import njit
@@ -11,168 +9,34 @@ from roguewave.wavetheory import (
 )
 
 
+class ST4WaveBreakingParameters(TypedDict):
+    saturation_breaking_constant: float
+    saturation_breaking_directional_control: float
+    saturation_cosine_power: float
+    saturation_integration_width_degrees: float
+    saturation_threshold: float
+    cumulative_breaking_constant: float
+    cumulative_breaking_max_relative_frequency: float
+
+
 class ST4WaveBreaking(Dissipation):
-    def __init__(
-        self,
-        saturation_breaking_constant=3.501408748021698e-05,
-        saturation_breaking_directional_control=0,
-        saturation_cosine_power=2,
-        saturation_integration_width_degrees=80,
-        saturation_threshold=0.0009,
-        cumulative_breaking_constant=0.4,
-        cumulative_breaking_max_relative_frequency=0.5,
-    ):
-        self.saturation_breaking_constant = saturation_breaking_constant
-        self.saturation_breaking_directional_control = (
-            saturation_breaking_directional_control
-        )
-        self.saturation_cosine_power = saturation_cosine_power
-        self.saturation_integration_width_degrees = saturation_integration_width_degrees
-        self.saturation_threshold = saturation_threshold
-        self.cumulative_breaking_constant = cumulative_breaking_constant
-        self.cumulative_breaking_max_relative_frequency = (
-            cumulative_breaking_max_relative_frequency
-        )
+    name = "st4 dissipation"
 
-    def bulk_rate(
-        self, spectrum: FrequencyDirectionSpectrum, memoize=None
-    ) -> DataArray:
-        dissipation = st4_bulk_dissipation(
-            variance_density=spectrum.variance_density.values,
-            depth=spectrum.depth.values,
-            radian_frequency=spectrum.radian_frequency.values,
-            radian_direction=spectrum.radian_direction.values,
-            direction_step=spectrum.direction_step.values,
-            frequency_step=spectrum.frequency_step.values,
-            saturation_breaking_constant=self.saturation_breaking_constant,
-            saturation_breaking_directional_control=self.saturation_breaking_directional_control,
-            saturation_cosine_power=self.saturation_cosine_power,
-            saturation_integration_width_degrees=self.saturation_integration_width_degrees,
-            saturation_threshold=self.saturation_threshold,
-            cumulative_breaking_constant=self.cumulative_breaking_constant,
-            cumulative_breaking_max_relative_frequency=self.cumulative_breaking_max_relative_frequency,
-            number_of_frequencies=spectrum.number_of_frequencies,
-            number_of_directions=spectrum.number_of_directions,
-            number_of_points=spectrum.number_of_spectra,
-        )
-        return DataArray(
-            data=dissipation,
-            dims=spectrum.dims_space_time,
-            coords=spectrum.coords_space_time,
-        )
+    def __init__(self, parameters: ST4WaveBreakingParameters = None):
+        super(ST4WaveBreaking, self).__init__(parameters)
+        self._dissipation_function = st4_dissipation_breaking
 
-    def rate(self, spectrum: FrequencyDirectionSpectrum, memoize=None) -> DataArray:
-        if memoize is None:
-            memoize = {}
-
-        dissipation = st4_dissipation(
-            variance_density=spectrum.variance_density.values,
-            depth=spectrum.depth.values,
-            radian_frequency=spectrum.radian_frequency.values,
-            radian_direction=spectrum.radian_direction.values,
-            direction_step=spectrum.direction_step.values,
-            frequency_step=spectrum.frequency_step.values,
-            saturation_breaking_constant=self.saturation_breaking_constant,
-            saturation_breaking_directional_control=self.saturation_breaking_directional_control,
-            saturation_cosine_power=self.saturation_cosine_power,
-            saturation_integration_width_degrees=self.saturation_integration_width_degrees,
-            saturation_threshold=self.saturation_threshold,
-            cumulative_breaking_constant=self.cumulative_breaking_constant,
-            cumulative_breaking_max_relative_frequency=self.cumulative_breaking_max_relative_frequency,
-            number_of_frequencies=spectrum.number_of_frequencies,
-            number_of_directions=spectrum.number_of_directions,
-            number_of_points=spectrum.number_of_spectra,
+    @staticmethod
+    def default_parameters() -> ST4WaveBreakingParameters:
+        return ST4WaveBreakingParameters(
+            saturation_breaking_constant=3.501408748021698e-05 / 10,
+            saturation_breaking_directional_control=0,
+            saturation_cosine_power=2,
+            saturation_integration_width_degrees=80,
+            saturation_threshold=0.0009,
+            cumulative_breaking_constant=0.4,
+            cumulative_breaking_max_relative_frequency=0.5,
         )
-        return DataArray(data=dissipation, dims=spectrum.dims, coords=spectrum.coords())
-
-
-@njit(cache=True)
-def st4_dissipation(
-    variance_density,
-    depth,
-    radian_frequency,
-    radian_direction,
-    direction_step,
-    frequency_step,
-    saturation_breaking_constant,
-    saturation_breaking_directional_control,
-    saturation_cosine_power,
-    saturation_integration_width_degrees,
-    saturation_threshold,
-    cumulative_breaking_constant,
-    cumulative_breaking_max_relative_frequency,
-    number_of_frequencies,
-    number_of_directions,
-    number_of_points,
-):
-    dissipation = empty(
-        (number_of_points, number_of_frequencies, number_of_directions), "float64"
-    )
-    for point_index in range(number_of_points):
-        dissipation_breaking = st4_dissipation_breaking(
-            variance_density=variance_density[point_index, :, :],
-            depth=depth[point_index],
-            radian_frequency=radian_frequency,
-            radian_direction=radian_direction,
-            direction_step=direction_step,
-            frequency_step=frequency_step,
-            saturation_breaking_constant=saturation_breaking_constant,
-            saturation_breaking_directional_control=saturation_breaking_directional_control,
-            saturation_cosine_power=saturation_cosine_power,
-            saturation_integration_width_degrees=saturation_integration_width_degrees,
-            saturation_threshold=saturation_threshold,
-            cumulative_breaking_constant=cumulative_breaking_constant,
-            cumulative_breaking_max_relative_frequency=cumulative_breaking_max_relative_frequency,
-            number_of_frequencies=number_of_frequencies,
-            number_of_directions=number_of_directions,
-        )
-        dissipation[point_index, :, :] = dissipation_breaking
-    return dissipation
-
-
-@njit(cache=True)
-def st4_bulk_dissipation(
-    variance_density,
-    depth,
-    radian_frequency,
-    radian_direction,
-    direction_step,
-    frequency_step,
-    saturation_breaking_constant,
-    saturation_breaking_directional_control,
-    saturation_cosine_power,
-    saturation_integration_width_degrees,
-    saturation_threshold,
-    cumulative_breaking_constant,
-    cumulative_breaking_max_relative_frequency,
-    number_of_frequencies,
-    number_of_directions,
-    number_of_points,
-):
-    dissipation = empty(number_of_points, "float64")
-    for point_index in range(number_of_points):
-        dissipation_breaking = st4_dissipation_breaking(
-            variance_density=variance_density[point_index, :, :],
-            depth=depth[point_index],
-            radian_frequency=radian_frequency,
-            radian_direction=radian_direction,
-            direction_step=direction_step,
-            frequency_step=frequency_step,
-            saturation_breaking_constant=saturation_breaking_constant,
-            saturation_breaking_directional_control=saturation_breaking_directional_control,
-            saturation_cosine_power=saturation_cosine_power,
-            saturation_integration_width_degrees=saturation_integration_width_degrees,
-            saturation_threshold=saturation_threshold,
-            cumulative_breaking_constant=cumulative_breaking_constant,
-            cumulative_breaking_max_relative_frequency=cumulative_breaking_max_relative_frequency,
-            number_of_frequencies=number_of_frequencies,
-            number_of_directions=number_of_directions,
-        )
-        grid_info = {"frequency_step": frequency_step, "direction_step": direction_step}
-        dissipation[point_index] = numba_integrate_spectral_data(
-            dissipation_breaking, grid_info
-        )
-    return dissipation
 
 
 @njit(cache=True)
@@ -345,22 +209,30 @@ def st4_cumulative_breaking(
 
 @njit(cache=True)
 def st4_dissipation_breaking(
-    variance_density: NDArray,
-    depth: NDArray,
-    radian_frequency: NDArray,
-    radian_direction: NDArray,
-    direction_step: NDArray,
-    frequency_step: NDArray,
-    saturation_breaking_constant,
-    saturation_breaking_directional_control,
-    saturation_cosine_power,
-    saturation_integration_width_degrees,
-    saturation_threshold: float,
-    cumulative_breaking_constant: float,
-    cumulative_breaking_max_relative_frequency: float,
-    number_of_frequencies: int,
-    number_of_directions: int,
+    variance_density: NDArray, depth: NDArray, spectral_grid, parameters
 ):
+    number_of_directions = variance_density.shape[1]
+    number_of_frequencies = variance_density.shape[0]
+
+    radian_frequency = spectral_grid["radian_frequency"]
+    radian_direction = spectral_grid["radian_direction"]
+    frequency_step = spectral_grid["frequency_step"]
+    direction_step = spectral_grid["direction_step"]
+
+    saturation_integration_width_degrees = parameters[
+        "saturation_integration_width_degrees"
+    ]
+    saturation_cosine_power = parameters["saturation_cosine_power"]
+    saturation_threshold = parameters["saturation_threshold"]
+    cumulative_breaking_constant = parameters["cumulative_breaking_constant"]
+    cumulative_breaking_max_relative_frequency = parameters[
+        "cumulative_breaking_max_relative_frequency"
+    ]
+    saturation_breaking_constant = parameters["saturation_breaking_constant"]
+    saturation_breaking_directional_control = parameters[
+        "saturation_breaking_directional_control"
+    ]
+
     wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
     wave_speed = radian_frequency / wavenumber
     group_velocity = intrinsic_group_velocity(wavenumber, depth)

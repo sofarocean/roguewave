@@ -8,7 +8,7 @@ from roguewave.wavespectra.spectrum import (
 from roguewave.tools.math import wrapped_difference
 from typing import Sequence, TypeVar, Union, Literal
 from xarray import concat, Dataset, DataArray
-from numpy import diff
+from numpy import diff, empty
 from numpy.typing import NDArray
 from numba import njit
 
@@ -16,10 +16,12 @@ _T = TypeVar("_T", FrequencySpectrum, FrequencyDirectionSpectrum)
 spec_dims = Literal["frequency", "direction"]
 
 
-def concatenate_spectra(spectra: Sequence[_T], dim, **kwargs) -> _T:
+def concatenate_spectra(spectra: Sequence[_T], dim=None, **kwargs) -> _T:
     """
     Concatenate along the given dimension. If the dimension does not exist a new dimension will be created. Under the
     hood this calls the concat function of xarray. Named arguments to that function can be applied here as well.
+
+    If dim is set to None - we first flatten the spectral objects - and then join along the flattened dimension.
 
     :param spectra: A sequence of Frequency Spectra/Frequency Direction Spectra
     :param dim: the dimension to concatenate along
@@ -28,7 +30,13 @@ def concatenate_spectra(spectra: Sequence[_T], dim, **kwargs) -> _T:
 
     # Concatenate the dataset in the spectral objects using the xarray concatenate function
     dataset = Dataset()
-    dataset[dim] = [x.dataset[dim].values for x in spectra]
+
+    if dim is not None:
+        # Why are we doing this?
+        dataset[dim] = [x.dataset[dim].values for x in spectra]
+    else:
+        dim = "linear_index"
+        spectra = [x.flatten(dim) for x in spectra]
 
     for variable_name in spectra[0]:
         if variable_name == dim:
@@ -94,5 +102,22 @@ def numba_integrate_spectral_data(data: NDArray, grid):
                 data[frequency_index, direction_index]
                 * frequency_step[frequency_index]
                 * direction_step[direction_index]
+            )
+    return return_value
+
+
+@njit(cache=True, fastmath=True)
+def numba_directionally_integrate_spectral_data(data: NDArray, grid):
+
+    direction_step = grid["direction_step"]
+    number_of_frequencies = data.shape[-2]
+    number_of_directions = data.shape[-1]
+
+    return_value = empty(number_of_frequencies, dtype=data.dtype)
+    for frequency_index in range(number_of_frequencies):
+        return_value[frequency_index] = 0.0
+        for direction_index in range(number_of_directions):
+            return_value[frequency_index] += (
+                data[frequency_index, direction_index] * direction_step[direction_index]
             )
     return return_value

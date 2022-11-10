@@ -1,4 +1,4 @@
-from roguewave.wavephysics.generation import WindGeneration, TWindInputType
+from roguewave.wavephysics.balance import WindGeneration, TWindInputType
 from roguewave.wavespectra import FrequencyDirectionSpectrum
 from xarray import DataArray
 from roguewave.wavephysics.fluidproperties import (
@@ -50,7 +50,7 @@ def wave_supported_stress(
         memoized["wavenumber"] = spectrum.wavenumber
 
     wind_input = generation.rate(
-        speed, wind_direction, spectrum, roughness_length, wind_input_type
+        spectrum, speed, wind_direction, roughness_length, wind_input_type
     )
 
     stress_magnitude, stress_direction = numba_wave_supported_stress(

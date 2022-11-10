@@ -35,6 +35,9 @@ def inverse_intrinsic_dispersion_relation(
     # Numba does not recognize "atleast_1d" for scalars
     w = atleast_1d(angular_frequency)
 
+    if dep == numpy.inf:
+        return w**2 / grav
+
     k_deep_water_estimate = w**2 / grav
     k_shallow_water_estimate = w / numpy.sqrt(grav * dep)
 

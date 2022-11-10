@@ -126,9 +126,9 @@ class SourceTermBalance:
 
 @njit(parallel=True, nogil=True)
 def _u10_from_spectra(
-    variance_density,
-    guess_u10,
-    depth,
+    variance_density: NDArray,
+    guess_u10: NDArray,
+    depth: NDArray,
     wind_source_term_function,
     dissipation_source_term_function,
     parameters_generation,

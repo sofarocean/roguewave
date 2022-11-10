@@ -4,8 +4,6 @@ numpy
 wheel
 netCDF4
 pandas
-qpsolvers
-msgpack
 s3fs
 h5netcdf
 tqdm

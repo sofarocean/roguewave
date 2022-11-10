@@ -14,7 +14,6 @@ from roguewave.wavespectra.estimators import (
     Estimators,
 )
 from typing import Iterator, Hashable, TypeVar, Union, List, Literal, Mapping
-from numpy.typing import NDArray
 from xarray import Dataset, DataArray, open_dataset, concat, ones_like, where
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
@@ -248,6 +247,51 @@ class WaveSpectrum(DatasetWrapper):
             dataset = dataset.assign({x: self.dataset[x].mean(dim=dim, skipna=skipna)})
         return cls(dataset)
 
+    def flatten(self: "WaveSpectrum", flattened_coordinate="linear_index") -> _T:
+        """
+        Serialize the non-spectral dimensions creating a single leading dimension without a coordinate.
+        """
+
+        # Get the current dimensions and shape
+        dims = self.dims_space_time
+        coords = self.coords_space_time
+        shape = self.space_time_shape()
+        length = numpy.product(shape)
+
+        # Calculate the flattened shape
+        new_shape = (length,)
+        new_spectral_shape = (length, *self.spectral_shape())
+        new_dims = [flattened_coordinate] + self.dims_spectral
+
+        linear_index = DataArray(
+            data=numpy.arange(0, length), dims=flattened_coordinate
+        )
+        indices = numpy.unravel_index(linear_index.values, shape)
+
+        dataset = {}
+        for index, dim in zip(indices, dims):
+            x = coords[dim].values[index]
+            dataset[dim] = DataArray(
+                data=coords[dim].values[index], dims=flattened_coordinate
+            )
+
+        for name in self.dataset:
+            if name in SPECTRAL_VARS:
+                x = DataArray(
+                    data=self.dataset[name].values.reshape(new_spectral_shape),
+                    dims=new_dims,
+                    coords=self.coords_spectral,
+                )
+            else:
+                x = DataArray(
+                    data=self.dataset[name].values.reshape(new_shape),
+                    dims=flattened_coordinate,
+                )
+            dataset[name] = x
+
+        cls = type(self)
+        return cls(Dataset(dataset))
+
     def sum(self: _T, dim, skipna=False) -> _T:
         """
         Calculate the sum value of the spectrum along the given dimension.
@@ -290,6 +334,14 @@ class WaveSpectrum(DatasetWrapper):
     def shape(self):
         return self.variance_density.shape
 
+    def spectral_shape(self):
+        number_of_spectral_dims = len(self.dims_spectral)
+        return self.shape()[-number_of_spectral_dims:]
+
+    def space_time_shape(self):
+        number_of_spectral_dims = len(self.dims_spectral)
+        return self.shape()[:-number_of_spectral_dims]
+
     def frequency_moment(self, power: int, fmin=0, fmax=numpy.inf) -> DataArray:
         """
         Calculate a "frequency moment" over the given range. A frequency moment
@@ -323,8 +375,12 @@ class WaveSpectrum(DatasetWrapper):
         return [str(x) for x in self.variance_density.dims if x not in (SPECTRAL_DIMS)]
 
     @property
-    def coords_space_time(self) -> Mapping[str, NDArray]:
+    def coords_space_time(self) -> Mapping[str, DataArray]:
         return {dim: self.dataset[dim] for dim in self.dims_space_time}
+
+    @property
+    def coords_spectral(self) -> Mapping[str, DataArray]:
+        return {dim: self.dataset[dim] for dim in self.dims_spectral}
 
     @property
     def dims_spectral(self) -> List[str]:
@@ -891,19 +947,31 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
         return self.dataset[NAME_D]
 
     def as_frequency_spectrum(self) -> "FrequencySpectrum":
-        return create_1d_spectrum(
-            self.frequency.values,
-            self.e.values,
-            self.time.values,
-            self.latitude.values,
-            self.longitude.values,
-            self.a1.values,
-            self.b1.values,
-            self.a2.values,
-            self.b2.values,
-            depth=self.depth.values,
-            dims=self.dims_space_time + [NAME_F],
-        )
+        dataset = {
+            "a1": self.a1,
+            "b1": self.b1,
+            "a2": self.a2,
+            "b2": self.b2,
+            "variance_density": self.e,
+        }
+        for name in self.dataset:
+            if name not in SPECTRAL_VARS:
+                dataset[name] = self.dataset[name]
+
+        return FrequencySpectrum(Dataset(dataset))
+        # return create_1d_spectrum(
+        #     self.frequency.values,
+        #     self.e.values,
+        #     self.time.values,
+        #     self.latitude.values,
+        #     self.longitude.values,
+        #     self.a1.values,
+        #     self.b1.values,
+        #     self.a2.values,
+        #     self.b2.values,
+        #     depth=self.depth.values,
+        #     dims=self.dims_space_time + [NAME_F],
+        # )
 
     def spectrum_1d(self) -> "FrequencySpectrum":
         """
@@ -1070,7 +1138,11 @@ def create_2d_spectrum(
 
 
 def create_spectrum_dataset(dims, variables) -> Dataset:
-    independent_variables = dims
+    independent_variables = []
+    for dim in dims:
+        if dim in variables:
+            independent_variables.append(dim)
+
     dependent_variables = [x for x in variables if x not in independent_variables]
 
     spectral_coords = {k: variables[k] for k in independent_variables}

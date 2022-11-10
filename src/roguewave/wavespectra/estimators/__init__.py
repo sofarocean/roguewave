@@ -25,7 +25,8 @@ How To Use This Module
 """
 from roguewave.wavespectra.estimators.mem2 import mem2
 from roguewave.wavespectra.estimators.mem import mem
-from roguewave.wavespectra.estimators.loglikelyhood import log_likelyhood
+
+# from roguewave.wavespectra.estimators.loglikelyhood import log_likelyhood
 from roguewave.wavespectra.estimators.estimate import (
     estimate_directional_distribution,
     Estimators,

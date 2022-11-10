@@ -132,8 +132,10 @@ def test_jacobian():
         lambdas = initial_value(
             numpy.array(a1), numpy.array(b1), numpy.array(a2), numpy.array(b2)
         )
-
-        jacobian = mem2_jacobian(lambdas, twiddle_factors, direction_increment)
+        jacobian = numpy.zeros((4, 4))
+        jacobian = mem2_jacobian(
+            lambdas, twiddle_factors, direction_increment, jacobian
+        )
 
         def F(x):
             return moment_constraints(x, twiddle_factors, moments, direction_increment)

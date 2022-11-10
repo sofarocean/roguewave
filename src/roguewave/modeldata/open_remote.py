@@ -23,7 +23,7 @@ import xarray
 from typing import List, Union, Iterable
 from .modelinformation import _get_resource_specification
 from os import remove, rename
-from roguewave.tools.time import to_datetime_utc, to_datetime64
+from roguewave.tools.time import to_datetime_utc, decode_integer_datetime
 from glob import glob
 from .timebase import TimeSlice
 from .keygeneration import generate_uris
@@ -265,36 +265,48 @@ def _convert_grib_to_netcdf_pygrib(filepath: str, model_variables) -> None:
     :param filepath: filepath of the grib file
     :return: None
     """
+
+    # Open the grib file
     grib = pygrib.open(filepath)
-    dataset = xarray.Dataset()
+    coords = {}
+    data = {}
     for variable in model_variables:
-        message = grib.select(shortName=variable)[0]
+        # lets get the correct messages - using the given short or long name.
+        try:
+            messages = grib.select(shortName=variable)
+        except ValueError:
+            messages = grib.select(name=variable)
+
+        assert len(messages) == 1, "grib files with multiple times not supported"
+        message = messages[0]
+
+        # Decode time, valid time
+        init_time = decode_integer_datetime(
+            message["dataDate"], message["dataTime"], as_datetime64=True
+        )
+        valid_time = decode_integer_datetime(
+            message["validityDate"], message["validityTime"], as_datetime64=True
+        )
+
         latitude, longitude = message.latlons()
-        latitude = latitude[:, 0]
-        longitude = longitude[0, :]
-        data = message.values.filled(numpy.nan)
+        assert numpy.all(numpy.diff(latitude[0, :]) == 0)
 
-        valid_time = numpy.array([to_datetime64(message.validDate)])
-        time = numpy.array([to_datetime64(message.analDate)])
-        step = message["step"]
-
-        dataset = dataset.assign_coords(
-            {
-                "longitude": longitude,
-                "latitude": latitude,
-                "validtime": valid_time,
-                "time": time,
-                "step": step,
+        if variable == model_variables[0]:
+            coords = {
+                "longitude": longitude[0, :],
+                "latitude": latitude[:, 0],
+                "validtime": numpy.array(valid_time),
+                "time": numpy.array(init_time),
             }
-        )
-        dataarray = xarray.DataArray(
-            name=variable,
-            data=data.astype("float32"),
-            dims=["latitude", "longitude"],
-            coords={"longitude": longitude, "latitude": latitude},
-        )
-        dataset = dataset.assign({variable: dataarray})
 
+        data[variable] = xarray.DataArray(
+            name=variable,
+            data=message.values.filled(numpy.nan).astype("float32"),
+            dims=["latitude", "longitude"],
+            coords={"longitude": longitude[0, :], "latitude": latitude[:, 0]},
+        )
+
+    dataset = xarray.Dataset(data_vars=data, coords=coords)
     dataset.to_netcdf(filepath + ".nc")
     dataset.close()
 

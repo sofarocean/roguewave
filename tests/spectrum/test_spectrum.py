@@ -227,9 +227,11 @@ def test_spectrum1d():
 def test_spectrum2d():
     (_, spec1d) = helper_create_spectra(4)
 
-    for method in ["mem2", "mem", "loglikelyhood"]:
+    for method in ["mem2", "mem"]:
         for solution_method in ["scipy", "newton", "approximate"]:
-            spec2d = spec1d.as_frequency_direction_spectrum(72, method=method)
+            spec2d = spec1d.as_frequency_direction_spectrum(
+                72, method=method, solution_method=solution_method
+            )
 
             assert spec2d.dims_spectral == ["frequency", "direction"]
             assert spec2d.dims == ["time", "frequency", "direction"]

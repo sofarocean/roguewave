@@ -639,7 +639,7 @@ def _download_data(
                 data[key] = _next[key]
 
         # If we did not receive all data we requested...
-        _start_date = to_datetime_utc(max_time, to_scalar=True) + timedelta(seconds=1)
+        _start_date = max_time + timedelta(seconds=1)
 
     # Postprocessing
     if len(data) < 1:
@@ -768,9 +768,14 @@ def _get_next_page(
             # time object, the former returns a length 1 data-array of
             # datetime64. To ensure we get a datetime - we call the datetime
             # conversion and request output as a scalar.
+            obj = out[var_name][-1]
+            if isinstance(obj, FrequencySpectrum):
+                cur_time = to_datetime_utc(obj.time.values[0])
+            else:
+                cur_time = out[var_name][-1].time
 
-            if to_datetime_utc(out[var_name][-1].time, True) > max_time:
-                max_time = to_datetime_utc(out[var_name][-1].time, True)
+            if cur_time > max_time:
+                max_time = cur_time
 
     return out, max_num_items, max_time
 

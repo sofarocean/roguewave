@@ -70,6 +70,11 @@ def colocate_model_spotter(
         if spotters[spotter_id].shape[0] <= 2:
             spotters.pop(spotter_id)
 
+    # we want model data to cover the entire period. Spotter data will be returned up to the enddate. Hence we enforce
+    # inclusion of the endpoint during colocation, this will ensure that whenever there is spotter data, there is
+    # enclosing model data (which I would argue is the expected behaviour).
+    time_slice.endpoint = True
+
     model = extract_from_remote_dataset(
         spotters,
         variable,

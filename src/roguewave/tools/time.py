@@ -5,7 +5,7 @@ Sofar Ocean Technologies
 Authors: Pieter Bart Smit
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from xarray import DataArray
 import numpy
 from typing import Union, List, Tuple
@@ -88,3 +88,58 @@ def to_datetime64(
         return datetime64(int(time.timestamp()), "s")
     else:
         raise ValueError("unknown time type")
+
+
+def time_from_timeint(t) -> timedelta:
+    """
+    unpack a timedelta from a time given as an integer in the form "hhmmss" e.g. 201813 for 20:18:13
+    """
+    if t >= 10000:
+        hours = t // 10000
+        minutes = (t - hours * 10000) // 100
+        seconds = t - hours * 10000 - minutes * 100
+    elif t >= 100:
+        hours = t // 100
+        minutes = t - hours * 100
+        seconds = 0
+    else:
+        hours = t
+        minutes = 0
+        seconds = 0
+
+    return timedelta(seconds=(hours * 3600 + minutes * 60 + seconds))
+
+
+def date_from_dateint(t) -> datetime:
+    """
+    unpack a datetime from a date given as an integer in the form "yyyymmdd" or "yymmdd" e.g. 20221109 for 2022-11-09
+    or 221109 for 2022-11-09
+    """
+
+    if t > 1000000:
+        years = t // 10000
+        months = (t - years * 10000) // 100
+        days = t - years * 10000 - months * 100
+    else:
+        years = t // 10000
+        months = (t - years * 10000) // 100
+        days = t - years * 10000 - months * 100
+        years = years + 2000
+
+    return datetime(years, months, days, tzinfo=timezone.utc)
+
+
+def decode_integer_datetime(
+    date_int, time_int, as_datetime64=False
+) -> Union[datetime, datetime64]:
+    """
+    Convert a date and time given as integed encoded in the form "yyyymmdd" and "hhmm" _or_ "hhmmss" to a datetime
+    :param date_int: integer of the form yyyymmdd
+    :param time_int: time of the form "hhmm" or "hhmmss"
+    :return:
+    """
+    dt = date_from_dateint(date_int) + time_from_timeint(time_int)
+    if as_datetime64:
+        return datetime64(dt, "s")
+    else:
+        return dt

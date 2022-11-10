@@ -3,60 +3,79 @@ Copyright (C) 2022
 Sofar Ocean Technologies
 
 Authors: Pieter Bart Smit
-"""
 
+
+"""
 from datetime import datetime, timezone, timedelta
 from xarray import DataArray
-import numpy
-from typing import Union, List, Tuple
-from numpy import datetime64
-
-scalar_input_types = Union[float, int, datetime, str, datetime64]
-input_types = Union[scalar_input_types, List[scalar_input_types], numpy.ndarray]
+from typing import Union, Sequence
+from numpy import datetime64, ndarray, array
+from numpy.typing import NDArray
+from numbers import Number
 
 
-def to_datetime_utc(
-    time: input_types, to_scalar=False
-) -> Union[datetime, List[datetime]]:
-    datetimes = _to_datetime_utc(time)
-    if to_scalar and not isinstance(datetimes, datetime):
-        return datetimes[0]
-    else:
-        return datetimes
+scalar_input_types = Union[str, float, int, datetime, datetime64]
+input_types = Union[scalar_input_types, Sequence[scalar_input_types]]
 
 
-def _to_datetime_utc(time: input_types) -> Union[datetime, List[datetime], None]:
+def to_datetime_utc(time: input_types) -> Union[datetime, Sequence[datetime], None]:
+    """
+    Output datetimes are garantueed to be in the UTC timezone. For timezone naive input the timezone is assumed to be
+    UTC. None as input is translated to None as output to allow for cases where time is optional. Note that the
+    implementation works with heterogeneous sequences.
+
+    :param time: Time, is either a valid scalar time type or a sequence of time types.
+    :return: If the input is a sequence, the output is a sequence of datetimes, otherwise it is a scalar datetime.
+
+    """
+
     if time is None:
         return None
 
-    if isinstance(time, datetime):
-        return time.astimezone(timezone.utc)
+    if isinstance(time, (DataArray, list, tuple, ndarray)):
+        # if this is a sequence type, recursively call to datetime on the sequence
+        if isinstance(time, DataArray):
+            time = time.values
 
-    elif isinstance(time, str):
-        if time[-1] == "Z":
-            # From isoformat does not parse "Z" as a valid timezone designator
-            time = time[:-1] + "+00:00"
-        try:
-            return datetime.fromisoformat(time)
-        except ValueError:
-            return datetime.strptime(time, "%Y-%m-%dT%H:%M:%S.%f%z")
-
-    elif isinstance(time, datetime64):
-        time_stamp_seconds = numpy.datetime64(time, "s").astype("float64")
-        time = datetime.fromtimestamp(time_stamp_seconds, tz=timezone.utc)
-        return time
-
-    elif isinstance(time, List) or isinstance(time, numpy.ndarray):
-        return [_to_datetime_utc(x) for x in time]
-
-    elif isinstance(time, DataArray):
-        return _to_datetime_utc(time.values)
+        return [to_datetime_utc(x) for x in time]
 
     else:
-        return datetime.fromtimestamp(time, tz=timezone.utc)
+        # if this is a scalar type, do the appropriate conversion.
+        if isinstance(time, datetime):
+            if time.tzinfo is None:
+                time = time.replace(tzinfo=timezone.utc)
+            return time.astimezone(timezone.utc)
+
+        elif isinstance(time, str):
+            if time[-1] == "Z":
+                # From isoformat does not parse "Z" as a valid timezone designator. This should be fixed in Python 11.
+                time = time[:-1] + "+00:00"
+            try:
+                dt = datetime.fromisoformat(time)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+
+                return dt.astimezone(
+                    timezone.utc
+                )  # datetime.fromisoformat(time).astimezone(timezone.utc)
+            except ValueError:
+                return datetime.strptime(time, "%Y-%m-%dT%H:%M:%S.%f%z").astimezone(
+                    timezone.utc
+                )
+
+        elif isinstance(time, datetime64):
+            # We first cast datetime64 explicitly to seconds and then as a float to allow for fractional seconds.
+            return datetime.fromtimestamp(
+                datetime64(time, "s").astype("float64"), tz=timezone.utc
+            ).replace(tzinfo=timezone.utc)
+        elif isinstance(time, Number):
+            return datetime.fromtimestamp(time, tz=timezone.utc)
+
+        else:
+            raise ValueError(f"Unknown time type: {type(time)} with value {time}")
 
 
-def datetime_to_iso_time_string(time: input_types):
+def datetime_to_iso_time_string(time: scalar_input_types):
     if time is None:
         return None
 
@@ -64,9 +83,7 @@ def datetime_to_iso_time_string(time: input_types):
     return time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
-def to_datetime64(
-    time: Union[input_types, numpy.array, List, Tuple]
-) -> Union[numpy.ndarray, None, datetime64]:
+def to_datetime64(time) -> Union[None, datetime64, NDArray[datetime64]]:
     """
     Convert time input to numpy ndarrays.
     :param time:
@@ -75,22 +92,18 @@ def to_datetime64(
     if time is None:
         return None
 
-    if isinstance(time, numpy.ndarray):
-        return numpy.array([datetime64(to_datetime_utc(x), "s") for x in time])
+    # Convert to a (sequence of) UTC datetime(s)
+    time = to_datetime_utc(time)
 
-    elif isinstance(time, List) or isinstance(time, Tuple):
-        return numpy.array([datetime64(to_datetime_utc(x), "s") for x in time])
-
-    elif isinstance(time, datetime64):
-        return datetime64(time, "s")
-    elif isinstance(time, datetime):
-        time = time.replace(tzinfo=timezone.utc)
+    if isinstance(time, datetime):
+        # If a datetime- do conversion
         return datetime64(int(time.timestamp()), "s")
     else:
-        raise ValueError("unknown time type")
+        # if  a sequence, do list comprehension and return an array
+        return array([datetime64(int(x.timestamp()), "s") for x in time])
 
 
-def time_from_timeint(t) -> timedelta:
+def time_from_timeint(t: int) -> timedelta:
     """
     unpack a timedelta from a time given as an integer in the form "hhmmss" e.g. 201813 for 20:18:13
     """
@@ -110,7 +123,7 @@ def time_from_timeint(t) -> timedelta:
     return timedelta(seconds=(hours * 3600 + minutes * 60 + seconds))
 
 
-def date_from_dateint(t) -> datetime:
+def date_from_dateint(t: int) -> datetime:
     """
     unpack a datetime from a date given as an integer in the form "yyyymmdd" or "yymmdd" e.g. 20221109 for 2022-11-09
     or 221109 for 2022-11-09
@@ -129,8 +142,8 @@ def date_from_dateint(t) -> datetime:
     return datetime(years, months, days, tzinfo=timezone.utc)
 
 
-def decode_integer_datetime(
-    date_int, time_int, as_datetime64=False
+def datetime_from_time_and_date_integers(
+    date_int: int, time_int: int, as_datetime64=False
 ) -> Union[datetime, datetime64]:
     """
     Convert a date and time given as integed encoded in the form "yyyymmdd" and "hhmm" _or_ "hhmmss" to a datetime
@@ -140,6 +153,6 @@ def decode_integer_datetime(
     """
     dt = date_from_dateint(date_int) + time_from_timeint(time_int)
     if as_datetime64:
-        return datetime64(dt, "s")
+        return to_datetime64(dt)
     else:
         return dt

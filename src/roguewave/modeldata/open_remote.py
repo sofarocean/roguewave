@@ -23,7 +23,7 @@ import xarray
 from typing import List, Union, Iterable
 from .modelinformation import _get_resource_specification
 from os import remove, rename
-from roguewave.tools.time import to_datetime_utc, decode_integer_datetime
+from roguewave.tools.time import to_datetime_utc, datetime_from_time_and_date_integers
 from glob import glob
 from .timebase import TimeSlice
 from .keygeneration import generate_uris
@@ -281,10 +281,10 @@ def _convert_grib_to_netcdf_pygrib(filepath: str, model_variables) -> None:
         message = messages[0]
 
         # Decode time, valid time
-        init_time = decode_integer_datetime(
+        init_time = datetime_from_time_and_date_integers(
             message["dataDate"], message["dataTime"], as_datetime64=True
         )
-        valid_time = decode_integer_datetime(
+        valid_time = datetime_from_time_and_date_integers(
             message["validityDate"], message["validityTime"], as_datetime64=True
         )
 

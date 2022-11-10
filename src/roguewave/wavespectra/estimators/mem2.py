@@ -197,7 +197,7 @@ def mem2_scipy_root_finder(
 
 
 # To note; enabling caching seems to not play nice with paralel
-@njit(parallel=_PARALLEL)
+@njit(parallel=_PARALLEL, cache=(not _PARALLEL))
 def mem2_newton(
     directions_radians: numpy.ndarray,
     a1: numpy.ndarray,

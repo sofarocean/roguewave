@@ -502,8 +502,11 @@ def _roughness_iteration_function(
     :return:
     """
     vonkarman_constant = parameters["vonkarman_constant"]
+    elevation = parameters["elevation"]
     if wind[2] == "u10":
-        friction_velocity = wind[0] * vonkarman_constant / log(10 / roughness_length)
+        friction_velocity = (
+            wind[0] * vonkarman_constant / log(elevation / roughness_length)
+        )
     else:
         friction_velocity = wind[0]
 

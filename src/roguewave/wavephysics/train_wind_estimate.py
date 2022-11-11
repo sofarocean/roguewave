@@ -65,10 +65,6 @@ def calibrate_wind_estimate_from_spectrum(
         "charnock_constant": 0.015,
     }
 
-    # charnock_default_parameters= {
-    #     'charnock_constant': 0.015
-    # }
-
     scale = {}
     for parameter_name in parameter_names:
         scale[parameter_name] = estimate_default_parameters[parameter_name]

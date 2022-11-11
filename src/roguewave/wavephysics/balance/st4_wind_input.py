@@ -20,6 +20,7 @@ class ST4WaveGenerationParameters(TypedDict):
     vonkarman_constant: float
     wave_age_tuning_parameter: float
     growth_parameter_betamax: float
+    elevation: float
 
 
 class ST4WindInput(WindGeneration):
@@ -40,6 +41,7 @@ class ST4WindInput(WindGeneration):
             air_density=AIR.density,
             water_density=WATER.density,
             vonkarman_constant=AIR.vonkarman_constant,
+            elevation=10,
         )
 
 
@@ -85,13 +87,14 @@ def _st4_wind_generation_point(
     gravitational_acceleration = st4_parameters["gravitational_acceleration"]
     radian_frequency = st4_spectral_grid["radian_frequency"]
     radian_direction = st4_spectral_grid["radian_direction"]
+    elevation = st4_parameters["elevation"]
 
     wind_forcing, wind_direction_degrees, wind_forcing_type = wind
 
     # Preprocess winds to the correct conventions (U10->friction velocity if need be, wind direction degrees->radians)
     if wind_forcing_type == "u10":
         friction_velocity = (
-            wind_forcing * vonkarman_constant / log(10 / roughness_length)
+            wind_forcing * vonkarman_constant / log(elevation / roughness_length)
         )
 
     elif wind_forcing_type in ["ustar", "friction_velocity"]:

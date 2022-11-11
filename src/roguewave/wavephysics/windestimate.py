@@ -12,11 +12,7 @@ from typing import Literal
 from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectrum
 from roguewave.wavephysics.balance import SourceTermBalance
 from xarray import Dataset
-from roguewave.wavephysics.fluidproperties import AIR
-from roguewave.wavephysics.momentumflux import (
-    RoughnessLength,
-    create_roughness_length_estimator,
-)
+from roguewave.wavephysics.roughness import charnock_roughness_length
 
 
 _methods = Literal["peak", "mean"]
@@ -85,7 +81,6 @@ def estimate_u10_from_spectrum(
     vonkarman_constant=0.4,
     grav=9.81,
     number_of_bins=20,
-    roughness_parametrization: RoughnessLength = None,
     direction_convention: _direction_convention = "going_to_counter_clockwise_east",
     **kwargs,
 ) -> Dataset:
@@ -123,11 +118,6 @@ def estimate_u10_from_spectrum(
     # 3) Use Emean to estimate Wind speed (using Charnock and LogLaw)
     # 4) Calculate mean direction over equilibrium range
 
-    if roughness_parametrization is None:
-        roughness_parametrization = create_roughness_length_estimator(
-            "charnock_constant", **kwargs
-        )
-
     if isinstance(spectrum, FrequencyDirectionSpectrum):
         spectrum_1d = spectrum.as_frequency_spectrum()
     else:
@@ -144,10 +134,9 @@ def estimate_u10_from_spectrum(
         grav,
         number_of_bins,
     )
+
     # Find z0 from Charnock Relation
-    z0 = roughness_parametrization.roughness(
-        dataset.friction_velocity, spectrum, AIR, dataset.direction
-    )
+    z0 = charnock_roughness_length(dataset.friction_velocity, **kwargs)
 
     if direction_convention == "coming_from_clockwise_north":
         dataset["direction"] = (270.0 - dataset["direction"]) % 360

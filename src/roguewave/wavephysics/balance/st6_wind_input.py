@@ -18,6 +18,7 @@ class ST6WaveGenerationParameters(TypedDict):
     water_density: float
     vonkarman_constant: float
     friction_velocity_scaling: float
+    elevation: float
 
 
 class ST6WindInput(WindGeneration):
@@ -40,6 +41,7 @@ class ST6WindInput(WindGeneration):
             water_density=WATER.density,
             vonkarman_constant=AIR.vonkarman_constant,
             friction_velocity_scaling=28,
+            elevation=10,
         )
 
 
@@ -83,6 +85,7 @@ def _st6_wind_generation_point(
     friction_velocity_scaling = st6_parameters["friction_velocity_scaling"]
     air_density = st6_parameters["air_density"]
     water_density = st6_parameters["water_density"]
+    elevation = st6_parameters["elevation"]
     radian_frequency = st6_spectral_grid["radian_frequency"]
     radian_direction = st6_spectral_grid["radian_direction"]
     wind_forcing, wind_direction_degrees, wind_forcing_type = wind
@@ -90,10 +93,10 @@ def _st6_wind_generation_point(
     # Preprocess winds to the correct conventions (U10->friction velocity if need be, wind direction degrees->radians)
     if wind_forcing_type == "u10":
         u10 = wind_forcing
-        friction_velocity = u10 * vonkarman_constant / log(10 / roughness_length)
+        friction_velocity = u10 * vonkarman_constant / log(elevation / roughness_length)
 
     elif wind_forcing_type in ["ustar", "friction_velocity"]:
-        u10 = wind_forcing / vonkarman_constant * log(10 / roughness_length)
+        u10 = wind_forcing / vonkarman_constant * log(elevation / roughness_length)
         friction_velocity = wind_forcing
 
     else:

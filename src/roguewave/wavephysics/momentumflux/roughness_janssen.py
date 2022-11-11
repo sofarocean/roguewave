@@ -1,6 +1,5 @@
 from roguewave.wavephysics.momentumflux.roughness_charnock import CharnockConstant
 from roguewave.wavephysics.momentumflux.roughness_base_class import RoughnessLength
-from roguewave.wavephysics.momentumflux.wavesupportedstress import wave_supported_stress
 from roguewave.wavephysics.fluidproperties import (
     GRAVITATIONAL_ACCELERATION,
     FluidProperties,
@@ -13,7 +12,6 @@ from roguewave.wavespectra import (
 )
 from roguewave.wavephysics.balance import wind_parametrizations, create_wind_source_term
 from xarray import DataArray
-from numpy import log
 
 
 class Janssen(RoughnessLength):
@@ -78,31 +76,4 @@ class Janssen(RoughnessLength):
 
         return self.generation.roughness(
             speed, direction_degrees, spectrum, roughness_length_guess=guess
-        )
-
-    def wave_supported_stress(
-        self,
-        speed,
-        elevation,
-        roughness_length,
-        spectrum: FrequencyDirectionSpectrum,
-        direction_degrees=None,
-        air: FluidProperties = AIR,
-        water: FluidProperties = WATER,
-        **kwargs
-    ):
-
-        friction_velocity = (
-            speed * air.vonkarman_constant / log(elevation / roughness_length)
-        )
-        return wave_supported_stress(
-            spectrum,
-            friction_velocity,
-            direction_degrees,
-            roughness_length,
-            self.generation,
-            "friction_velocity",
-            air,
-            water,
-            self.gravitational_acceleration,
         )

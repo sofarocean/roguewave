@@ -1,12 +1,11 @@
-from roguewave import WaveSpectrum, FrequencySpectrum, FrequencyDirectionSpectrum
+from roguewave import WaveSpectrum
 from roguewave.wavephysics.fluidproperties import (
     AIR,
     FluidProperties,
     WATER,
-    GRAVITATIONAL_ACCELERATION,
 )
 from roguewave.tools.solvers import fixed_point_iteration
-from xarray import DataArray, zeros_like
+from xarray import DataArray
 from numpy import log, inf, sqrt, exp
 from abc import ABC, abstractmethod
 
@@ -19,8 +18,7 @@ class RoughnessLength(ABC):
         fluid_properties: FluidProperties,
         direction_degrees=None,
     ) -> DataArray:
-        if issubclass(type(spectrum), FrequencySpectrum):
-            spectrum = spectrum.as_frequency_direction_spectrum(36)
+
         return self.smooth(friction_velocity, fluid_properties) + self.form_drag(
             friction_velocity, spectrum, direction_degrees
         )
@@ -45,8 +43,6 @@ class RoughnessLength(ABC):
         guess=None,
         **kwargs
     ) -> DataArray:
-        if issubclass(type(spectrum), FrequencySpectrum):
-            spectrum = spectrum.as_frequency_direction_spectrum(36)
 
         if guess is None:
             drag = sqrt(self.drag_coefficient_estimate(speed))
@@ -72,30 +68,12 @@ class RoughnessLength(ABC):
         water: FluidProperties = WATER,
         **kwargs
     ) -> DataArray:
-        if issubclass(type(spectrum), FrequencySpectrum):
-            spectrum = spectrum.as_frequency_direction_spectrum(36)
 
         roughness = self.roughness_from_speed(
             speed, elevation, spectrum, direction_degrees, air, water
         )
         friction_velocity = speed * air.vonkarman_constant / log(elevation / roughness)
         return (friction_velocity / speed) ** 2
-
-    def implied_charnock(
-        self,
-        speed,
-        elevation,
-        spectrum: WaveSpectrum,
-        direction_degrees=None,
-        air: FluidProperties = AIR,
-        water: FluidProperties = WATER,
-        **kwargs
-    ) -> DataArray:
-        roughness = self.roughness_from_speed(
-            speed, elevation, spectrum, direction_degrees, air, water, **kwargs
-        )
-        friction_velocity = air.vonkarman_constant * speed / log(elevation / roughness)
-        return roughness * GRAVITATIONAL_ACCELERATION / friction_velocity**2
 
     def drag_coefficient_estimate(self, speed):
         """
@@ -113,31 +91,3 @@ class RoughnessLength(ABC):
             speed * air.vonkarman_constant / log(elevation / roughness_length)
         )
         return air.density * friction_velocity**2
-
-    def wave_supported_stress(
-        self,
-        speed,
-        elevation,
-        roughness_length,
-        spectrum: FrequencyDirectionSpectrum,
-        direction_degrees=None,
-        air: FluidProperties = AIR,
-        water: FluidProperties = WATER,
-        **kwargs
-    ):
-        return zeros_like(speed), zeros_like(speed)
-
-    def turbulent_stress(
-        self,
-        speed,
-        elevation,
-        roughness_length,
-        spectrum: FrequencyDirectionSpectrum,
-        direction_degrees=None,
-        air: FluidProperties = AIR,
-        water: FluidProperties = WATER,
-    ):
-        wave_stress, _ = self.wave_supported_stress(
-            speed, elevation, roughness_length, spectrum, direction_degrees
-        )
-        return self.total_stress(speed, elevation, roughness_length) - wave_stress

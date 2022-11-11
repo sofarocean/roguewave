@@ -3,12 +3,14 @@ from roguewave import (
 )
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavephysics.balance.source_term import SourceTerm
-from roguewave.tools.solvers import numba_newton_raphson, numba_fixed_point_iteration
+from roguewave.wavephysics.balance.solvers import (
+    numba_newton_raphson,
+    numba_fixed_point_iteration,
+)
 from xarray import DataArray, zeros_like
 from typing import Literal, Tuple
 from numpy import inf, empty, isnan, nan, arctan2, sqrt, pi, cos, sin, exp, any, log
 from numba import njit, types, prange
-from numba_progress import ProgressBar
 from numba.typed import Dict as NumbaDict
 from numpy.typing import NDArray
 from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
@@ -95,44 +97,6 @@ class WindGeneration(SourceTerm):
             dims=spectrum.dims_space_time,
             coords=spectrum.coords_space_time,
         )
-
-    def u10_from_bulk_rate(
-        self,
-        bulk_rate: DataArray,
-        guess_u10: DataArray,
-        guess_direction: DataArray,
-        spectrum: FrequencyDirectionSpectrum,
-    ) -> DataArray:
-        """
-
-        :param bulk_rate:
-        :param guess_u10:
-        :param guess_direction:
-        :param spectrum:
-        :return:
-        """
-        disable = spectrum.number_of_spectra < 100
-        with ProgressBar(
-            total=spectrum.number_of_spectra,
-            disable=disable,
-            desc=f"Estimating U10 from {self.name} Source term",
-        ) as progress_bar:
-            u10 = _u10_from_bulk_rate(
-                bulk_rate.values,
-                spectrum.variance_density.values,
-                guess_u10=guess_u10.values,
-                guess_direction=guess_direction.values,
-                depth=spectrum.depth.values,
-                wind_source_term_function=self._wind_source_term_function,
-                spectral_grid=self.spectral_grid(spectrum),
-                parameters=self.parameters,
-                progress_bar=progress_bar,
-            )
-            return DataArray(
-                data=u10,
-                dims=spectrum.dims_space_time,
-                coords=spectrum.coords_space_time,
-            )
 
 
 @njit(cache=True, fastmath=True)

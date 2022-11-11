@@ -17,7 +17,6 @@ from scipy.optimize import root
 import typing
 from roguewave.wavespectra.estimators.utils import get_direction_increment
 from roguewave.wavespectra.estimators.mem import numba_mem
-from roguewave.tools.solvers import solve_cholesky
 from numba import njit, prange
 from numba.typed import Dict as NumbaDict
 from numba.core import types
@@ -610,3 +609,47 @@ def initial_value(
     guess[..., 2] = a1**2 - b1**2 - 2 * a2 * fac
     guess[..., 3] = 2 * a1 * b1 - 2 * b2 * fac
     return guess
+
+
+@njit(cache=True, fastmath=True)
+def solve_cholesky(matrix, rhs):
+    """
+    Solve using cholesky decomposition according to the Cholesky–Banachiewicz algorithm.
+    See: https://en.wikipedia.org/wiki/Cholesky_decomposition#The_Cholesky_algorithm
+    """
+    M, N = matrix.shape
+    x = numpy.zeros(M)
+    cholesky_decomposition = numpy.zeros((M, M))
+    inv = numpy.zeros(M)
+
+    for mm in range(0, M):
+        forward_sub_sum = rhs[mm]
+        for nn in range(0, mm):
+            sum = matrix[mm, nn]
+            for kk in range(0, nn):
+                sum -= cholesky_decomposition[mm, kk] * cholesky_decomposition[nn, kk]
+
+            cholesky_decomposition[mm, nn] = inv[nn] * sum
+            forward_sub_sum += -cholesky_decomposition[mm, nn] * x[nn]
+
+        sum = matrix[mm, mm]
+        for kk in range(0, mm):
+            sum -= cholesky_decomposition[mm, kk] ** 2
+
+        if sum <= 0.0:
+            raise ValueError(
+                "Matrix not positive definite, likely due to finite precision errors."
+            )
+
+        cholesky_decomposition[mm, mm] = numpy.sqrt(sum)
+        inv[mm] = 1 / cholesky_decomposition[mm, mm]
+        x[mm] = forward_sub_sum * inv[mm]
+
+    # Backward Substitution (in place)
+    for mm in range(0, M):
+        kk = M - mm - 1
+        sum = x[kk]
+        for nn in range(kk + 1, N):
+            sum += -cholesky_decomposition[nn, kk] * x[nn]
+        x[kk] = sum * inv[kk]
+    return x

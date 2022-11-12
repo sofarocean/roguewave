@@ -770,7 +770,7 @@ def _get_next_page(
             # conversion and request output as a scalar.
             obj = out[var_name][-1]
             if isinstance(obj, FrequencySpectrum):
-                cur_time = to_datetime_utc(obj.time.values[0])
+                cur_time = to_datetime_utc(obj.time.values)
             else:
                 cur_time = out[var_name][-1].time
 

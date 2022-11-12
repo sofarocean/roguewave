@@ -19,7 +19,7 @@ TIMEDELTA = timedelta(seconds=10 * 3600 + 60 * 20 + 42)
 XARRAY = DataArray(data=[to_datetime64(TEST_DATETIME)])
 
 
-def t_time_from_timeint():
+def test_time_from_timeint():
     assert time_from_timeint(TEST_DATE_TIME_INT[1]), TIMEDELTA
     assert TEST_DATE == date_from_dateint(TEST_DATE_TIME_INT[0])
     assert TEST_DATETIME == datetime_from_time_and_date_integers(*TEST_DATE_TIME_INT)
@@ -28,7 +28,7 @@ def t_time_from_timeint():
     ) == datetime_from_time_and_date_integers(*TEST_DATE_TIME_INT, as_datetime64=True)
 
 
-def t_datetime_conversions():
+def test_datetime_conversions():
     # Convert a datetime64, a isoformat, string,string,string, integer,float, datetime
     times = [
         to_datetime64(TEST_DATETIME),
@@ -71,5 +71,5 @@ def t_datetime_conversions():
 
 
 if __name__ == "__main__":
-    t_time_from_timeint()
-    t_datetime_conversions()
+    test_time_from_timeint()
+    test_datetime_conversions()

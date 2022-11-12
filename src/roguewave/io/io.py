@@ -16,10 +16,11 @@ How To Use This Module
 (See the individual functions for details.)
 
 """
-from roguewave.wavespectra import FrequencySpectrum, \
-    FrequencyDirectionSpectrum, create_1d_spectrum
-from roguewave.metoceandata import WaveBulkData, WindData, \
-    SSTData,BarometricPressure
+from roguewave.wavespectra import (
+    FrequencySpectrum,
+    FrequencyDirectionSpectrum,
+    create_1d_spectrum,
+)
 from pandas import DataFrame, read_json
 from typing import Union, Dict, List
 from datetime import datetime
@@ -40,40 +41,47 @@ _UNION = Union[
     Dict[str, List[FrequencySpectrum]],
     List[List[FrequencyDirectionSpectrum]],
     List[List[DataFrame]],
-    Dict[int,List[DataFrame]],
-    Dict[str,List[WaveBulkData]],
-    Dict[str,DataFrame]
+    Dict[int, List[DataFrame]],
+    Dict[str, DataFrame],
 ]
 
-def _b64_encode_numpy(val:numpy.ndarray)->dict:
+
+def _b64_encode_numpy(val: numpy.ndarray) -> dict:
     if val.dtype == numpy.float64:
-        val=val.astype(dtype=numpy.float32)
+        val = val.astype(dtype=numpy.float32)
 
     if val.dtype == numpy.int64:
-        val=val.astype(dtype=numpy.int32)
+        val = val.astype(dtype=numpy.int32)
 
     dtype = val.dtype.str
     shape = val.shape
     data = base64.b64encode(val)
 
-    return {"__class__":"ndarray", "data":{"dtype":dtype,"shape":shape,"data":data.decode('utf8')}}
+    return {
+        "__class__": "ndarray",
+        "data": {"dtype": dtype, "shape": shape, "data": data.decode("utf8")},
+    }
+
 
 def _b64_decode_numpy(data):
-    decoded_bytes = base64.b64decode(bytes(data['data'],encoding='utf-8'))
-    dtype = numpy.dtype(data['dtype'])
-    array = numpy.frombuffer(decoded_bytes,dtype=dtype)
-    return numpy.reshape(array,data['shape'])
+    decoded_bytes = base64.b64decode(bytes(data["data"], encoding="utf-8"))
+    dtype = numpy.dtype(data["dtype"])
+    array = numpy.frombuffer(decoded_bytes, dtype=dtype)
+    return numpy.reshape(array, data["shape"])
 
-def _b64_encode_dataset(val:Dataset,name)->dict:
-    net_cdf = val.to_netcdf(engine='scipy')
+
+def _b64_encode_dataset(val: Dataset, name) -> dict:
+    net_cdf = val.to_netcdf(engine="scipy")
     data = base64.b64encode(net_cdf)
-    return {"__class__":name, "data":{"data":data.decode('utf8')}}
+    return {"__class__": name, "data": {"data": data.decode("utf8")}}
+
 
 def _b64_decode_dataset(data):
-    decoded_bytes = base64.b64decode(bytes(data['data'],encoding='utf-8'))
+    decoded_bytes = base64.b64decode(bytes(data["data"], encoding="utf-8"))
     with BytesIO(decoded_bytes) as fp:
-        dataset = open_dataset(fp,engine='scipy')
+        dataset = open_dataset(fp, engine="scipy")
     return dataset
+
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -87,84 +95,66 @@ class NumpyEncoder(json.JSONEncoder):
             return int(obj)
         elif isinstance(obj, numpy.float64):
             return float(obj)
-        elif isinstance(obj,Dataset):
-            return _b64_encode_dataset(obj,"Dataset")
-        elif isinstance(obj,FrequencySpectrum):
-            return _b64_encode_dataset(obj.dataset,"FrequencySpectrum")
-        elif isinstance(obj,FrequencyDirectionSpectrum):
-            return _b64_encode_dataset(obj.dataset,"FrequencyDirectionSpectrum")
+        elif isinstance(obj, Dataset):
+            return _b64_encode_dataset(obj, "Dataset")
+        elif isinstance(obj, FrequencySpectrum):
+            return _b64_encode_dataset(obj.dataset, "FrequencySpectrum")
+        elif isinstance(obj, FrequencyDirectionSpectrum):
+            return _b64_encode_dataset(obj.dataset, "FrequencyDirectionSpectrum")
         elif isinstance(obj, datetime):
-            return {'__class__':'datetime', 'data':datetime.isoformat(obj)}
-        elif isinstance(obj,DataFrame):
-            return {'__class__':'DataFrame', 'data': obj.to_json(date_unit='s')}
-        elif isinstance(obj, WaveBulkData):
-            return {'__class__': 'WaveBulkData', 'data':obj.as_dict()}
-        elif isinstance(obj, WindData):
-            return {'__class__': 'WindData', 'data':obj.as_dict()}
-        elif isinstance(obj, SSTData):
-            return {'__class__': 'SSTData', 'data':obj.as_dict()}
-        elif isinstance(obj, BarometricPressure):
-            return {'__class__': 'BarometricPressure', 'data':obj.as_dict()}
+            return {"__class__": "datetime", "data": datetime.isoformat(obj)}
+        elif isinstance(obj, DataFrame):
+            return {"__class__": "DataFrame", "data": obj.to_json(date_unit="s")}
         else:
             return json.JSONEncoder.default(self, obj)
 
-def object_hook(dictionary:dict):
-    if '__class__' in dictionary:
-        if dictionary['__class__'] == 'DataFrame':
+
+def object_hook(dictionary: dict):
+    if "__class__" in dictionary:
+        if dictionary["__class__"] == "DataFrame":
             #
-            df = read_json(dictionary['data'])
-            if 'timestamp' in df:
-                df['timestamp'] = df['timestamp'].apply(
-                    lambda x: x.tz_localize('utc'))
-            elif 'time' in df:
-                df['time'] = df['time'].apply(
-                    lambda x: x.tz_localize('utc'))
-            elif 'valid_time' in df:
-                df['valid_time'] = df['valid_time'].apply(
-                    lambda x: x.tz_localize('utc'))
-            elif 'init_time' in df:
-                df['valid_time'] = df['valid_time'].apply(
-                    lambda x: x.tz_localize('utc'))
+            df = read_json(dictionary["data"])
+            if "timestamp" in df:
+                df["timestamp"] = df["timestamp"].apply(lambda x: x.tz_localize("utc"))
+            elif "time" in df:
+                df["time"] = df["time"].apply(lambda x: x.tz_localize("utc"))
+            elif "valid_time" in df:
+                df["valid_time"] = df["valid_time"].apply(
+                    lambda x: x.tz_localize("utc")
+                )
+            elif "init_time" in df:
+                df["valid_time"] = df["valid_time"].apply(
+                    lambda x: x.tz_localize("utc")
+                )
             else:
-                df.index = [ x.tz_localize('utc') for x in df.index]
+                df.index = [x.tz_localize("utc") for x in df.index]
             return df
-        elif dictionary['__class__'] == 'WaveSpectrum1D':
-            data = dictionary['data']
+        elif dictionary["__class__"] == "WaveSpectrum1D":
+            data = dictionary["data"]
             return create_1d_spectrum(
-                frequency=data['frequency'],
-                variance_density=data['varianceDensity'],
-                time=data['timestamp'],
-                latitude=data['latitude'],
-                longitude=data['longitude'],
-                a1=data['a1'],
-                b1=data['b1'],
-                a2=data['a2'],
-                b2=data['b2']
+                frequency=data["frequency"],
+                variance_density=data["varianceDensity"],
+                time=data["timestamp"],
+                latitude=data["latitude"],
+                longitude=data["longitude"],
+                a1=data["a1"],
+                b1=data["b1"],
+                a2=data["a2"],
+                b2=data["b2"],
             )
-        elif dictionary['__class__'] == 'Dataset':
-            return _b64_decode_dataset(dictionary['data'])
-        elif dictionary['__class__'] == 'FrequencySpectrum':
-            return FrequencySpectrum(
-                _b64_decode_dataset(dictionary['data']))
-        elif dictionary['__class__'] == 'FrequencyDirectionSpectrum':
-            return FrequencyDirectionSpectrum(
-                _b64_decode_dataset(dictionary['data']))
-        elif dictionary['__class__'] == 'ndarray':
-            return _b64_decode_numpy(dictionary['data'])
-        elif dictionary['__class__'] == 'datetime':
-            return datetime.fromisoformat( dictionary['data'] )
-        elif dictionary['__class__'] == 'WaveBulkData':
-            return WaveBulkData(**dictionary['data'])
-        elif dictionary['__class__'] == 'WaveBulkData':
-            return WaveBulkData(**dictionary['data'])
-        elif dictionary['__class__'] == 'WindData':
-            return WindData(**dictionary['data'])
-        elif dictionary['__class__'] == 'SSTData':
-            return SSTData(**dictionary['data'])
-        elif dictionary['__class__'] == 'BarometricPressure':
-            return BarometricPressure(**dictionary['data'])
+        elif dictionary["__class__"] == "Dataset":
+            return _b64_decode_dataset(dictionary["data"])
+        elif dictionary["__class__"] == "FrequencySpectrum":
+            return FrequencySpectrum(_b64_decode_dataset(dictionary["data"]))
+        elif dictionary["__class__"] == "FrequencyDirectionSpectrum":
+            return FrequencyDirectionSpectrum(_b64_decode_dataset(dictionary["data"]))
+        elif dictionary["__class__"] == "ndarray":
+            return _b64_decode_numpy(dictionary["data"])
+        elif dictionary["__class__"] == "datetime":
+            return datetime.fromisoformat(dictionary["data"])
     else:
         return dictionary
+
 
 def load(filename: str) -> _UNION:
     """
@@ -177,12 +167,14 @@ def load(filename: str) -> _UNION:
         - Data in the same form it was saved.
     """
 
-    with gzip.open(filename, 'rb') as file:
-        data = file.read().decode('utf-8')
+    with gzip.open(filename, "rb") as file:
+        data = file.read().decode("utf-8")
         return json.loads(data, object_hook=object_hook)
 
 
-def save(_input: _UNION, filename: str, format='json', separate_spotters_into_files=False):
+def save(
+    _input: _UNION, filename: str, format="json", separate_spotters_into_files=False
+):
     """
     Save spectral data, possible in nested form as returned by the spectral
     partition/reconstruction/etc. functions. Data is saved in JSON form
@@ -197,19 +189,18 @@ def save(_input: _UNION, filename: str, format='json', separate_spotters_into_fi
     """
 
     def write(filename, _input, format):
-        if format == 'json':
-            with gzip.open(filename, 'wt') as file:
-                json.dump(_input,file,cls=NumpyEncoder)
-                #file.write(data.encode('utf-8'))
+        if format == "json":
+            with gzip.open(filename, "wt") as file:
+                json.dump(_input, file, cls=NumpyEncoder)
+                # file.write(data.encode('utf-8'))
         else:
-            raise Exception('Unknown output format')
-
+            raise Exception("Unknown output format")
 
     if separate_spotters_into_files:
         os.makedirs(filename, exist_ok=True)
         for key in _input:
             name = os.path.join(filename, key)
-            write( name,_input[key],format )
+            write(name, _input[key], format)
 
     else:
-        write(filename,_input,format)
+        write(filename, _input, format)

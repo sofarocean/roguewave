@@ -9,7 +9,7 @@ Authors: Pieter Bart Smit
 from datetime import datetime, timezone, timedelta
 from xarray import DataArray
 from typing import Union, Sequence
-from numpy import datetime64, ndarray, array
+from numpy import datetime64, ndarray
 from numpy.typing import NDArray
 from numbers import Number
 
@@ -100,7 +100,7 @@ def to_datetime64(time) -> Union[None, datetime64, NDArray[datetime64]]:
         return datetime64(int(time.timestamp()), "s")
     else:
         # if  a sequence, do list comprehension and return an array
-        return array([datetime64(int(x.timestamp()), "s") for x in time])
+        return ndarray([datetime64(int(x.timestamp()), "s") for x in time])
 
 
 def time_from_timeint(t: int) -> timedelta:

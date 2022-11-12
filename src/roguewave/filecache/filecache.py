@@ -23,15 +23,14 @@ Functions:
 # =============================================================================
 import os
 from typing import List, Tuple, Union, Dict, Iterable, Callable
-from .cache_object import TEMPORARY_DIRECTORY, \
-    CACHE_SIZE_GB, FileCache
+from .cache_object import TEMPORARY_DIRECTORY, CACHE_SIZE_GB, FileCache
 from .remote_resources import RemoteResource
 
 # Constants
 # =============================================================================
 
 
-DEFAULT_CACHE_NAME = '__default__'
+DEFAULT_CACHE_NAME = "__default__"
 
 # Private Module Variables
 # =============================================================================
@@ -44,11 +43,14 @@ _ACTIVE_FILE_CACHES = {}  # type: Dict[str,FileCache]
 
 # Main public function.
 # =============================================================================
+def set(name, value, cache_name: str = None):
+    cache = get_cache(cache_name)
+    setattr(cache, name, value)
 
 
 def filepaths(
-        uris: Union[List[str], str],
-        cache_name: str = None
+    uris: Union[List[str], str],
+    cache_name: str = None,
 ) -> Union[List[str], Tuple[List[str], List[bool]]]:
     """
     Return the full file path to locally stored objects corresponding to the
@@ -72,15 +74,14 @@ def remove_directive_function(directive: str, name: str, cache_name=None):
 
 
 def set_directive_function(
-        directive: str, name: str,
-        post_process_function: Union[
-            Callable[[str], None], Callable[[str], bool]] = None,
-        cache_name=None):
+    directive: str,
+    name: str,
+    post_process_function: Union[Callable[[str], None], Callable[[str], bool]] = None,
+    cache_name=None,
+):
     #
     _ = get_cache(cache_name).set_directive_function(
-        directive,
-        name,
-        post_process_function
+        directive, name, post_process_function
     )
 
 
@@ -94,14 +95,14 @@ def exists(cache_name: str):
     return cache_name in _ACTIVE_FILE_CACHES
 
 
-def create_cache(cache_name: str,
-                 cache_path: str = TEMPORARY_DIRECTORY,
-                 cache_size_GB: Union[int, float] = CACHE_SIZE_GB,
-                 do_cache_eviction_on_startup: bool = False,
-                 download_in_parallel=True,
-                 resources: List[RemoteResource] = None
-                 ) \
-        -> None:
+def create_cache(
+    cache_name: str,
+    cache_path: str = TEMPORARY_DIRECTORY,
+    cache_size_GB: Union[int, float] = CACHE_SIZE_GB,
+    do_cache_eviction_on_startup: bool = False,
+    download_in_parallel=True,
+    resources: List[RemoteResource] = None,
+) -> None:
     """
     Create a file cache. Created caches *must* have unique names and
     cache_paths.
@@ -129,23 +130,24 @@ def create_cache(cache_name: str,
     cache_path = os.path.abspath(os.path.expanduser(cache_path))
 
     if cache_name in _ACTIVE_FILE_CACHES:
-        raise ValueError(
-            f'Cache with name {cache_name} is already initialized')
+        raise ValueError(f"Cache with name {cache_name} is already initialized")
 
     for key, cache in _ACTIVE_FILE_CACHES.items():
         if cache.path == cache_path:
-            raise ValueError(f'Error when creating cache with name: '
-                             f'"{cache_name}". \n A cache named: "{key}" '
-                             f'already uses the path {cache_path} '
-                             f'for caching.\n '
-                             f'Multiple caches cannot share the same path.')
+            raise ValueError(
+                f"Error when creating cache with name: "
+                f'"{cache_name}". \n A cache named: "{key}" '
+                f"already uses the path {cache_path} "
+                f"for caching.\n "
+                f"Multiple caches cannot share the same path."
+            )
 
     _ACTIVE_FILE_CACHES[cache_name] = FileCache(
         cache_path,
         size_GB=cache_size_GB,
         do_cache_eviction_on_startup=do_cache_eviction_on_startup,
         parallel=download_in_parallel,
-        resources=resources
+        resources=resources,
     )
     return
 
@@ -159,7 +161,7 @@ def delete_cache(cache_name):
     :return:
     """
     if not exists(cache_name):
-        raise ValueError(f'Cache with name {cache_name} does not exist')
+        raise ValueError(f"Cache with name {cache_name} does not exist")
 
     cache = _ACTIVE_FILE_CACHES.pop(cache_name)
     cache.purge()
@@ -175,8 +177,7 @@ def delete_default():
         delete_cache(DEFAULT_CACHE_NAME)
 
 
-def delete_files(uris: Union[str, Iterable[str]],
-                 cache_name: str) -> None:
+def delete_files(uris: Union[str, Iterable[str]], cache_name: str) -> None:
     """
     Remove given key(s) from the cache
     :param uris: list of keys to remove
@@ -205,6 +206,6 @@ def get_cache(cache_name: str) -> FileCache:
         if cache_name == DEFAULT_CACHE_NAME:
             create_cache(cache_name)
         else:
-            raise ValueError(f'Cache with name {cache_name} does not exist.')
+            raise ValueError(f"Cache with name {cache_name} does not exist.")
 
     return _ACTIVE_FILE_CACHES[cache_name]

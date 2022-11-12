@@ -39,8 +39,8 @@ from pysofar.spotter import SofarApi
 
 
 # Spotter Cache setup.
-CACHE_NAME = 'spotter_cache'
-CACHE_PATH = '~/temporary_roguewave_files/spotter_cache'
+CACHE_NAME = "spotter_cache"
+CACHE_PATH = "~/temporary_roguewave_files/spotter_cache"
 CACHE_SIZE_GB = 2
 
 
@@ -56,11 +56,10 @@ class WaveFleetResource(RemoteResource):
     and function pointer are registerd as keyword/value pairs in the
     _handlers dictionary.
     """
-    URI_PREFIX = 'wavefleet://'
 
-    def __init__(self,
-                 request_type_handle_mapping: dict,
-                 session: SofarApi):
+    URI_PREFIX = "wavefleet://"
+
+    def __init__(self, request_type_handle_mapping: dict, session: SofarApi):
         # Dictionary that maps a request type (str) to a function
         self._handlers = request_type_handle_mapping
         # Sofar session object
@@ -83,16 +82,18 @@ class WaveFleetResource(RemoteResource):
         if not self.handler_defined(request_type=request_type):
             self._handlers[request_type] = handler
         else:
-            raise ValueError(
-                f'A handler is already defined for {request_type}')
+            raise ValueError(f"A handler is already defined for {request_type}")
 
 
 # Functions
 # =============================================================================
-
-
-def get_data(spotter_ids: List[str], session: SofarApi,
-             handler, **kwargs):
+def flush(
+    spotter_ids: List[str],
+    session: SofarApi,
+    handler,
+    request_type="get_data",
+    **kwargs,
+):
     """
     Caching method for the get_data function defined in spotter_api. Note that
     the function handles creation of a cache if not initialized and adding of
@@ -104,16 +105,56 @@ def get_data(spotter_ids: List[str], session: SofarApi,
     :param kwargs: Args needed to call the handler.
     :return:
     """
-    REQUEST_TYPE = 'get_data'
+
     if not _exists():
-        _create_cache(request_type=REQUEST_TYPE, handler=handler,
-                      session=session)
+        _create_cache(request_type=request_type, handler=handler, session=session)
+
+    if not _handler_is_defined(request_type=request_type):
+        return
+
+    uris = [
+        _spotter_cache_uri(request_type, spotter_id=_id, **kwargs)
+        for _id in spotter_ids
+    ]
+    filecache.delete_files(uris, cache_name=CACHE_NAME)
+    return
+
+
+def get_data(
+    spotter_ids: List[str],
+    session: SofarApi,
+    handler,
+    parallel=True,
+    description=None,
+    **kwargs,
+):
+    """
+    Caching method for the get_data function defined in spotter_api. Note that
+    the function handles creation of a cache if not initialized and adding of
+    the request handler.
+
+    :param spotter_ids: list of spotter ID's
+    :param session: valid sofar API session
+    :param handler: Function to execute a given request.
+    :param kwargs: Args needed to call the handler.
+    :return:
+    """
+    REQUEST_TYPE = "get_data"
+    if not _exists():
+        _create_cache(request_type=REQUEST_TYPE, handler=handler, session=session)
 
     if not _handler_is_defined(request_type=REQUEST_TYPE):
         _add_handler(request_type=REQUEST_TYPE, handler=handler)
 
-    uris = [_spotter_cache_uri(REQUEST_TYPE, spotter_id=_id,
-                               **kwargs) for _id in spotter_ids]
+    if description is not None:
+        filecache.set("description", description, cache_name=CACHE_NAME)
+
+    filecache.set("parallel", parallel, cache_name=CACHE_NAME)
+
+    uris = [
+        _spotter_cache_uri(REQUEST_TYPE, spotter_id=_id, **kwargs)
+        for _id in spotter_ids
+    ]
 
     filepaths = filecache.filepaths(uris, cache_name=CACHE_NAME)
     output = [load(filepath) for filepath in filepaths]
@@ -132,10 +173,9 @@ def get_data_search(handler, session: SofarApi, **kwargs):
 
     :return:
     """
-    REQUEST_TYPE = 'search'
+    REQUEST_TYPE = "search"
     if not _exists():
-        _create_cache(request_type=REQUEST_TYPE, handler=handler,
-                      session=session)
+        _create_cache(request_type=REQUEST_TYPE, handler=handler, session=session)
 
     if not _handler_is_defined(request_type=REQUEST_TYPE):
         _add_handler(request_type=REQUEST_TYPE, handler=handler)
@@ -164,37 +204,39 @@ def _spotter_cache_uri(request_type: str, **kwargs):
     :param kwargs: json serializabe dict. See NumpyEncoder for custom additions
     :return:  uri
     """
-    kwargs['request_type'] = request_type
-    return f"wavefleet://" + json.dumps(kwargs, cls=NumpyEncoder)
+    kwargs["request_type"] = request_type
+    return "wavefleet://" + json.dumps(kwargs, cls=NumpyEncoder)
 
 
 def _decode_spotter_cache_uri(uri: str):
     """
-        Decode a "wavefleet uri" back into its kwargs form together with
-        the request type. A "wavefleet uri" is a string that has the form:
+    Decode a "wavefleet uri" back into its kwargs form together with
+    the request type. A "wavefleet uri" is a string that has the form:
 
-            wavefleet://[request_type]/[json_serialized_kwargs]
+        wavefleet://[request_type]/[json_serialized_kwargs]
 
-        To note; this is only used to create a hashable string that uniquely
-        specifies the request.
+    To note; this is only used to create a hashable string that uniquely
+    specifies the request.
 
-        :param uri: wavefleet "URI"
-        :return:  request_type and kwargs that serve as input to the
-            request_type handler.
-        """
-    uri = uri.replace('wavefleet://', '')
+    :param uri: wavefleet "URI"
+    :return:  request_type and kwargs that serve as input to the
+        request_type handler.
+    """
+    uri = uri.replace("wavefleet://", "")
     kwargs = json.loads(uri, object_hook=object_hook)
-    request_type = kwargs.pop('request_type')
+    request_type = kwargs.pop("request_type")
     return request_type, kwargs
 
 
 def _create_cache(request_type, handler, session):
     if not _exists():
         wavefleetresource = WaveFleetResource({request_type: handler}, session)
-        filecache.create_cache(CACHE_NAME,
-                               cache_path=CACHE_PATH,
-                               resources=[wavefleetresource],
-                               cache_size_GB=CACHE_SIZE_GB)
+        filecache.create_cache(
+            CACHE_NAME,
+            cache_path=CACHE_PATH,
+            resources=[wavefleetresource],
+            cache_size_GB=CACHE_SIZE_GB,
+        )
 
 
 def _exists() -> bool:
@@ -227,7 +269,7 @@ def _add_handler(request_type, handler):
     else:
         # Note that we require that the wavefleet object is there. If the
         # cache was created through create_cache this should be the case.
-        raise ValueError('No valid WaveFleetResource object instantiated')
+        raise ValueError("No valid WaveFleetResource object instantiated")
 
 
 def _handler_is_defined(request_type):
@@ -243,4 +285,4 @@ def _handler_is_defined(request_type):
     else:
         # Note that we require that the wavefleet object is there. If the
         # cache was created through create_cache this should be the case.
-        raise ValueError('No valid WaveFleetResource object instantiated')
+        raise ValueError("No valid WaveFleetResource object instantiated")

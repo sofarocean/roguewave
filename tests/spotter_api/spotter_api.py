@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from pandas.testing import assert_frame_equal
 from pandas import DataFrame
+from roguewave.spotterapi import spotterapi
 
 try:
     # Load a dotenv file with the eng account if provided, otherwise it is assumed that a proper env is setup
@@ -8,15 +9,23 @@ try:
 except Exception:
     pass
 
-
-from roguewave.spotterapi.spotterapi import get_data, get_bulk_wave_data
-from datetime import datetime
+from roguewave.spotterapi.spotterapi import (
+    get_data,
+    get_bulk_wave_data,
+    get_spotter_data,
+)
+from datetime import datetime, timedelta
+from roguewave import to_datetime_utc, FrequencySpectrum
 
 # Smartmooring unit on the eng account.
 SMARTMOORING_TEST_SPOTTER_ID = "SPOT-30083D"
 TEST_SPOTTER_ID = "SPOT-010288"
+START_DATE_MULTIPAGE = datetime(2022, 10, 10)
 START_DATE = datetime(2022, 11, 10)
 END_DATE = datetime(2022, 11, 11)
+
+START_DATE_SM = datetime(2022, 9, 10)
+END_DATE_SM = datetime(2022, 9, 21)
 
 DATAFRAME_KEYS = [
     "latitude",
@@ -47,10 +56,31 @@ DATAFRAME_KEYS_WIND = [
     "windDirection10Meter",
     "seasurfaceId",
 ]
+
+DATAFRAME_KEYS_SMARTMOORING = [
+    "latitude",
+    "longitude",
+    "time",
+    "sensorPosition",
+    "units",
+    "value",
+    "unit_type",
+    "data_type_name",
+]
+
 DATAFRAME_KEYS_SST = ["latitude", "longitude", "seaSurfaceTemperature"]
 
+DATAFRAME_KEYS_MICROPHONEDATA = [
+    "latitude",
+    "longitude",
+    "units",
+    "soundPressure",
+    "unit_type",
+    "data_type_name",
+]
 
-def tst_get_data_waveheight():
+
+def test_get_data_waveheight():
     single = get_data(
         TEST_SPOTTER_ID, START_DATE, END_DATE, include_waves=True, cache=False
     )
@@ -73,7 +103,7 @@ def tst_get_data_waveheight():
         assert key in data["waves"], f"{key} not in data"
 
 
-def tst_get_pressure():
+def test_get_pressure():
     single = get_data(
         TEST_SPOTTER_ID,
         START_DATE,
@@ -89,7 +119,7 @@ def tst_get_pressure():
         assert key in data["barometerData"], f"{key} not in data"
 
 
-def tst_get_sst():
+def test_get_sst():
     single = get_data(
         TEST_SPOTTER_ID,
         START_DATE,
@@ -104,7 +134,7 @@ def tst_get_sst():
         assert key in data["surfaceTemp"], f"{key} not in data"
 
 
-def tst_get_wind():
+def test_get_wind():
     single = get_data(
         TEST_SPOTTER_ID,
         START_DATE,
@@ -119,7 +149,50 @@ def tst_get_wind():
         assert key in data["wind"], f"{key} not in data"
 
 
-def tst_get_all():
+def test_get_smart_mooring_data():
+    single = get_spotter_data(
+        SMARTMOORING_TEST_SPOTTER_ID,
+        "smartMooringData",
+        START_DATE_SM,
+        END_DATE_SM,
+        flatten=False,
+        cache=False,
+    )
+    assert SMARTMOORING_TEST_SPOTTER_ID in single
+    data = single[SMARTMOORING_TEST_SPOTTER_ID]
+    for key in DATAFRAME_KEYS_SMARTMOORING:
+        assert key in data["smartMooringData"], f"{key} not in data"
+
+    # Make sure our artificial rate limiting does not influence results returned.
+    spotterapi.MAX_DAYS_SMARTMOORING = 20
+    no_rate_limit = get_spotter_data(
+        SMARTMOORING_TEST_SPOTTER_ID,
+        "smartMooringData",
+        START_DATE_SM,
+        END_DATE_SM,
+        flatten=False,
+        cache=False,
+    )[SMARTMOORING_TEST_SPOTTER_ID]
+
+    assert_frame_equal(data["smartMooringData"], no_rate_limit["smartMooringData"])
+
+
+def test_get_microphone():
+    single = get_spotter_data(
+        TEST_SPOTTER_ID,
+        ["microphoneData"],
+        START_DATE,
+        END_DATE,
+        cache=False,
+        flatten=False,
+    )
+    assert TEST_SPOTTER_ID in single
+    data = single[TEST_SPOTTER_ID]
+    for key in DATAFRAME_KEYS_MICROPHONEDATA:
+        assert key in data["microphoneData"], f"{key} not in data"
+
+
+def test_get_all():
     single = get_data(
         TEST_SPOTTER_ID,
         START_DATE,
@@ -134,11 +207,24 @@ def tst_get_all():
     assert TEST_SPOTTER_ID in single
     data = single[TEST_SPOTTER_ID]
 
-    for key in ["wind", "waves", "frequencyData", "barometerData", "surfaceTempData"]:
+    for key in ["wind", "waves", "frequencyData", "barometerData", "surfaceTemp"]:
         assert key in data, f"{key} not in data."
 
 
-def tst_get_spectrum():
+def test_get_spectrum():
+    single = get_data(
+        TEST_SPOTTER_ID,
+        START_DATE,
+        END_DATE,
+        include_waves=False,
+        include_wind=False,
+        include_surface_temp_data=False,
+        include_barometer_data=False,
+        include_frequency_data=True,
+        cache=False,
+    )
+    assert TEST_SPOTTER_ID in single
+
     single = get_data(
         TEST_SPOTTER_ID,
         START_DATE,
@@ -153,9 +239,81 @@ def tst_get_spectrum():
     assert TEST_SPOTTER_ID in single
 
 
+def test_get_paged_data():
+    single = get_data(
+        TEST_SPOTTER_ID,
+        START_DATE,
+        END_DATE,
+        include_waves=False,
+        include_wind=False,
+        include_surface_temp_data=False,
+        include_barometer_data=False,
+        include_frequency_data=True,
+        cache=False,
+    )
+    assert TEST_SPOTTER_ID in single
+
+
+def test_flatten():
+    single = get_spotter_data(
+        [TEST_SPOTTER_ID, SMARTMOORING_TEST_SPOTTER_ID],
+        ["waves", "frequencyData"],
+        START_DATE,
+        END_DATE,
+        flatten=True,
+        cache=False,
+    )
+    assert "waves" in single
+    single = single["waves"]
+    assert isinstance(single, DataFrame)
+    assert "spotter_id" in single.keys()
+
+    for key in DATAFRAME_KEYS:
+        assert key in single, f"{key} not in data"
+
+
+def test_multi_page():
+    single = get_spotter_data(
+        [TEST_SPOTTER_ID, SMARTMOORING_TEST_SPOTTER_ID],
+        ["waves", "frequencyData", "surfaceTemp"],  # ,'frequencyData','surfaceTemp'
+        START_DATE_MULTIPAGE,
+        END_DATE,
+        flatten=False,
+        cache=False,
+    )
+
+    data = single[TEST_SPOTTER_ID]["waves"]
+    assert isinstance(data, DataFrame)
+    assert data.shape == (766, 11)
+    assert data["significantWaveHeight"][600] == 6.73
+    assert to_datetime_utc(END_DATE) - data["time"].iloc[-1] < timedelta(hours=1)
+    assert data["time"].iloc[0] - to_datetime_utc(START_DATE) < timedelta(hours=1)
+
+    data = single[TEST_SPOTTER_ID]["surfaceTemp"]
+    assert isinstance(data, DataFrame)
+    assert data.shape == (2298, 4)
+    assert to_datetime_utc(END_DATE) - data["time"].iloc[-1] < timedelta(hours=1)
+    assert data["time"].iloc[0] - to_datetime_utc(START_DATE) < timedelta(hours=1)
+
+    data = single[TEST_SPOTTER_ID]["frequencyData"]
+    assert isinstance(data, FrequencySpectrum)
+    assert len(data) == 766
+    assert abs(data.significant_waveheight[600] - 6.73) < 0.01
+    assert to_datetime_utc(END_DATE) - to_datetime_utc(data.time)[-1] < timedelta(
+        hours=1
+    )
+    assert to_datetime_utc(data.time)[0] - to_datetime_utc(START_DATE) < timedelta(
+        hours=1
+    )
+
+
 if __name__ == "__main__":
-    data = tst_get_data_waveheight()
-    data = tst_get_pressure()
-    data = tst_get_sst()
-    data = tst_get_wind()
-    data = tst_get_all()
+    test_get_smart_mooring_data()
+    test_multi_page()
+    test_flatten()
+    test_get_data_waveheight()
+    test_get_pressure()
+    test_get_sst()
+    test_get_wind()
+    test_get_all()
+    test_get_microphone()

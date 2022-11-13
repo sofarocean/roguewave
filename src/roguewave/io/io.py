@@ -31,6 +31,7 @@ import numpy
 import base64
 from io import BytesIO
 from xarray import Dataset, open_dataset
+from roguewave import to_datetime_utc
 
 
 _UNION = Union[
@@ -117,7 +118,9 @@ def object_hook(dictionary: dict):
             if "timestamp" in df:
                 df["timestamp"] = df["timestamp"].apply(lambda x: x.tz_localize("utc"))
             elif "time" in df:
-                df["time"] = df["time"].apply(lambda x: x.tz_localize("utc"))
+                time = to_datetime_utc(df["time"].values)
+                # df["time"] = df["time"].apply(lambda x: x.tz_localize("utc"))
+                df["time"] = time
             elif "valid_time" in df:
                 df["valid_time"] = df["valid_time"].apply(
                     lambda x: x.tz_localize("utc")

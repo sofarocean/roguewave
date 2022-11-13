@@ -270,7 +270,6 @@ class WaveSpectrum(DatasetWrapper):
 
         dataset = {}
         for index, dim in zip(indices, dims):
-            x = coords[dim].values[index]
             dataset[dim] = DataArray(
                 data=coords[dim].values[index], dims=flattened_coordinate
             )

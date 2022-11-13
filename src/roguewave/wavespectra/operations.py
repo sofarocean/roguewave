@@ -16,7 +16,7 @@ _T = TypeVar("_T", FrequencySpectrum, FrequencyDirectionSpectrum)
 spec_dims = Literal["frequency", "direction"]
 
 
-def concatenate_spectra(spectra: Sequence[_T], dim=None, **kwargs) -> _T:
+def concatenate_spectra(spectra: Sequence[_T], dim=None, keys=None, **kwargs) -> _T:
     """
     Concatenate along the given dimension. If the dimension does not exist a new dimension will be created. Under the
     hood this calls the concat function of xarray. Named arguments to that function can be applied here as well.

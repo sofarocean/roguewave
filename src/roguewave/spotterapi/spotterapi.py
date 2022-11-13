@@ -105,11 +105,9 @@ def get_spectrum(
     WaveSpectrum1D object.
 
     """
-    if "flatten" not in kwargs:
-        kwargs["flatten"] = False
-    varname: Literal["frequencyData"] = "frequencyData"
-    data = get_spotter_data(spotter_ids, [varname], start_date, end_date, **kwargs)
-    return {key: data[key]["frequencyData"] for key in data}
+    return get_spotter_data(
+        spotter_ids, "frequencyData", start_date, end_date, **kwargs
+    )
 
 
 def get_bulk_wave_data(
@@ -134,12 +132,11 @@ def get_bulk_wave_data(
     :return: Data as a dictornary with spotter_id's as keys, and for each
     corresponding value a dataframe containing the output.
     """
-
-    varname: Literal["waves"] = "waves"
-    if "flatten" not in kwargs:
-        kwargs["flatten"] = False
-    data = get_spotter_data(spotter_ids, [varname], start_date, end_date, **kwargs)
-    return {key: data[key]["waves"] for key in data}
+    df = get_spotter_data(spotter_ids, "waves", start_date, end_date, **kwargs)
+    data = {}
+    for spotter_id in df["spotter_id"].unique():
+        data[spotter_id] = df[df["spotter_id"] == spotter_id]
+    return data
 
 
 # -----------------------------------------------------------------------------
@@ -178,26 +175,60 @@ def get_data(
     if include_waves:
         data_to_get.append("waves")
     data_to_get: List[DATA_TYPES]
-    if "flatten" not in kwargs:
-        kwargs["flatten"] = False
-    return get_spotter_data(spotter_ids, data_to_get, start_date, end_date, **kwargs)
+
+    data = {}
+
+    for data_type in data_to_get:
+        df = get_spotter_data(spotter_ids, data_type, start_date, end_date, **kwargs)
+
+        if data_type == "frequencyData":
+            for spotter_id in df:
+                if spotter_id not in data:
+                    data[spotter_id] = {}
+                data[spotter_id][data_type] = df[spotter_id]
+        else:
+            for spotter_id in df["spotter_id"].unique():
+                if spotter_id not in data:
+                    data[spotter_id] = {}
+                data[spotter_id][data_type] = df[df["spotter_id"] == spotter_id]
+
+    return data
+
+
+# Return types for get spotter data. Options that control the return type are:
+# - data-to-get-entries; if frequencyData is requested we return a FrequencySpectrum object,
+#                        otherwise we return a dataframe.
+# - data-to_get type; if a list we return each requested variable as a key value mapping
+# - flatten: if false data for each spotter is returned in a key value mapping with
+#            spotter_id as key.
 
 
 def get_spotter_data(
     spotter_ids: Union[str, List[str]],
-    data_to_get: Union[DATA_TYPES, List[DATA_TYPES]],
+    data_type: DATA_TYPES,
     start_date: Union[datetime, int, float, str] = None,
     end_date: Union[datetime, int, float, str] = None,
-    flatten=True,
     session: SofarApi = None,
     parallel_download=True,
     cache=True,
-) -> Dict[str, Dict[str, Union[FrequencySpectrum, DataFrame]]]:
+) -> Union[DataFrame, Dict[str, FrequencySpectrum]]:
     """
-    Gets the requested data for the spotter(s) in the given interval
+    Gets the requested data for the spotter(s) in the given interval as either a dataframe containing
+    all the data for the combined spotters in a single table (all datatypes except frequencyData) or
+    a dictionary object that has the spotter_id as key and contains a frequency spectrum object as
+    values.
 
     :param spotter_ids: Can be either 1) a List of spotter_ids or 2) a single
     Spotter_id.
+
+    :param data_type: Literal string denoting the desired data type, options are
+            data_type="waves", bulk wave data
+            data_type="wind", wind estimates
+            data_type="surfaceTemp", surface temperature (if available)
+            data_type="barometerData", barometer data (if available)
+            data_type="frequencyData", frequency data (if available) NOTE: does not return a datafrae
+            data_type="microphoneData", microphone data if available
+            data_type="smartMooringData", smartmooring data if available.
 
     :param start_date: ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to beginning of spotters
@@ -240,66 +271,54 @@ def get_spotter_data(
     if not isinstance(spotter_ids, (list, tuple)):
         spotter_ids = [spotter_ids]
 
-    # Make sure we have a list object
-    if not isinstance(data_to_get, (list, tuple)):
-        data_to_get = [data_to_get]
-
     # Ensure we have datetime aware objects
     start_date = to_datetime_utc(start_date)
     end_date = to_datetime_utc(end_date)
 
-    data = {}
-    for var_name in data_to_get:
-        description = f"Downloading from api - {var_name}"
-        if not cache or end_date > datetime.now(tz=timezone.utc):
-            # Use cached data  _only_ for requests that concern the past. In real-time
-            # things may change. In the later case (or when we do not want to use cached values) we flush the cache entries.
-            spotter_cache.flush(
-                spotter_ids,
-                session,
-                _download_data,
-                var_name=var_name,
-                start_date=start_date,
-                end_date=end_date,
-            )
-
-        data_for_variable = spotter_cache.get_data(
+    description = f"Downloading from api - {data_type}"
+    if not cache or end_date > datetime.now(tz=timezone.utc):
+        # Use cached data  _only_ for requests that concern the past. In real-time
+        # things may change. In the later case (or when we do not want to use cached values) we flush the cache entries.
+        spotter_cache.flush(
             spotter_ids,
             session,
             _download_data,
-            parallel=parallel_download,
-            description=description,
-            var_name=var_name,
+            var_name=data_type,
             start_date=start_date,
             end_date=end_date,
         )
 
-        if not flatten:
-            for spotter_id, spotter_data in zip(spotter_ids, data_for_variable):
-                #
-                # Did we get any data for this spotter
-                if spotter_data is not None:
-                    if spotter_id not in data:
-                        data[spotter_id] = {}
-                    data[spotter_id][var_name] = spotter_data
-        else:
-            values, _id = [], []
-            for spotter_id, spotter_data in zip(spotter_ids, data_for_variable):
-                #
-                # Did we get any data for this spotter
-                if spotter_data is not None:
-                    values += [spotter_data]
-                    _id += [spotter_id]
+    data_for_variable = spotter_cache.get_data(
+        spotter_ids,
+        session,
+        _download_data,
+        parallel=parallel_download,
+        description=description,
+        var_name=data_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
-            if var_name == "frequencyData":
-                data[var_name] = concatenate_spectra(values)
-            else:
-                data[var_name] = concat(
-                    values, keys=_id, names=["spotter_id", "time index"]
-                )
+    if data_type == "frequencyData":
+        data = {}
+        for spotter_id, spotter_data in zip(spotter_ids, data_for_variable):
+            #
+            # Did we get any data for this spotter
+            if spotter_data is not None:
+                data[spotter_id] = spotter_data
+    else:
+        values, _id = [], []
+        for spotter_id, spotter_data in zip(spotter_ids, data_for_variable):
+            #
+            # Did we get any data for this spotter
+            if spotter_data is not None:
+                values += [spotter_data]
+                _id += [spotter_id]
 
-                data[var_name].reset_index(inplace=True)
-                data[var_name].drop(columns="time index", inplace=True)
+        data = concat(values, keys=_id, names=["spotter_id", "time index"])
+
+        data.reset_index(inplace=True)
+        data.drop(columns="time index", inplace=True)
 
     return data
 

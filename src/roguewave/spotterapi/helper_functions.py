@@ -1,5 +1,5 @@
 from pysofar.sofar import SofarApi
-from typing import List, Dict, MutableMapping, Union
+from typing import List, Dict, MutableMapping, Union, Any
 from pandas import DataFrame
 from numpy import unique, inf, array
 from roguewave import (
@@ -156,7 +156,7 @@ def _get_class(key, data) -> Union[MutableMapping, FrequencySpectrum]:
             raise Exception(f"Unknown variable {key}")
 
 
-def as_dataframe(list_of_dict: List[Dict]) -> DataFrame:
+def as_dataframe(list_of_dict: List[Dict[str, Any]]) -> DataFrame:
     """
     Convert a list of dictionaries to a dataframe. Each dictionary in the list is assumed
     to have the same set of keys.

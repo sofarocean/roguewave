@@ -36,13 +36,7 @@ from roguewave.wavespectra import (
     concatenate_spectra,
 )
 
-from typing import (
-    Dict,
-    List,
-    Union,
-    Sequence,
-    Literal,
-)
+from typing import Dict, List, Union, Sequence, Literal, Any
 from pandas import DataFrame, concat
 from .helper_functions import (
     _get_sofar_api,
@@ -90,14 +84,11 @@ def get_spectrum(
     spotter_ids: Union[str, Sequence[str]],
     start_date: Union[datetime, int, float, str] = None,
     end_date: Union[datetime, int, float, str] = None,
-    session: SofarApi = None,
-    parallel_download=True,
-    cache: bool = True,
-    flatten=False,
+    **kwargs,
 ) -> Dict[str, FrequencySpectrum]:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
-    interval
+    interval.
 
     :param spotter_ids: Can be either 1) a List of spotter_ids or 2) a single
     Spotter_id.
@@ -109,34 +100,15 @@ def get_spectrum(
     :param end_date:   ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to end of spotter history
 
-    :param session:    Active SofarApi session. If none is provided one will be
-                       creatated automatically. This requires that an API key
-                       is set in the environment.
-
-    :param parallel_download: Use multiple requests to the Api to speed up
-                        retrieving data. Only useful for large requests.
-
-    :param cache: Cache requests. If True, returned data will be stored in
-                        a file Cache on disk, and repeated calls with the
-                        same arguments will use locally cached data. The cache
-                        is a FileCache with a maximum of 2GB by default.
-
     :return: Data as a dictornary with spotter_id's as keys, and for each
     corresponding value a List that for each returned time contains a
     WaveSpectrum1D object.
 
     """
+    if "flatten" not in kwargs:
+        kwargs["flatten"] = False
     varname: Literal["frequencyData"] = "frequencyData"
-    data = get_spotter_data(
-        spotter_ids,
-        [varname],
-        start_date,
-        end_date,
-        session=session,
-        parallel_download=parallel_download,
-        cache=cache,
-        flatten=flatten,
-    )
+    data = get_spotter_data(spotter_ids, [varname], start_date, end_date, **kwargs)
     return {key: data[key]["frequencyData"] for key in data}
 
 
@@ -144,10 +116,7 @@ def get_bulk_wave_data(
     spotter_ids: Union[str, Sequence[str]],
     start_date: Union[datetime, int, float, str] = None,
     end_date: Union[datetime, int, float, str] = None,
-    session: SofarApi = None,
-    parallel_download: bool = True,
-    cache: bool = True,
-    flatten=False,
+    **kwargs,
 ) -> Dict[str, DataFrame]:
     """
     Gets the requested bulk wave data for the spotter(s) in the given interval
@@ -162,33 +131,14 @@ def get_bulk_wave_data(
     :param end_date:   ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to end of spotter history
 
-    :param session:    Active SofarApi session. If none is provided one will be
-                       creatated automatically. This requires that an API key
-                       is set in the environment.
-
-    :param parallel_download: Use multiple requests to the Api to speed up
-                        retrieving data. Only useful for large requests.
-
-    :param cache: Cache requests. If True, returned data will be stored in
-                        a file Cache on disk, and repeated calls with the
-                        same arguments will use locally cached data. The cache
-                        is a FileCache with a maximum of 2GB by default.
-
     :return: Data as a dictornary with spotter_id's as keys, and for each
     corresponding value a dataframe containing the output.
     """
 
     varname: Literal["waves"] = "waves"
-    data = get_spotter_data(
-        spotter_ids,
-        [varname],
-        start_date,
-        end_date,
-        session=session,
-        parallel_download=parallel_download,
-        cache=cache,
-        flatten=flatten,
-    )
+    if "flatten" not in kwargs:
+        kwargs["flatten"] = False
+    data = get_spotter_data(spotter_ids, [varname], start_date, end_date, **kwargs)
     return {key: data[key]["waves"] for key in data}
 
 
@@ -202,15 +152,21 @@ def get_data(
     include_wind=False,
     include_barometer_data=False,
     include_surface_temp_data=False,
-    flatten=False,
-    session: SofarApi = None,
-    parallel_download=True,
-    cache=True,
+    **kwargs,
 ) -> Dict[str, Dict[str, Union[FrequencySpectrum, DataFrame]]]:
     """
     DEPRICATED USE get_spotter_data instead
     """
+    from warnings import warn
+
+    warn(
+        "The get_data function is depricated, please use get_spotter_data instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     data_to_get = []
+
     if include_frequency_data:
         data_to_get.append("frequencyData")
     if include_barometer_data:
@@ -221,17 +177,10 @@ def get_data(
         data_to_get.append("wind")
     if include_waves:
         data_to_get.append("waves")
-
-    return get_spotter_data(
-        spotter_ids,
-        data_to_get,
-        start_date,
-        end_date,
-        session,
-        parallel_download,
-        flatten=flatten,
-        cache=cache,
-    )
+    data_to_get: List[DATA_TYPES]
+    if "flatten" not in kwargs:
+        kwargs["flatten"] = False
+    return get_spotter_data(spotter_ids, data_to_get, start_date, end_date, **kwargs)
 
 
 def get_spotter_data(
@@ -350,7 +299,7 @@ def get_spotter_data(
                 )
 
                 data[var_name].reset_index(inplace=True)
-                data[var_name] = data[var_name].drop(columns="time index")
+                data[var_name].drop(columns="time index", inplace=True)
 
     return data
 
@@ -404,7 +353,7 @@ def _unpaginate(
     end_date: datetime,
     spotter_id: str,
     session: SofarApi,
-):
+) -> Union[FrequencySpectrum, Dict[str, Any]]:
     """
     Generator function to unpaginate data from the api.
 
@@ -416,7 +365,7 @@ def _unpaginate(
     - Not all Spotters will have (all) data for the given timerange.
     - Wavefleet sometimes times out on requests.
 
-    :param spotter: Spotter object from pysofar
+    :param spotter_id: Spotter id
 
     :param start_date: ISO 8601 formatted date string, epoch or datetime.
                        If not included defaults to beginning of spotters
@@ -424,10 +373,6 @@ def _unpaginate(
 
     :param end_date: ISO 8601 formatted date string, epoch or datetime.
                      If not included defaults to end of spotter history
-
-    :param limit: Maximum number of Spectra to download per call. Not exposed
-                  externally right now as there is not really a reason to
-                  change it. (calling function does not set the limit)
 
     :return: Data
     """

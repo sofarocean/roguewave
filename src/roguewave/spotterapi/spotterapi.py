@@ -241,16 +241,10 @@ def get_spotter_data(
                         same arguments will use locally cached data. The cache
                         is a FileCache with a maximum of 2GB by default.
 
-    :return: Data as a dictornary with spotter_id's as keys, and for each
-    corresponding value a dataframe containing the output.
-
-    To Note; this function now fetches each of the variables seperately -
-        instead of doing one fetch; this is a clutch fix to the issue that
-        data for different variables have different timestamps. As a consequence
-        getting 100 data points for frequency data may cover 5 days -whereas
-        the same number of points only cover a day for SST data. Since we
-        only get 100 data points per request- and have to advance to the next
-        date ourselves-  this complicates matters tremendously.
+    :return:
+        data_type="frequencyData": a dictionary with spoter ids as keys and FrequencySpectra as values
+        data_type= ...  : a Pandas Dataframe with a spotter_id column that indicates to which spotter entries
+            belong.
     """
 
     if spotter_ids is None:

@@ -1,8 +1,9 @@
 from typing import Mapping, Sequence, Union, Tuple
-from pandas import DataFrame
+from pandas import DataFrame, concat
 from xarray import DataArray
+from datetime import timedelta
 
-from roguewave.spotterapi.spotterapi import get_bulk_wave_data
+from roguewave.spotterapi.spotterapi import get_spotter_data
 from roguewave.interpolate.dataset import tracks_as_dataset
 from roguewave.modeldata.extract import extract_from_remote_dataset
 from roguewave.interpolate.dataframe import interpolate_dataframe_time
@@ -19,7 +20,7 @@ def colocate_model_spotter(
     parallel: bool = True,
     timebase: str = "model",
     slice_remotely=False,
-    return_as_dataset=True,
+    return_as_dataset=False,
 ) -> Union[
     Tuple[Mapping[str, DataFrame], Mapping[str, DataFrame]], Tuple[DataArray, DataArray]
 ]:
@@ -58,12 +59,23 @@ def colocate_model_spotter(
                 "time base is native or spotter"
             )
 
-    spotters = get_bulk_wave_data(
+    if timebase.lower() == "model":
+        # If we have a model time base we interpolate spotter observations onto the model grid
+        # To ensure we have data to use for interpolation at the end points we widen the interval there
+        obs_delta = timedelta(hours=3)
+    else:
+        obs_delta = timedelta(hours=0)
+
+    df = get_spotter_data(
         spotter_ids,
-        time_slice.start_time,
-        time_slice.end_time,
-        convert_to_sofar_model_names=True,
+        "waves",
+        time_slice.start_time - obs_delta,
+        time_slice.end_time + obs_delta,
     )
+    spotters = {
+        key: value.drop(columns="spotter_id")
+        for (key, value) in df.groupby(["spotter_id"])
+    }
 
     for spotter_id in list(spotters.keys()):
         # If only one value - pop because we cannot interpolate on 1 value.
@@ -73,7 +85,8 @@ def colocate_model_spotter(
     # we want model data to cover the entire period. Spotter data will be returned up to the enddate. Hence we enforce
     # inclusion of the endpoint during colocation, this will ensure that whenever there is spotter data, there is
     # enclosing model data (which I would argue is the expected behaviour).
-    time_slice.endpoint = True
+    if timebase.lower() == "spotter":
+        time_slice.endpoint = True
 
     model = extract_from_remote_dataset(
         spotters,
@@ -88,13 +101,13 @@ def colocate_model_spotter(
     for spotter_id in spotters:
         s = spotters[spotter_id]  # type: DataFrame
         m = model[spotter_id]  # type: DataFrame
-        model_time = m.index.values
+        model_time = m["time"].values
         if timebase.lower() == "native":
             pass
         elif timebase.lower() == "observed" or timebase.lower() == "spotter":
-            m = interpolate_dataframe_time(m, s.index.values)
+            m = interpolate_dataframe_time(m, s["time"].values)
         elif timebase.lower() == "model":
-            s = interpolate_dataframe_time(s, m.index.values)
+            s = interpolate_dataframe_time(s, m["time"].values)
         else:
             raise ValueError(
                 f"Unknown timebase {timebase}, must be one of: "
@@ -109,6 +122,8 @@ def colocate_model_spotter(
             model_time, spotters
         )
     else:
+        model = colocate_into_single_dataframe(model)
+        spotters = colocate_into_single_dataframe(spotters)
         return model, spotters
 
 
@@ -126,3 +141,13 @@ def colocated_tracks_as_dataset(*args) -> Tuple[DataArray, DataArray]:
     model = tracks_as_dataset(time, model)
     spotter = tracks_as_dataset(time, spotter)
     return spotter, model
+
+
+def colocate_into_single_dataframe(data: dict[str, DataFrame]) -> DataFrame:
+    _ids = list(data.keys())
+    values = [data[_id] for _id in _ids]
+
+    data = concat(values, keys=_ids, names=["spotter_id", "time index"])
+    data.reset_index(inplace=True)
+    data.drop(columns="time index", inplace=True)
+    return data

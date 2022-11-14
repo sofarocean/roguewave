@@ -12,7 +12,7 @@ from typing import Union, Sequence
 from numpy import datetime64, ndarray, array
 from numpy.typing import NDArray
 from numbers import Number
-
+from pandas import Series
 
 scalar_input_types = Union[str, float, int, datetime, datetime64]
 input_types = Union[scalar_input_types, Sequence[scalar_input_types]]
@@ -32,9 +32,9 @@ def to_datetime_utc(time: input_types) -> Union[datetime, Sequence[datetime], No
     if time is None:
         return None
 
-    if isinstance(time, (DataArray, list, tuple, ndarray)):
+    if isinstance(time, (DataArray, list, tuple, ndarray, Series)):
         # if this is a sequence type, recursively call to datetime on the sequence
-        if isinstance(time, DataArray):
+        if isinstance(time, (DataArray, Series)):
             time = time.values
 
         return [to_datetime_utc(x) for x in time]

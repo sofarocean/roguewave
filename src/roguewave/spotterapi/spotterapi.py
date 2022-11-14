@@ -133,10 +133,7 @@ def get_bulk_wave_data(
     corresponding value a dataframe containing the output.
     """
     df = get_spotter_data(spotter_ids, "waves", start_date, end_date, **kwargs)
-    data = {}
-    for spotter_id in df["spotter_id"].unique():
-        data[spotter_id] = df[df["spotter_id"] == spotter_id]
-    return data
+    return {key: value for (key, value) in df.groupby(["spotter_id"])}
 
 
 # -----------------------------------------------------------------------------
@@ -177,20 +174,15 @@ def get_data(
     data_to_get: List[DATA_TYPES]
 
     data = {}
-
     for data_type in data_to_get:
         df = get_spotter_data(spotter_ids, data_type, start_date, end_date, **kwargs)
+        if not data_type == "frequencyData":
+            df = {key: value for (key, value) in df.groupby(["spotter_id"])}
 
-        if data_type == "frequencyData":
-            for spotter_id in df:
-                if spotter_id not in data:
-                    data[spotter_id] = {}
-                data[spotter_id][data_type] = df[spotter_id]
-        else:
-            for spotter_id in df["spotter_id"].unique():
-                if spotter_id not in data:
-                    data[spotter_id] = {}
-                data[spotter_id][data_type] = df[df["spotter_id"] == spotter_id]
+        for spotter_id in df:
+            if spotter_id not in data:
+                data[spotter_id] = {}
+            data[spotter_id][data_type] = df[spotter_id]
 
     return data
 
@@ -204,7 +196,7 @@ def get_data(
 
 
 def get_spotter_data(
-    spotter_ids: Union[str, List[str]],
+    spotter_ids: Union[str, Sequence[str]],
     data_type: DATA_TYPES,
     start_date: Union[datetime, int, float, str] = None,
     end_date: Union[datetime, int, float, str] = None,

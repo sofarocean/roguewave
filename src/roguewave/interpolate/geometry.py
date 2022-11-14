@@ -139,7 +139,7 @@ class Track(_Geometry):
             for latitude, longitude, time in zip(
                 spotter["latitude"].values,
                 spotter["longitude"].values,
-                spotter.index.values,
+                spotter["time"].values,
             ):
                 points.append(
                     SpaceTimePoint(

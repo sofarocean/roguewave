@@ -9,7 +9,7 @@ END_DATE = datetime(2022, 11, 11, tzinfo=timezone.utc)
 MODEL = "SofarECMWFHResOperationalWaveModel0p25"
 
 
-def tst_colocate_waveheight_timebase_model():
+def test_colocate_waveheight_timebase_model():
     variable = "significantWaveHeight"
     time_slice = TimeSliceForecast(START_DATE, END_DATE - START_DATE)
 
@@ -58,7 +58,7 @@ def tst_colocate_waveheight_timebase_model():
         assert_allclose(spotter[variable].values[index], values_obs[ii])
 
 
-def tst_colocate_waveheight_timebase_spotter():
+def test_colocate_waveheight_timebase_spotter():
     variable = "significantWaveHeight"
     time_slice = TimeSliceForecast(START_DATE, END_DATE - START_DATE)
 
@@ -89,5 +89,5 @@ def tst_colocate_waveheight_timebase_spotter():
 
 
 if __name__ == "__main__":
-    tst_colocate_waveheight_timebase_model()
-    tst_colocate_waveheight_timebase_spotter()
+    test_colocate_waveheight_timebase_model()
+    test_colocate_waveheight_timebase_spotter()

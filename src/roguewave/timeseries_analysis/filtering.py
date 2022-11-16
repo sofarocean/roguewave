@@ -1,52 +1,69 @@
 from numba import njit
-from numpy import ndarray, empty_like, diff, abs, nan, isfinite
+from numba.typed import Dict
+from numba.core import types
+from numpy import empty_like, abs, nan, isfinite, flip
 from numpy.typing import NDArray
+from typing import Literal
 from numpy import interp
-from roguewave.timeseries_analysis.parse_spotter_files import (
-    load_gps,
-    load_displacement,
-)
-
-
-def pipeline(filters, time: ndarray, signal: ndarray) -> ndarray:
-
-    for (filter, settings) in filters:
-        signal = filter(time, signal, **settings)
-
-    return signal
+from scipy.signal import sosfilt, sosfiltfilt, butter
 
 
 @njit(cache=True)
-def exponential_highpass_filter(time_seconds, signal):
-    sampling_frequency = 2.5  # kwargs.get('sampling_frequency', 2.5)
+def exponential_filter(
+    time_seconds, signal, sampling_frequency=2.5, options: dict = None
+):
+    """
+    Exponential filter that operates on the differences between succesive values.
+
+    :param time_seconds:
+    :param signal:
+    :param options:
+    :return:
+    """
+
+    if options is None:
+        options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
+
+    smoothing_factor = options.get("smoothing_factor", 0.004)
+    maximum_gap_size = options.get("maximum_gap_size", 3)
     sampling_interval = 1 / sampling_frequency
-    smoothing_factor = 0.05  # kwargs.get('smoothing_factor',0.01)
 
-    exponential_mean = 0
+    # Initialize empty array
     filtered_signal = empty_like(signal)
-    for ii in range(len(signal)):
-        if ii > 0:
-            time_delta_seconds = time_seconds[ii] - time_seconds[ii - 1]
-        else:
-            time_delta_seconds = sampling_interval
 
-        if abs(time_delta_seconds - sampling_interval) > 0.1 * sampling_interval:
-            # restart the filter
-            exponential_mean = 0
+    # Initialize start values
+    exponential_mean = 0
+    filtered_signal[0] = 0
+
+    for ii in range(1, len(signal)):
+        signal_delta = signal[ii] - signal[ii - 1]
+
+        if (
+            time_seconds[ii] - time_seconds[ii - 1]
+            > maximum_gap_size * sampling_interval
+        ):
+            # Restart
+            exponential_mean = 0.0
+            filtered_signal[ii] = 0.0
 
         exponential_mean = (
-            exponential_mean * (1 - smoothing_factor) + signal[ii] * smoothing_factor
+            exponential_mean * (1 - smoothing_factor) + signal_delta * smoothing_factor
         )
-        filtered_signal[ii] = signal[ii] - exponential_mean
+        filtered_signal[ii] = filtered_signal[ii - 1] + (
+            signal_delta - exponential_mean
+        )
 
     return filtered_signal
 
 
 @njit(cache=True)
-def outlier_rejection_filter(time: NDArray, signal: NDArray) -> NDArray:
-    sampling_frequency = 2.5
-    rejection_threshold = 9.81 / 2  # 9.81 * 0.45
-    sampling_interval = 1 / sampling_frequency
+def spike_filter(
+    time: NDArray, signal: NDArray, sampling_frequency=2.5, options: dict = None
+) -> NDArray:
+    if options is None:
+        options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
+
+    rejection_threshold = options.get("rejection_threshold", 9.81)
 
     filtered_signal = empty_like(signal)
     filtered_signal[0] = signal[0]
@@ -56,51 +73,42 @@ def outlier_rejection_filter(time: NDArray, signal: NDArray) -> NDArray:
 
     for ii in range(1, len(signal)):
         delta_signal = signal[ii] - prev_signal
-        delta_time = time[ii] - time[ii - 1]
+        delta_time = time[ii] - prev_time
 
         if abs(delta_signal / delta_time) > rejection_threshold:
             filtered_signal[ii] = nan
             continue
 
-        filtered_signal[ii] = 0.1 * (prev_signal + delta_signal)  # + 0.3*signal[ii]
+        filtered_signal[ii] = prev_signal + delta_signal
         prev_signal = filtered_signal[ii]
         prev_time = time[ii]
     return nan_interpolate(time, filtered_signal)
 
 
-@njit(cache=True)
-def integrate(time: NDArray, signal: NDArray) -> NDArray:
-    coef = [3 / 8, 19 / 24, -5 / 24, 1 / 24]
+def sos_filter(
+    signal: NDArray, direction: Literal["backward", "forward", "filtfilt"], sos=None
+) -> NDArray:
+    #
+    # Apply forward/backward/filtfilt sos filter
+    #
+    # Get SOS coefficients
+    if sos is None:
+        sos = butter(4, 0.033, btype="high", output="sos", fs=2.5)
+    #
+    if direction == "backward":
+        return flip(sosfilt(sos, flip(signal)))
 
-    integrated_signal = empty_like(signal)
-    integrated_signal[0] = 0
+    elif direction == "forward":
+        return sosfilt(sos, signal)
 
-    # Start with Trapezoidal rule
-    for ii in range(1, 3):
-        dt = time[ii] - time[ii - 1]
-        integrated_signal[ii] = (
-            integrated_signal[ii - 1] + (signal[ii] + signal[ii - 1]) / 2 * dt
-        )
+    elif direction == "filtfilt":
+        return sosfiltfilt(sos, signal)
 
-    # Then apply Adams Moulton
-    for ii in range(3, len(signal)):
-        dt = time[ii] - time[ii - 1]
-        integrated_signal[ii] = (
-            integrated_signal[ii - 1]
-            + coef[0] * signal[ii] * dt
-            + coef[1] * signal[ii - 1] * dt
-            + coef[2] * signal[ii - 2] * dt
-            + coef[3] * signal[ii - 3] * dt
-        )
-    return integrated_signal
+    else:
+        raise ValueError(f"Unknown direction {direction}")
 
 
 @njit(cache=True)
 def nan_interpolate(time: NDArray, signal: NDArray) -> NDArray:
     mask = isfinite(signal)
     return interp(time, time[mask], signal[mask])
-
-
-if __name__ == "__main__":
-    vert = load_gps(path="/Users/pietersmit/Downloads/Sunflower13/log")
-    hor = load_displacement(path="/Users/pietersmit/Downloads/Sunflower13/log")

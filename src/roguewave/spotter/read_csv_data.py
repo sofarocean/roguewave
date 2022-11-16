@@ -1,15 +1,12 @@
 from ._csv_file_layouts import get_format, ColumnParseParameters
 from pandas import DataFrame, read_csv, concat
 from roguewave.timeseries_analysis.filtering import sos_filter
-from numpy import cos, sin, pi
 from typing import Iterator, List, Callable
 from glob import glob
+from roguewave import FrequencySpectrum
 import os
 
-_pattern = {
-    "GPS": "????_GPS.csv",
-    "FLT": "????_FLT.csv",
-}
+_pattern = {"GPS": "????_GPS.csv", "FLT": "????_FLT.csv", "LOC": "????_LOC.csv"}
 
 
 def apply_to_group(function: Callable[[DataFrame], DataFrame], dataframe: DataFrame):
@@ -35,6 +32,7 @@ def files_to_parse(path: str, pattern: str) -> Iterator[str]:
 def load_as_dataframe(
     files_to_parse: Iterator[str],
     csv_parsing_options: List[ColumnParseParameters],
+    sampling_interval=0.4,
 ) -> DataFrame:
     column_names = [x["column_name"] for x in csv_parsing_options]
     usecols = [x["column_name"] for x in csv_parsing_options if x["include"]]
@@ -60,10 +58,12 @@ def load_as_dataframe(
 
     source_files = list(files_to_parse)
     data_frames = [process_file(source_file) for source_file in source_files]
-    return mark_continuous_groups(concat(data_frames, keys=source_files))
+    return mark_continuous_groups(
+        concat(data_frames, keys=source_files), sampling_interval
+    )
 
 
-def mark_continuous_groups(df: DataFrame, sampling_interval=0.4):
+def mark_continuous_groups(df: DataFrame, sampling_interval):
     """
     This function adds a column that has unique number for each continuous block of data (i.e. data without gaps).
     It does so by:
@@ -79,38 +79,18 @@ def mark_continuous_groups(df: DataFrame, sampling_interval=0.4):
     return df
 
 
-def read_data(path, data_type) -> DataFrame:
+def read_data(path, data_type, sampling_interval) -> DataFrame:
     files = files_to_parse(path, _pattern[data_type])
     format = get_format(data_type)
-    return load_as_dataframe(files, format)
+    return load_as_dataframe(files, format, sampling_interval)
 
 
-def read_gps(path, postprocess=True) -> DataFrame:
-    data = read_data(path, "GPS")
-
-    if not postprocess:
-        return data
-
-    dataframe = DataFrame()
-    dataframe["time"] = data["time"].values
-    dataframe["latitude"] = (
-        data["latitude degrees"].values + data["latitude minutes"].values
-    )
-    dataframe["longitude"] = (
-        data["longitude degrees"].values + data["longitude minutes"].values
-    )
-    dataframe["z"] = data["z"].values
-
-    angle = (90 - data["course over ground"].values / 1000) * pi / 180
-    dataframe["u"] = cos(angle) * data["speed over ground"].values
-    dataframe["v"] = sin(angle) * data["speed over ground"].values
-    dataframe["w"] = data["w"].values
-    dataframe["group id"] = data["group id"].values
-    return dataframe
+def read_gps(path) -> DataFrame:
+    return read_data(path, "GPS", 0.4)
 
 
 def read_displacement(path, postprocess=True) -> DataFrame:
-    data = read_data(path, "FLT")
+    data = read_data(path, "FLT", 0.4)
     if not postprocess:
         return data
 
@@ -122,3 +102,11 @@ def read_displacement(path, postprocess=True) -> DataFrame:
         return _data
 
     return apply_to_group(_process, data)
+
+
+def read_location(path) -> DataFrame:
+    return read_data(path, "LOC", 60)
+
+
+def read_spectra(path, postprocess=True) -> FrequencySpectrum:
+    pass

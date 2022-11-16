@@ -134,6 +134,43 @@ _formats = {
             convert=do_nothing,
         ),
     ],
+    "LOC": [
+        ColumnParseParameters(
+            header_name="GPS_Epoch_Time(s)",
+            column_name="time",
+            dtype=float64,
+            include=True,
+            convert=do_nothing,
+        ),
+        ColumnParseParameters(
+            header_name="lat(deg)",
+            column_name="latitude degrees",
+            dtype=float32,
+            include=True,
+            convert=do_nothing,
+        ),
+        ColumnParseParameters(
+            header_name="at(min*1e5)",
+            column_name="latitude minutes",
+            dtype=float32,
+            include=True,
+            convert=lambda x: x / 60e5,
+        ),
+        ColumnParseParameters(
+            header_name="lon(deg)",
+            column_name="longitude degrees",
+            dtype=float32,
+            include=True,
+            convert=do_nothing,
+        ),
+        ColumnParseParameters(
+            header_name="long(min*1e5)",
+            column_name="longitude minutes",
+            dtype=float32,
+            include=True,
+            convert=lambda x: x / 60e5,
+        ),
+    ],
 }
 
 

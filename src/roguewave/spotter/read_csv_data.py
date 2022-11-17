@@ -1,12 +1,20 @@
-from ._csv_file_layouts import get_format, ColumnParseParameters
+from ._csv_file_layouts import get_format, ColumnParseParameters, spectral_column_names
+from ._spotter_constants import spotter_constants, SpotterConstants
 from pandas import DataFrame, read_csv, concat
 from roguewave.timeseries_analysis.filtering import sos_filter
 from typing import Iterator, List, Callable
+from xarray import Dataset
 from glob import glob
 from roguewave import FrequencySpectrum
 import os
+from numpy import nan, linspace, errstate, sqrt, sign, interp, full_like, inf
 
-_pattern = {"GPS": "????_GPS.csv", "FLT": "????_FLT.csv", "LOC": "????_LOC.csv"}
+_pattern = {
+    "GPS": "????_GPS.csv",
+    "FLT": "????_FLT.csv",
+    "LOC": "????_LOC.csv",
+    "SPC": "????_SPC.csv",
+}
 
 
 def apply_to_group(function: Callable[[DataFrame], DataFrame], dataframe: DataFrame):
@@ -42,6 +50,7 @@ def load_as_dataframe(
     def process_file(file):
         df = read_csv(
             file,
+            index_col=False,
             delimiter=",",
             header=0,
             names=column_names,
@@ -49,7 +58,7 @@ def load_as_dataframe(
             on_bad_lines="skip",
             usecols=usecols,
         )
-        df.dropna(inplace=True)
+        df = quality_control(df)
 
         for name, function in zip(usecols, convert):
             df[name] = function(df[name])
@@ -58,9 +67,14 @@ def load_as_dataframe(
 
     source_files = list(files_to_parse)
     data_frames = [process_file(source_file) for source_file in source_files]
-    return mark_continuous_groups(
-        concat(data_frames, keys=source_files), sampling_interval
-    )
+
+    # Fragmentation occurs for spectral data- to avoid performance issues we recreate the dataframe after the concat
+    # here.
+    dataframe = concat(
+        data_frames, keys=source_files, names=["source files", "file index"]
+    ).copy()
+    dataframe.reset_index(inplace=True)
+    return mark_continuous_groups(dataframe, sampling_interval)
 
 
 def mark_continuous_groups(df: DataFrame, sampling_interval):
@@ -85,12 +99,24 @@ def read_data(path, data_type, sampling_interval) -> DataFrame:
     return load_as_dataframe(files, format, sampling_interval)
 
 
-def read_gps(path) -> DataFrame:
-    return read_data(path, "GPS", 0.4)
+def read_gps(path, config: SpotterConstants = None) -> DataFrame:
+    if config is None:
+        config = spotter_constants()
+
+    return read_data(
+        path, "GPS", sampling_interval=config["sampling_interval_gps"]
+    )  # ,
 
 
-def read_displacement(path, postprocess=True) -> DataFrame:
-    data = read_data(path, "FLT", 0.4)
+def read_displacement(
+    path, postprocess=True, config: SpotterConstants = None
+) -> DataFrame:
+    if config is None:
+        config = spotter_constants()
+
+    data = read_data(
+        path, "FLT", sampling_interval=config["sampling_interval_location"]
+    )
     if not postprocess:
         return data
 
@@ -104,9 +130,117 @@ def read_displacement(path, postprocess=True) -> DataFrame:
     return apply_to_group(_process, data)
 
 
-def read_location(path) -> DataFrame:
-    return read_data(path, "LOC", 60)
+def read_location(path, postprocess=True, config: SpotterConstants = None) -> DataFrame:
+    if config is None:
+        config = spotter_constants()
+
+    raw_data = read_data(path, "LOC", config["sampling_interval_location"])
+    if not postprocess:
+        return raw_data
+
+    dataframe = DataFrame()
+    dataframe["time"] = raw_data["time"]
+    dataframe["latitude"] = (
+        raw_data["latitude degrees"]
+        + sign(raw_data["latitude degrees"]) * raw_data["latitude minutes"] / 60
+    )
+    dataframe["longitude"] = (
+        raw_data["longitude degrees"]
+        + sign(raw_data["longitude degrees"]) * raw_data["longitude minutes"] / 60
+    )
+    dataframe["group id"] = raw_data["group id"]
+    return dataframe
 
 
-def read_spectra(path, postprocess=True) -> FrequencySpectrum:
-    pass
+def read_raw_spectra(
+    path, postprocess=True, config: SpotterConstants = None
+) -> DataFrame:
+    if config is None:
+        config = spotter_constants()
+    if not postprocess:
+        return read_data(path, "SPC", config["sampling_interval_spectra"])
+
+    if config is None:
+        config = spotter_constants()
+
+    column_names = spectral_column_names(groupedby="kind", config=config)
+
+    dataframes = []
+    raw_data = read_data(path, "SPC", config["sampling_interval_spectra"])
+
+    data_types = []
+    for data_type, freq_column_names in column_names:
+        df = raw_data[["time"] + freq_column_names]
+        rename_mapping = {name: index for index, name in enumerate(freq_column_names)}
+        df = df.rename(rename_mapping, axis=1)
+        data_types.append(data_type)
+        dataframes.append(df)
+
+    data = concat(dataframes, keys=data_types, names=["kind", "source_index"])
+    data.reset_index(inplace=True)
+    data.drop(columns="source_index", inplace=True)
+    return data
+
+
+def read_spectra(path, depth=inf, config: SpotterConstants = None) -> FrequencySpectrum:
+    if config is None:
+        config = spotter_constants()
+
+    data = read_raw_spectra(path)
+
+    df = 1 / (config["number_of_samples"] * config["sampling_interval_gps"])
+    frequencies = (
+        linspace(
+            0,
+            config["number_of_frequencies"],
+            config["number_of_frequencies"],
+            endpoint=False,
+        )
+        * df
+    )
+
+    spectral_values = data[list(range(0, config["number_of_frequencies"]))].values
+    time = data["time"].values
+    time = time[data["kind"] == "Szz_re"]
+
+    Szz = spectral_values[data["kind"] == "Szz_re", :]
+    Sxx = spectral_values[data["kind"] == "Sxx_re", :]
+    Syy = spectral_values[data["kind"] == "Syy_re", :]
+    Cxy = spectral_values[data["kind"] == "Sxy_re", :]
+    Qzx = spectral_values[data["kind"] == "Szx_im", :]
+    Qzy = spectral_values[data["kind"] == "Szy_im", :]
+
+    with errstate(invalid="ignore", divide="ignore"):
+        # Supress divide by 0; silently produce NaN
+        a1 = Qzx / sqrt(Szz * (Sxx + Syy))
+        a2 = (Sxx - Syy) / (Sxx + Syy)
+        b1 = Qzy / sqrt(Szz * (Sxx + Syy))
+        b2 = 2.0 * Cxy / (Sxx + Syy)
+
+    location = read_location(path, postprocess=True, config=config)
+    latitude = interp(time, location["time"].values, location["latitude"].values)
+    longitude = interp(time, location["time"].values, location["longitude"].values)
+
+    depth = full_like(time, depth)
+
+    dataset = Dataset(
+        data_vars={
+            "variance_density": (["time", "frequency"], Szz),
+            "a1": (["time", "frequency"], a1),
+            "b1": (["time", "frequency"], b1),
+            "a2": (["time", "frequency"], a2),
+            "b2": (["time", "frequency"], b2),
+            "depth": (["time"], depth),
+            "latitude": (["time"], latitude),
+            "longitude": (["time"], longitude),
+        },
+        coords={"time": time.astype("<M8[s]"), "frequency": frequencies},
+    )
+    return FrequencySpectrum(dataset)
+
+
+def quality_control(dataframe: DataFrame) -> DataFrame:
+    negative_time = dataframe["time"].diff() < 0
+    dataframe.loc[negative_time, "time"] = nan
+    dataframe.dropna(inplace=True)
+    return dataframe

@@ -150,7 +150,6 @@ def calculate_co_spectra(
     return output
 
 
-# @njit(cache=True)
 @njit(cache=True)
 def welch(
     epoch_time: numpy.ndarray,
@@ -286,7 +285,6 @@ def estimate_frequency_spectrum(
     :param longitude:
     :return:
     """
-    n = kwargs.get("n", None)
     spectral_time, frequencies, co_spectra = estimate_co_spectra(
         epoch_time,
         (x, y, z),
@@ -298,18 +296,6 @@ def estimate_frequency_spectrum(
     )
 
     szz, a1, b1, a2, b2 = extract_moments(co_spectra, index_x=0, index_y=1, index_z=2)
-
-    if n is not None:
-        szz = _cross_correlation_correction(
-            epoch_time,
-            z,
-            n,
-            window,
-            segment_length_seconds,
-            window_overlap_fraction,
-            sampling_frequency,
-            spectral_window,
-        )
 
     if depth is None:
         depth = numpy.full(szz.shape[0], numpy.inf)
@@ -340,38 +326,3 @@ def estimate_frequency_spectrum(
         coords={"time": spectral_time.astype("<M8[s]"), "frequency": frequencies},
     )
     return FrequencySpectrum(dataset)
-
-
-def _cross_correlation_correction(
-    epoch_time,
-    z,
-    n,
-    window,
-    segment_length_seconds,
-    window_overlap_fraction,
-    sampling_frequency,
-    spectral_window,
-):
-    _, _, co_spectra_n = estimate_co_spectra(
-        epoch_time,
-        (z, n),
-        window,
-        segment_length_seconds,
-        window_overlap_fraction,
-        sampling_frequency,
-        spectral_window,
-    )
-    snn = numpy.real(co_spectra_n[:, 1, 1, :])
-    szn = numpy.real(co_spectra_n[:, 0, 1, :])
-    szz = numpy.real(co_spectra_n[:, 0, 0, :])
-    correlation = szn / numpy.sqrt(snn * szz)
-    return _apply_cross_correlation_correction(correlation, szz)
-
-
-@njit(cache=True)
-def _apply_cross_correlation_correction(correlation, szz):
-    shape = szz.shape
-    for ipoint in range(shape[0]):
-        imax = numpy.argmax(szz[ipoint, :])
-        szz[ipoint, :imax] = szz[ipoint, :imax] * correlation[ipoint, :imax] ** 2
-    return szz

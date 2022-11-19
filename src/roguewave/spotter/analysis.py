@@ -66,9 +66,6 @@ def spectra_from_raw_gps(path, **kwargs) -> FrequencySpectrum:
     displacement_doppler = displacement_from_gps_doppler_velocities(path)
     displacement_location = displacement_from_gps_positions(path)
 
-    if kwargs.get("ccc", True):
-        kwargs["n"] = displacement_location["z"].values
-
     if kwargs.get("use_u", False):
         x = displacement_doppler["x"].values
     else:

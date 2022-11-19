@@ -1,5 +1,5 @@
 from roguewave import FrequencySpectrum
-from roguewave.timeseries_analysis.welch import estimate_spectrum
+from roguewave.timeseries_analysis.welch import estimate_frequency_spectrum
 from roguewave.spotter.read_csv_data import read_displacement, read_spectra
 from pandas import DataFrame
 
@@ -10,7 +10,7 @@ def get_displacement() -> DataFrame:
 
 def calc_spectra() -> FrequencySpectrum:
     disp = get_displacement()
-    spec = estimate_spectrum(
+    spec = estimate_frequency_spectrum(
         disp["time"].values, disp["x"].values, disp["y"].values, disp["z"].values
     )
     return spec

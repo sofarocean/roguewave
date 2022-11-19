@@ -1,4 +1,4 @@
-from numpy import float32, float64, int32
+from numpy import float32, float64, int32, timedelta64
 from typing import TypeVar, List, TypedDict, Callable
 from ._spotter_constants import SpotterConstants, spotter_constants
 
@@ -36,28 +36,28 @@ _formats = {
         ColumnParseParameters(
             header_name="lat(deg)",
             column_name="latitude degrees",
-            dtype=float32,
+            dtype=float64,
             include=True,
             convert=do_nothing,
         ),
         ColumnParseParameters(
-            header_name="at(min*1e5)",
+            header_name="lat(min*1e5)",
             column_name="latitude minutes",
-            dtype=float32,
+            dtype=float64,
             include=True,
             convert=lambda x: x / 1e5,
         ),
         ColumnParseParameters(
             header_name="lon(deg)",
             column_name="longitude degrees",
-            dtype=float32,
+            dtype=float64,
             include=True,
             convert=do_nothing,
         ),
         ColumnParseParameters(
             header_name="long(min*1e5)",
             column_name="longitude minutes",
-            dtype=float32,
+            dtype=float64,
             include=True,
             convert=lambda x: x / 1e5,
         ),
@@ -171,6 +171,43 @@ _formats = {
             convert=lambda x: x / 1e5,
         ),
     ],
+    "TIME": [
+        ColumnParseParameters(
+            header_name="GPS_Epoch_Time(s)",
+            column_name="time",
+            dtype=float64,
+            include=True,
+            convert=do_nothing,
+        ),
+        ColumnParseParameters(
+            header_name="lat(deg)",
+            column_name="latitude degrees",
+            dtype=float32,
+            include=False,
+            convert=do_nothing,
+        ),
+        ColumnParseParameters(
+            header_name="at(min*1e5)",
+            column_name="latitude minutes",
+            dtype=float32,
+            include=False,
+            convert=lambda x: x / 1e5,
+        ),
+        ColumnParseParameters(
+            header_name="lon(deg)",
+            column_name="longitude degrees",
+            dtype=float32,
+            include=False,
+            convert=do_nothing,
+        ),
+        ColumnParseParameters(
+            header_name="long(min*1e5)",
+            column_name="longitude minutes",
+            dtype=float32,
+            include=False,
+            convert=lambda x: x / 1e5,
+        ),
+    ],
     "SPC": [
         ColumnParseParameters(
             header_name="type",
@@ -267,9 +304,9 @@ def create_spectral_format(config: SpotterConstants) -> List[ColumnParseParamete
         config = spotter_constants()
 
     _format = _formats["SPC"]
-    sampling_frequency = 1 / (
-        config["number_of_samples"] * config["sampling_interval_gps"]
-    )
+    sampling_interval = config["sampling_interval_gps"] / timedelta64(1, "s")
+
+    sampling_frequency = 1 / (config["number_of_samples"] * sampling_interval)
 
     def _create(name) -> ColumnParseParameters:
         return ColumnParseParameters(

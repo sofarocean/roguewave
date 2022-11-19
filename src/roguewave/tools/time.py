@@ -9,7 +9,7 @@ Authors: Pieter Bart Smit
 from datetime import datetime, timezone, timedelta
 from xarray import DataArray
 from typing import Union, Sequence
-from numpy import datetime64, ndarray, array
+from numpy import datetime64, ndarray, array, timedelta64
 from numpy.typing import NDArray
 from numbers import Number
 from pandas import Series
@@ -81,6 +81,10 @@ def datetime_to_iso_time_string(time: scalar_input_types):
 
     time = to_datetime_utc(time)
     return time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def datetime64_to_timestamp(time):
+    return (time - datetime64(0, "s")) / timedelta64(1, "s")
 
 
 def to_datetime64(time) -> Union[None, datetime64, NDArray[datetime64]]:

@@ -31,7 +31,7 @@ from roguewave import FrequencySpectrum
 from numpy.typing import NDArray
 from typing import Tuple
 from scipy.signal.windows import get_window
-from xarray import Dataset
+from xarray import Dataset, DataArray
 from numba import njit, objmode
 
 
@@ -73,53 +73,50 @@ def segment_timeseries(epoch_time, segment_length_seconds) -> List[tuple]:
 
 
 @njit(cache=True)
-def power_spectra(
-    x: numpy.ndarray,
-    y: numpy.ndarray,
-    z: numpy.ndarray,
+def calculate_co_spectra(
+    signals,
     window: numpy.ndarray,
     sampling_frequency,
     window_overlap_fraction=0.5,
-) -> Tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
+    spectral_window=None,
+) -> NDArray:
     overlap = int(len(window) * window_overlap_fraction)
     nyquist_index = len(window) // 2
 
-    sxx = numpy.zeros((nyquist_index), dtype="complex_")
-    syy = numpy.zeros((nyquist_index), dtype="complex_")
-    szz = numpy.zeros((nyquist_index), dtype="complex_")
-    sxy = numpy.zeros((nyquist_index), dtype="complex_")
-    szx = numpy.zeros((nyquist_index), dtype="complex_")
-    szy = numpy.zeros((nyquist_index), dtype="complex_")
+    nsig = len(signals)
+    nt = len(signals[0])
+    output = numpy.zeros((nsig, nsig, nyquist_index), dtype="complex_")
+    ffts = numpy.zeros((nsig, nyquist_index), dtype="complex_")
 
-    x = x - numpy.mean(x)
-    y = y - numpy.mean(y)
-    z = z - numpy.mean(z)
+    zero_mean_signals = numpy.zeros((nsig, nt))
+    for index, signal in enumerate(signals):
+        zero_mean_signals[index, :] = signal - numpy.mean(signal)
 
     ii = 0
     istart = 0
     while True:
         # Advance the counter
-
         iend = istart + len(window)
-        if iend > len(x):
+        if iend > nt:
             break
 
+        for index in range(nsig):
+            with objmode():
+                # FFT not supported in Numba- yet
+                ffts[index, :] = fft(zero_mean_signals[index, istart:iend] * window)[
+                    0:nyquist_index
+                ]
+
+        sigs = numpy.zeros((nsig, nyquist_index))
+        for index in range(nsig):
+            sigs[index, :] = numpy.real(
+                ffts[index, :] * numpy.conjugate(ffts[index, :])
+            )
+
         ii += 1
-
-        with objmode(
-            fft_x="complex128[:]", fft_y="complex128[:]", fft_z="complex128[:]"
-        ):
-            # FFT not supported in Numba- yet
-            fft_x = fft(x[istart:iend] * window)[0:nyquist_index]
-            fft_y = fft(y[istart:iend] * window)[0:nyquist_index]
-            fft_z = fft(z[istart:iend] * window)[0:nyquist_index]
-
-        szz += 2 * fft_z * numpy.conjugate(fft_z)
-        syy += 2 * fft_y * numpy.conjugate(fft_y)
-        sxx += 2 * fft_x * numpy.conjugate(fft_x)
-        szx += 2 * fft_z * numpy.conjugate(fft_x)
-        szy += 2 * fft_z * numpy.conjugate(fft_y)
-        sxy += 2 * fft_x * numpy.conjugate(fft_y)
+        for mm in range(0, nsig):
+            for nn in range(mm, nsig):
+                output[mm, nn, :] += 2 * ffts[mm, :] * numpy.conjugate(ffts[nn, :])
 
         istart = istart + len(window) - overlap
 
@@ -130,64 +127,71 @@ def power_spectra(
         / frequency_step
         / len(window) ** 2
     )
-    szz = numpy.real(szz) * factor
-    syy = numpy.real(syy) * factor
-    sxx = numpy.real(sxx) * factor
-    cxy = numpy.real(sxy) * factor
-    qzx = numpy.imag(szx) * factor
-    qzy = numpy.imag(szy) * factor
 
-    a1 = qzx / numpy.sqrt(szz * (sxx + syy))
-    b1 = qzy / numpy.sqrt(szz * (sxx + syy))
-    a2 = (sxx - syy) / (sxx + syy)
-    b2 = 2 * cxy / (sxx + syy)
+    for mm in range(0, nsig):
+        for nn in range(mm, nsig):
 
-    return szz, a1, b1, a2, b2
+            if spectral_window is not None:
+                scaling = numpy.sum(output[mm, nn, :])
+
+                if not (numpy.abs(scaling) == 0.0):
+                    n = len(spectral_window) // 2
+                    smoothed = numpy.convolve(output[mm, nn, :], spectral_window)
+
+                    output[mm, nn, :] = (
+                        scaling * smoothed[n:-n] / numpy.sum(smoothed[n:-n])
+                    )
+
+            output[mm, nn, :] = output[mm, nn, :] * factor
+
+            if mm != nn:
+                output[nn, mm] = output[mm, nn]
+
+    return output
 
 
+# @njit(cache=True)
 @njit(cache=True)
 def welch(
     epoch_time: numpy.ndarray,
-    x: numpy.ndarray,
-    y: numpy.ndarray,
-    z: numpy.ndarray,
+    signals,
     window: numpy.ndarray,
     sampling_frequency: float,
     segment_length_seconds=1800,
     window_overlap_fraction=0.5,
-) -> Tuple[NDArray, NDArray, NDArray, NDArray, NDArray, NDArray]:
-    assert len(x) == len(y) == len(z) == len(epoch_time)
-
+    spectral_window=None,
+) -> Tuple[NDArray, NDArray, NDArray]:
     segments = segment_timeseries(epoch_time, segment_length_seconds)
 
-    e = numpy.empty((len(segments), len(window) // 2))
-    a1 = numpy.empty((len(segments), len(window) // 2))
-    b1 = numpy.empty((len(segments), len(window) // 2))
-    a2 = numpy.empty((len(segments), len(window) // 2))
-    b2 = numpy.empty((len(segments), len(window) // 2))
-    spectral_time = numpy.empty(len(segments))
+    number_of_spectra = len(segments)
+    number_of_frequencies = len(window) // 2
+
+    nsig = len(signals)
+    co_spectra = numpy.empty(
+        (number_of_spectra, nsig, nsig, number_of_frequencies), dtype="complex_"
+    )
+    spectral_time = numpy.empty(number_of_spectra)
 
     for index, segment in enumerate(segments):
         istart = segment[0]
         iend = segment[1]
         spectral_time[index] = (epoch_time[istart] + epoch_time[iend]) / 2
 
-        (
-            e[index, :],
-            a1[index, :],
-            b1[index, :],
-            a2[index, :],
-            b2[index, :],
-        ) = power_spectra(
-            x[istart:iend],
-            y[istart:iend],
-            z[istart:iend],
+        segment_signal = [sig[istart:iend] for sig in signals]
+        co_spectra[index, :, :, :] = calculate_co_spectra(
+            segment_signal,
             window,
             sampling_frequency,
             window_overlap_fraction,
+            spectral_window,
         )
 
-    return spectral_time, e, a1, b1, a2, b2
+    df = sampling_frequency / len(window)
+    frequencies = (
+        numpy.linspace(numpy.int64(0), len(window) // 2 - 1, len(window) // 2) * df
+    )
+
+    return spectral_time, frequencies, co_spectra
 
 
 @njit(cache=True)
@@ -212,7 +216,45 @@ def window_power_correction_factor(window: numpy.ndarray) -> float:
     return 1 / numpy.sqrt(numpy.mean(window**2))
 
 
-def estimate_spectrum(
+def extract_moments(co_spectra, index_x, index_y, index_z):
+    szz = numpy.real(co_spectra[:, index_z, index_z, :])
+    syy = numpy.real(co_spectra[:, index_y, index_y, :])
+    sxx = numpy.real(co_spectra[:, index_x, index_x, :])
+    cxy = numpy.real(co_spectra[:, index_x, index_y, :])
+    qzx = numpy.imag(co_spectra[:, index_z, index_x, :])
+    qzy = numpy.imag(co_spectra[:, index_z, index_y, :])
+
+    a1 = qzx / numpy.sqrt(szz * (sxx + syy))
+    b1 = qzy / numpy.sqrt(szz * (sxx + syy))
+    a2 = (sxx - syy) / (sxx + syy)
+    b2 = 2 * cxy / (sxx + syy)
+    return szz, a1, b1, a2, b2
+
+
+def estimate_co_spectra(
+    epoch_time,
+    signals,
+    window=None,
+    segment_length_seconds=1800,
+    window_overlap_fraction=0.5,
+    sampling_frequency=2.5,
+    spectral_window=None,
+) -> Tuple[NDArray, NDArray, NDArray]:
+    if window is None:
+        window = get_window("hann", 256)
+
+    return welch(
+        epoch_time,
+        signals,
+        window,
+        sampling_frequency,
+        segment_length_seconds,
+        window_overlap_fraction,
+        spectral_window,
+    )
+
+
+def estimate_frequency_spectrum(
     epoch_time,
     x,
     y,
@@ -221,9 +263,11 @@ def estimate_spectrum(
     segment_length_seconds=1800,
     window_overlap_fraction=0.5,
     sampling_frequency=2.5,
-    depth=None,
-    latitude=None,
-    longitude=None,
+    depth: DataArray = None,
+    latitude: DataArray = None,
+    longitude: DataArray = None,
+    spectral_window=None,
+    **kwargs
 ) -> FrequencySpectrum:
     """
 
@@ -242,38 +286,49 @@ def estimate_spectrum(
     :param longitude:
     :return:
     """
-
-    if window is None:
-        window = get_window("hann", 256)
-
-    spectral_time, e, a1, b1, a2, b2 = welch(
+    n = kwargs.get("n", None)
+    spectral_time, frequencies, co_spectra = estimate_co_spectra(
         epoch_time,
-        x,
-        y,
-        z,
+        (x, y, z),
         window,
-        sampling_frequency,
         segment_length_seconds,
         window_overlap_fraction,
+        sampling_frequency,
+        spectral_window,
     )
 
-    df = sampling_frequency / len(window)
-    frequencies = (
-        numpy.linspace(0, len(window) // 2, len(window) // 2, endpoint=True) * df
-    )
+    szz, a1, b1, a2, b2 = extract_moments(co_spectra, index_x=0, index_y=1, index_z=2)
+
+    if n is not None:
+        szz = _cross_correlation_correction(
+            epoch_time,
+            z,
+            n,
+            window,
+            segment_length_seconds,
+            window_overlap_fraction,
+            sampling_frequency,
+            spectral_window,
+        )
 
     if depth is None:
-        depth = numpy.full(e.shape[0], numpy.inf)
+        depth = numpy.full(szz.shape[0], numpy.inf)
+    else:
+        depth = numpy.interp(spectral_time, depth["time"].values, depth.values)
 
     if latitude is None:
-        latitude = numpy.full(e.shape[0], numpy.nan)
+        latitude = numpy.full(szz.shape[0], numpy.nan)
+    else:
+        depth = numpy.interp(spectral_time, latitude["time"].values, latitude.values)
 
     if longitude is None:
-        longitude = numpy.full(e.shape[0], numpy.nan)
+        longitude = numpy.full(szz.shape[0], numpy.nan)
+    else:
+        depth = numpy.interp(spectral_time, longitude["time"].values, longitude.values)
 
     dataset = Dataset(
         data_vars={
-            "variance_density": (["time", "frequency"], e),
+            "variance_density": (["time", "frequency"], szz),
             "a1": (["time", "frequency"], a1),
             "b1": (["time", "frequency"], b1),
             "a2": (["time", "frequency"], a2),
@@ -285,3 +340,38 @@ def estimate_spectrum(
         coords={"time": spectral_time.astype("<M8[s]"), "frequency": frequencies},
     )
     return FrequencySpectrum(dataset)
+
+
+def _cross_correlation_correction(
+    epoch_time,
+    z,
+    n,
+    window,
+    segment_length_seconds,
+    window_overlap_fraction,
+    sampling_frequency,
+    spectral_window,
+):
+    _, _, co_spectra_n = estimate_co_spectra(
+        epoch_time,
+        (z, n),
+        window,
+        segment_length_seconds,
+        window_overlap_fraction,
+        sampling_frequency,
+        spectral_window,
+    )
+    snn = numpy.real(co_spectra_n[:, 1, 1, :])
+    szn = numpy.real(co_spectra_n[:, 0, 1, :])
+    szz = numpy.real(co_spectra_n[:, 0, 0, :])
+    correlation = szn / numpy.sqrt(snn * szz)
+    return _apply_cross_correlation_correction(correlation, szz)
+
+
+@njit(cache=True)
+def _apply_cross_correlation_correction(correlation, szz):
+    shape = szz.shape
+    for ipoint in range(shape[0]):
+        imax = numpy.argmax(szz[ipoint, :])
+        szz[ipoint, :imax] = szz[ipoint, :imax] * correlation[ipoint, :imax] ** 2
+    return szz

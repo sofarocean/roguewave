@@ -1,1 +1,2 @@
-from .welch import estimate_spectrum
+from .welch import estimate_frequency_spectrum
+from .pipeline import pipeline

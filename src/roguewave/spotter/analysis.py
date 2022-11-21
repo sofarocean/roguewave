@@ -7,13 +7,16 @@ from roguewave import FrequencySpectrum
 from .read_csv_data import read_displacement, apply_to_group, read_gps
 
 
-def displacement_from_gps_doppler_velocities(path) -> DataFrame:
-    pipeline_stages = [
-        ("spike", None),
-        ("integrate", None),
-        ("exponential_delta", None),
-        ("sos_forward", None),
-    ]
+def displacement_from_gps_doppler_velocities(
+    path, pipeline_stages=None, **kwargs
+) -> DataFrame:
+    if pipeline_stages is None:
+        pipeline_stages = [
+            ("spike", None),
+            ("integrate", None),
+            ("exponential_delta", None),
+            ("sos_forward", None),
+        ]
 
     doppler_velocities = read_gps(path)
 
@@ -63,7 +66,7 @@ def displacement_from_gps_positions(path) -> DataFrame:
 
 
 def spectra_from_raw_gps(path, **kwargs) -> FrequencySpectrum:
-    displacement_doppler = displacement_from_gps_doppler_velocities(path)
+    displacement_doppler = displacement_from_gps_doppler_velocities(path, **kwargs)
     displacement_location = displacement_from_gps_positions(path)
 
     if kwargs.get("use_u", False):

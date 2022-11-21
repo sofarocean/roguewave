@@ -20,6 +20,10 @@ def integrate(time: NDArray, signal: NDArray) -> NDArray:
     # Then apply Adams Moulton
     for ii in range(3, len(signal)):
         dt = time[ii] - time[ii - 1]
+        if dt > 0.41:
+            integrated_signal[ii] = 0.0
+            continue
+
         integrated_signal[ii] = (
             integrated_signal[ii - 1]
             + coef[0] * signal[ii] * dt

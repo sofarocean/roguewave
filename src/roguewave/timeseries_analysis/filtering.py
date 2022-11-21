@@ -132,7 +132,7 @@ def cumulative_filter(time: NDArray, signal: NDArray, options: dict = None) -> N
     if options is None:
         options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
 
-    smoothing_factor = options.get("smoothing_factor", 0.004)
+    smoothing_factor = options.get("smoothing_factor", 0.01)
 
     filtered_signal = empty_like(signal)
     filtered_signal[0] = signal[0]

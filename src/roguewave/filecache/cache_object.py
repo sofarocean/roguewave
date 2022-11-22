@@ -144,6 +144,9 @@ class FileCache:
         # Post processing and validation functions
         self.directives = {"validate": {}, "postprocess": {}}
 
+        # message to display on progress bar
+        self.description = "Caching"
+
         # download resources
         if resources is None:
             self.resources = [
@@ -348,7 +351,8 @@ class FileCache:
         :return: None
         """
 
-        assert _hash in self._entries
+        if _hash not in self._entries:
+            return None
 
         file_to_delete = self._entries.pop(_hash)
 
@@ -497,6 +501,7 @@ class FileCache:
                 self.resources,
                 parallel_download=self.parallel,
                 disable_progress_bar=self.disable_progress_bar,
+                desc=self.description,
             )
 
             for cache_miss in cache_misses:
@@ -602,6 +607,7 @@ def _download_from_resources(
     resources: List[RemoteResource],
     parallel_download=False,
     disable_progress_bar=False,
+    desc="",
 ) -> List[bool]:
     """
     Wrapper function to download multiple uris from the resource(s).
@@ -644,10 +650,12 @@ def _download_from_resources(
             raise ValueError(f"No resource available for URI: " f"{cache_miss.uri}")
 
     # Download the requested objects.
-    if parallel_download and len(cache_misses) > 1:
+    if parallel_download and len(cache_misses) > 0:
         with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
             output = list(
-                tqdm(pool.imap(_worker, cache_misses), total=len(cache_misses))
+                tqdm(
+                    pool.imap(_worker, cache_misses), desc=desc, total=len(cache_misses)
+                )
             )
     else:
         if len(cache_misses) == 1:
@@ -658,6 +666,7 @@ def _download_from_resources(
                 map(_worker, cache_misses),
                 total=len(cache_misses),
                 disable=disable_progress_bar,
+                desc=desc,
             )
         )
     return output

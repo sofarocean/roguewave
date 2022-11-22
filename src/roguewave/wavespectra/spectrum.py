@@ -218,6 +218,9 @@ class WaveSpectrum(DatasetWrapper):
     def drop_invalid(self: _T) -> _T:
         return self._apply_filter(self.is_valid())
 
+    def where(self: _T, condition) -> _T:
+        return self._apply_filter(condition)
+
     def _apply_filter(self: _T, boolean_mask: DataArray) -> _T:
         dataset = Dataset()
         for var in self.dataset:
@@ -270,7 +273,6 @@ class WaveSpectrum(DatasetWrapper):
 
         dataset = {}
         for index, dim in zip(indices, dims):
-            x = coords[dim].values[index]
             dataset[dim] = DataArray(
                 data=coords[dim].values[index], dims=flattened_coordinate
             )
@@ -632,7 +634,10 @@ class WaveSpectrum(DatasetWrapper):
         :param fmax: maximum frequency
         :return: peak period
         """
-        return 1 / self.peak_frequency(fmin, fmax)
+        peak_period = 1 / self.peak_frequency(fmin, fmax)
+        peak_period.name = "peak period"
+        peak_period = peak_period.drop("frequency")
+        return peak_period
 
     def peak_direction(self, fmin=0, fmax=numpy.inf) -> DataArray:
         index = self.peak_index(fmin, fmax)

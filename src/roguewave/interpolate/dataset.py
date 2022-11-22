@@ -1,7 +1,6 @@
 import numpy
 from pandas import DataFrame
 from roguewave.interpolate.dataarray import interpolate_track_data_arrray
-from roguewave.interpolate.dataframe import interpolate_dataframe_time
 from roguewave.interpolate.geometry import Geometry, convert_to_track_set
 from roguewave.tools.time import to_datetime64
 from roguewave.interpolate.nd_interp import NdInterpolator
@@ -142,6 +141,7 @@ def interpolate_dataset(
         ).to_dataframe()
         if out[name].index.tz is None:
             out[name].index = out[name].index.tz_localize("utc")
+        out[name].reset_index(inplace=True)
     return out
 
 
@@ -187,10 +187,11 @@ def interpolate_at_points(
 def tracks_as_dataset(time, drifter_tracks: Mapping[str, DataFrame]) -> DataArray:
     tracks = {}
     for track_id, track in drifter_tracks.items():
-        variables = list(track.columns)
 
+        track.set_index("time", inplace=True)
+        variables = list(track.columns)
         tracks[track_id] = DataArray(
-            interpolate_dataframe_time(track, time),
+            track,
             coords={"time": time, "variables": variables},
             dims=["time", "variables"],
             name=track_id,

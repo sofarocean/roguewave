@@ -21,7 +21,6 @@ from roguewave.wavespectra import (
     FrequencyDirectionSpectrum,
     create_1d_spectrum,
 )
-from roguewave.metoceandata import WaveBulkData, WindData, SSTData, BarometricPressure
 from pandas import DataFrame, read_json
 from typing import Union, Dict, List
 from datetime import datetime
@@ -31,6 +30,7 @@ import os
 import numpy
 import base64
 from io import BytesIO
+from roguewave import to_datetime_utc
 from xarray import Dataset, open_dataset, DataArray
 
 
@@ -43,7 +43,6 @@ _UNION = Union[
     List[List[FrequencyDirectionSpectrum]],
     List[List[DataFrame]],
     Dict[int, List[DataFrame]],
-    Dict[str, List[WaveBulkData]],
     Dict[str, DataFrame],
 ]
 
@@ -124,14 +123,6 @@ class NumpyEncoder(json.JSONEncoder):
             return {"__class__": "datetime", "data": datetime.isoformat(obj)}
         elif isinstance(obj, DataFrame):
             return {"__class__": "DataFrame", "data": obj.to_json(date_unit="s")}
-        elif isinstance(obj, WaveBulkData):
-            return {"__class__": "WaveBulkData", "data": obj.as_dict()}
-        elif isinstance(obj, WindData):
-            return {"__class__": "WindData", "data": obj.as_dict()}
-        elif isinstance(obj, SSTData):
-            return {"__class__": "SSTData", "data": obj.as_dict()}
-        elif isinstance(obj, BarometricPressure):
-            return {"__class__": "BarometricPressure", "data": obj.as_dict()}
         else:
             return json.JSONEncoder.default(self, obj)
 
@@ -144,7 +135,9 @@ def object_hook(dictionary: dict):
             if "timestamp" in df:
                 df["timestamp"] = df["timestamp"].apply(lambda x: x.tz_localize("utc"))
             elif "time" in df:
-                df["time"] = df["time"].apply(lambda x: x.tz_localize("utc"))
+                time = to_datetime_utc(df["time"].values)
+                # df["time"] = df["time"].apply(lambda x: x.tz_localize("utc"))
+                df["time"] = time
             elif "valid_time" in df:
                 df["valid_time"] = df["valid_time"].apply(
                     lambda x: x.tz_localize("utc")
@@ -181,16 +174,6 @@ def object_hook(dictionary: dict):
             return _b64_decode_numpy(dictionary["data"])
         elif dictionary["__class__"] == "datetime":
             return datetime.fromisoformat(dictionary["data"])
-        elif dictionary["__class__"] == "WaveBulkData":
-            return WaveBulkData(**dictionary["data"])
-        elif dictionary["__class__"] == "WaveBulkData":
-            return WaveBulkData(**dictionary["data"])
-        elif dictionary["__class__"] == "WindData":
-            return WindData(**dictionary["data"])
-        elif dictionary["__class__"] == "SSTData":
-            return SSTData(**dictionary["data"])
-        elif dictionary["__class__"] == "BarometricPressure":
-            return BarometricPressure(**dictionary["data"])
     else:
         return dictionary
 

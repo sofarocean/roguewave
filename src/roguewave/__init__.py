@@ -1,5 +1,6 @@
 # Logging
 from roguewave.log import logger
+from roguewave.tools.time import to_datetime_utc, to_datetime64
 
 # model time
 from roguewave.modeldata import (
@@ -16,6 +17,7 @@ from roguewave.modeldata import (
     extract_from_remote_dataset,
     generate_uris,
 )
+
 
 # Interpolate
 from roguewave.interpolate import (
@@ -69,5 +71,7 @@ from roguewave.colocate import (
     colocated_tracks_as_dataset,
     colocate_model_spotter_spectra,
 )
+
+from roguewave.spotterapi import get_spotter_data
 
 from roguewave.spotterapi import get_spectrum

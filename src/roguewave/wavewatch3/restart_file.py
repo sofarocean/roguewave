@@ -544,8 +544,8 @@ class RestartFile(Sequence):
 
         nlon = len(self.longitude[longitude_slice])
         nlat = len(self.latitude[latitude_slice])
-        ilat0 = numpy.min(ilat)
-        ilon0 = numpy.min(ilon)
+        ilat0 = numpy.argmin(self.longitude[longitude_slice])
+        ilon0 = numpy.argmin(self.latitude[latitude_slice])
 
         # this will not work for stepsizes != 1
         out = numpy.zeros((nlat, nlon), dtype=m0.dtype) + numpy.nan

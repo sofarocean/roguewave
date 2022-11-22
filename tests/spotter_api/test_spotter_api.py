@@ -306,7 +306,7 @@ def test_multi_page():
 
     data = data[data["spotter_id"] == TEST_SPOTTER_ID]
     assert isinstance(data, DataFrame)
-    assert data.shape == (766, 12)
+    assert data.shape == (766, 13)
     assert data["significantWaveHeight"][600] == 6.73
     assert to_datetime_utc(END_DATE) - data["time"].iloc[-1] < timedelta(hours=1)
     assert data["time"].iloc[0] - to_datetime_utc(START_DATE) < timedelta(hours=1)
@@ -321,7 +321,7 @@ def test_multi_page():
 
     data = data[data["spotter_id"] == TEST_SPOTTER_ID]
     assert isinstance(data, DataFrame)
-    assert data.shape == (2298, 5)
+    assert data.shape == (2298, 6)
     assert to_datetime_utc(END_DATE) - data["time"].iloc[-1] < timedelta(hours=1)
     assert data["time"].iloc[0] - to_datetime_utc(START_DATE) < timedelta(hours=1)
 

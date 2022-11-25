@@ -52,7 +52,7 @@ def create_stage(stage: str, stage_opt=None) -> STAGE_SIGNATURE:
     elif stage == "exponential_delta":
         return lambda time, signal: exponential_delta_filter(time, signal)
     elif stage == "cumulative":
-        return lambda time, signal: cumulative_filter(time, signal)
+        return lambda time, signal: cumulative_filter(signal)
     elif stage == "exponential":
         return lambda time, signal: exponential_filter(time, signal)
     else:

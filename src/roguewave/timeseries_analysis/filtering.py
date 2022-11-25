@@ -1,7 +1,7 @@
 from numba import njit
 from numba.typed import Dict
 from numba.core import types
-from numpy import empty_like, abs, nan, isfinite, flip, linspace
+from numpy import empty_like, abs, nan, isfinite, flip, linspace, sqrt
 from numpy.typing import NDArray
 from typing import Literal
 from numpy import interp
@@ -128,38 +128,71 @@ def spike_filter(time: NDArray, signal: NDArray, options: dict = None) -> NDArra
 
 
 @njit(cache=True)
-def cumulative_filter(time: NDArray, signal: NDArray, options: dict = None) -> NDArray:
+def cumulative_filter(signal: NDArray, options: dict = None) -> NDArray:
+    """
+    Filter an input signal to remove step-like changes according to a cumulative filter approach.
+
+    :param signal: Input signal at a constant sampling interval. The signal and its first order difference are
+    observations of zero-mean processes.
+    :param options: optional dictionary to set algorithm parameters.
+    :return: Filtered signal with step like changes to the mean removed.
+    """
+
     if options is None:
         options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
 
     smoothing_factor = options.get("smoothing_factor", 0.01)
+    scale_factor = options.get("scale_factor", 5.0)
 
+    # Allocate the output filtered signal and set the first value to the first entry in the signal.
     filtered_signal = empty_like(signal)
     filtered_signal[0] = signal[0]
-    cumchange = 0.0
 
-    lf = 0.0
-    istart = 0
-    for ii in range(1, len(signal)):
-        delta_signal = signal[ii] - signal[ii - 1]
+    # Initialize algorithm paramteres
+    cumulative_distance = (
+        0.0  # Cumulative change in the function since the last delta-zero-crossing
+    )
+    prev_velocity = 0.0  # previous difference
+    idx_last_zero = 0  # Index of the last sign change
+    variance = 4  # Variance in the cumulative difference.
+    change_in_mean_detected = False  # Did we undergo a likely stepchange in the current upward or downward drift of the
+    # signal?
 
-        lf = lf * (1 - smoothing_factor) + delta_signal * smoothing_factor
-        delta = delta_signal - lf
+    for current_idx in range(1, len(signal)):
+        velocity = signal[current_idx] - signal[current_idx - 1]
 
-        if cumchange * (cumchange + delta) < 0:
-            istart = ii
+        if prev_velocity * velocity < 0:
+            # flip in sign of the differences indicates the "velocity" changed sign. Or a zero-crossing of the velocity/
+            # difference signal.
+
+            if not change_in_mean_detected:
+                # No step change. Update the mean of the variance.
+                variance = (
+                    variance * (1 - smoothing_factor)
+                    + cumulative_distance**2 * smoothing_factor
+                )
+
+            else:
+                # Step change. Remove the linear trend from the current position to the last known zero-crossing.
+                filtered_signal[idx_last_zero:current_idx] = filtered_signal[
+                    idx_last_zero:current_idx
+                ] - cumulative_distance * linspace(0, 1, current_idx - idx_last_zero)
+            idx_last_zero = current_idx
+            cumulative_distance = 0.0
+            change_in_mean_detected = False
         else:
-            if ii - istart > 23:
-                filtered_signal[istart:ii] = filtered_signal[
-                    istart:ii
-                ] - cumchange * linspace(0, 1, ii - istart)
-                istart = ii
-                cumchange = 0.0
+            # Check how far have we moved up (or down) since the last channge in sign of the velocity signal. If the
+            # cumulative change is larger than a typical change we assume that there has been a change in the mean. Note
+            # That no corrective action is taken here. We only correct the signal once velocities have flipped sign.
+            if abs(cumulative_distance) > scale_factor * sqrt(variance):
+                change_in_mean_detected = True
 
-        cumchange += delta
-        filtered_signal[ii] = filtered_signal[ii - 1] + delta
+        # Update previous velocity, cumulative signal and the filtered signal.
+        prev_velocity = velocity
+        cumulative_distance += velocity
+        filtered_signal[current_idx] = filtered_signal[current_idx - 1] + velocity
 
-    return nan_interpolate(time, filtered_signal)
+    return filtered_signal
 
 
 def sos_filter(

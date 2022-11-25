@@ -10,7 +10,6 @@ from roguewave.tools.time import datetime64_to_timestamp, to_datetime_utc, to_da
 from datetime import datetime
 import os
 from numpy import (
-    nan,
     linspace,
     errstate,
     sqrt,
@@ -21,6 +20,7 @@ from numpy import (
     sin,
     pi,
     timedelta64,
+    all,
 )
 
 _pattern = {
@@ -402,7 +402,17 @@ def read_spectra(
 
 
 def quality_control(dataframe: DataFrame) -> DataFrame:
-    negative_time = dataframe["time"].diff() < 0.0
-    dataframe.loc[negative_time, "time"] = nan
-    dataframe.dropna(inplace=True)
+    # Remove any rows with nan entries
+    dataframe = dataframe.dropna()
+
+    # Here we check for negative intervals and only keep data with positive intervals. It needs to be recursively
+    # applied since when removing an interval we may introduce a new negative interval. There are definitely more
+    # efficient ways to implement this and if this ever is a bottleneck we should - until then we do it the ugly way :-)
+    while True:
+        positive_time = dataframe["time"].diff() > 0.0
+        if all(positive_time.values[1:]):
+            break
+        else:
+            dataframe = dataframe.loc[positive_time]
+
     return dataframe

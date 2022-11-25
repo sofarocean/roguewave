@@ -31,8 +31,10 @@ from roguewave import FrequencySpectrum
 from numpy.typing import NDArray
 from typing import Tuple
 from scipy.signal.windows import get_window
-from xarray import Dataset, DataArray
+from xarray import Dataset
 from numba import njit, objmode
+from numba.typed import Dict
+from numba import types
 
 
 @njit(cache=True)
@@ -74,12 +76,20 @@ def segment_timeseries(epoch_time, segment_length_seconds) -> List[tuple]:
 
 @njit(cache=True)
 def calculate_co_spectra(
-    signals,
-    window: numpy.ndarray,
-    sampling_frequency,
-    window_overlap_fraction=0.5,
-    spectral_window=None,
+    epoch_time: NDArray,
+    signals: Tuple[NDArray],
+    window: NDArray,
+    options: Dict = None,
+    spectral_window: NDArray = None,
 ) -> NDArray:
+
+    if options is None:
+        options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
+
+    window_overlap_fraction = options.get("window_overlap_fraction", 0.5)
+    sampling_frequency = options.get("sampling_frequency", 2.5)
+    timebase_jitter_fraction = options.get("timebase_jitter_fraction", 2.5)
+
     overlap = int(len(window) * window_overlap_fraction)
     nyquist_index = len(window) // 2
 
@@ -92,6 +102,9 @@ def calculate_co_spectra(
     for index, signal in enumerate(signals):
         zero_mean_signals[index, :] = signal - numpy.mean(signal)
 
+    time_base = (epoch_time - epoch_time[0]) * sampling_frequency
+    time_delta = numpy.diff(time_base)
+
     ii = 0
     istart = 0
     while True:
@@ -99,6 +112,10 @@ def calculate_co_spectra(
         iend = istart + len(window)
         if iend > nt:
             break
+
+        if numpy.any(time_delta[istart:iend] > 1 + timebase_jitter_fraction):
+            istart = istart + len(window) - overlap
+            continue
 
         for index in range(nsig):
             with objmode():
@@ -118,34 +135,47 @@ def calculate_co_spectra(
             for nn in range(mm, nsig):
                 output[mm, nn, :] += 2 * ffts[mm, :] * numpy.conjugate(ffts[nn, :])
 
+                if mm != nn:
+                    output[nn, mm, :] = numpy.conjugate(output[mm, nn, :])
+
         istart = istart + len(window) - overlap
 
+    if ii == 0:
+        # No viable windows
+        output[:, :, :] = numpy.nan
+        return output
+
     frequency_step = sampling_frequency / len(window)
-    factor = (
+    output *= (
         window_power_correction_factor(window) ** 2
         / ii
         / frequency_step
         / len(window) ** 2
     )
 
-    for mm in range(0, nsig):
-        for nn in range(mm, nsig):
+    # Apply spectral smoothing if requested.
+    if spectral_window is not None:
+        pad_len = len(spectral_window) // 2
+        for mm in range(0, nsig):
+            for nn in range(mm, nsig):
+                # Convolutional padding length
+                total_energy_pre_smoothing = numpy.sum(output[mm, nn, :])
+                if total_energy_pre_smoothing == 0.0:
+                    continue
 
-            if spectral_window is not None:
-                scaling = numpy.sum(output[mm, nn, :])
+                # Window avereaged energy through convolution.
+                smoothed = numpy.convolve(output[mm, nn, :], spectral_window)
+                total_energy_post_smoothing = numpy.sum(smoothed[pad_len:-pad_len])
 
-                if not (numpy.abs(scaling) == 0.0):
-                    n = len(spectral_window) // 2
-                    smoothed = numpy.convolve(output[mm, nn, :], spectral_window)
+                # Renormalization to ensure we have the same pre/post total complex (co)variance
+                renormalization_factor = (
+                    total_energy_pre_smoothing / total_energy_post_smoothing
+                )
+                output[mm, nn, :] = renormalization_factor * smoothed[pad_len:-pad_len]
 
-                    output[mm, nn, :] = (
-                        scaling * smoothed[n:-n] / numpy.sum(smoothed[n:-n])
-                    )
-
-            output[mm, nn, :] = output[mm, nn, :] * factor
-
-            if mm != nn:
-                output[nn, mm] = output[mm, nn]
+                # Update the opposite diagonal
+                if mm != nn:
+                    output[nn, mm] = numpy.conjugate(output[mm, nn])
 
     return output
 
@@ -155,11 +185,15 @@ def welch(
     epoch_time: numpy.ndarray,
     signals,
     window: numpy.ndarray,
-    sampling_frequency: float,
-    segment_length_seconds=1800,
-    window_overlap_fraction=0.5,
+    options: Dict = None,
     spectral_window=None,
 ) -> Tuple[NDArray, NDArray, NDArray]:
+
+    if options is None:
+        options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
+
+    segment_length_seconds = options.get("segment_length_seconds", 1800.0)
+    sampling_frequency = options.get("segment_length_seconds", 2.5)
     segments = segment_timeseries(epoch_time, segment_length_seconds)
 
     number_of_spectra = len(segments)
@@ -178,10 +212,10 @@ def welch(
 
         segment_signal = [sig[istart:iend] for sig in signals]
         co_spectra[index, :, :, :] = calculate_co_spectra(
+            epoch_time[istart:iend],
             segment_signal,
             window,
-            sampling_frequency,
-            window_overlap_fraction,
+            options,
             spectral_window,
         )
 
@@ -230,87 +264,45 @@ def extract_moments(co_spectra, index_x, index_y, index_z):
     return szz, a1, b1, a2, b2
 
 
-def estimate_co_spectra(
-    epoch_time,
-    signals,
-    window=None,
-    segment_length_seconds=1800,
-    window_overlap_fraction=0.5,
-    sampling_frequency=2.5,
-    spectral_window=None,
-) -> Tuple[NDArray, NDArray, NDArray]:
-    if window is None:
-        window = get_window("hann", 256)
-
-    return welch(
-        epoch_time,
-        signals,
-        window,
-        sampling_frequency,
-        segment_length_seconds,
-        window_overlap_fraction,
-        spectral_window,
-    )
-
-
 def estimate_frequency_spectrum(
-    epoch_time,
-    x,
-    y,
-    z,
-    window=None,
-    segment_length_seconds=1800,
-    window_overlap_fraction=0.5,
-    sampling_frequency=2.5,
-    depth: DataArray = None,
-    latitude: DataArray = None,
-    longitude: DataArray = None,
+    epoch_time: NDArray,
+    x: NDArray,
+    y: NDArray,
+    z: NDArray,
+    window: NDArray = None,
+    options=None,
     spectral_window=None,
     **kwargs
 ) -> FrequencySpectrum:
     """
 
-    :param epoch_time: epoch time in seconds
-    :param x: East(positive)/west displacement
-    :param y: North(positive)/south displacement
-    :param z: vertical (up positive) displacement
-    :param window: window function to apply. If None are given a 256 point hann window is applied (default on Spotter),
-                   which corresponds to 102.4 second length window at a sampling frequency of 2.5 Hz
-                   (default on Spotter)
-    :param segment_length_seconds:  Segment length for the spectral analysis. If none is given a 1800
-    :param window_overlap_fraction: Overlap between successive windows (default 0.5)
-    :param sampling_frequency: sampling frequency in Hertz, default 2.5 Hz
+    :param epoch_time:
+    :param x:
+    :param y:
+    :param z:
+    :param window:
+    :param segment_length_seconds:
+    :param window_overlap_fraction:
+    :param sampling_frequency:
     :param depth:
     :param latitude:
     :param longitude:
+    :param spectral_window:
+    :param kwargs:
     :return:
     """
-    spectral_time, frequencies, co_spectra = estimate_co_spectra(
+    if window is None:
+        window = get_window("hann", 256)
+
+    spectral_time, frequencies, co_spectra = welch(
         epoch_time,
         (x, y, z),
         window,
-        segment_length_seconds,
-        window_overlap_fraction,
-        sampling_frequency,
+        options,
         spectral_window,
     )
 
     szz, a1, b1, a2, b2 = extract_moments(co_spectra, index_x=0, index_y=1, index_z=2)
-
-    if depth is None:
-        depth = numpy.full(szz.shape[0], numpy.inf)
-    else:
-        depth = numpy.interp(spectral_time, depth["time"].values, depth.values)
-
-    if latitude is None:
-        latitude = numpy.full(szz.shape[0], numpy.nan)
-    else:
-        depth = numpy.interp(spectral_time, latitude["time"].values, latitude.values)
-
-    if longitude is None:
-        longitude = numpy.full(szz.shape[0], numpy.nan)
-    else:
-        depth = numpy.interp(spectral_time, longitude["time"].values, longitude.values)
 
     dataset = Dataset(
         data_vars={
@@ -319,9 +311,9 @@ def estimate_frequency_spectrum(
             "b1": (["time", "frequency"], b1),
             "a2": (["time", "frequency"], a2),
             "b2": (["time", "frequency"], b2),
-            "depth": (["time"], depth),
-            "latitude": (["time"], latitude),
-            "longitude": (["time"], longitude),
+            "depth": (["time"], numpy.full(szz.shape[0], numpy.inf)),
+            "latitude": (["time"], numpy.full(szz.shape[0], numpy.nan)),
+            "longitude": (["time"], numpy.full(szz.shape[0], numpy.nan)),
         },
         coords={"time": spectral_time.astype("<M8[s]"), "frequency": frequencies},
     )

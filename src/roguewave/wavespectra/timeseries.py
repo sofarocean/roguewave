@@ -24,7 +24,7 @@ def surface_timeseries(
     :return:
     """
 
-    nfft = (signal_length // 2) * 2
+    nfft = (int(signal_length) // 2) * 2
 
     frequencies = linspace(0, 0.5 * sampling_frequency, nfft // 2, endpoint=False)
 

@@ -118,13 +118,18 @@ class PiersonMoskowitz(FrequencyShape):
         :param g: gravitational acceleration (default 9.81)
         :return:
         """
-        return (
+        values = numpy.zeros(len(frequency_hertz))
+        msk = frequency_hertz > 0
+        values[msk] = (
             self._alpha
             * self._g**2
             * (2 * numpy.pi) ** -4
-            * frequency_hertz**-5
-            * numpy.exp(-5 / 4 * (self._peak_frequency_hertz / frequency_hertz) ** 4)
+            * frequency_hertz[msk] ** -5
+            * numpy.exp(
+                -5 / 4 * (self._peak_frequency_hertz / frequency_hertz[msk]) ** 4
+            )
         )
+        return values
 
 
 def create_frequency_shape(
@@ -163,7 +168,9 @@ def create_parametric_spectrum(
     latitude: float = None,
     longitude: float = None,
 ) -> FrequencyDirectionSpectrum:
+
     m0 = (significant_wave_height / 4) ** 2
+
     D = create_directional_shape(
         shape=direction_shape,
         mean_direction_degrees=mean_direction_degrees,

@@ -12,63 +12,40 @@ from numpy import (
     abs,
     array,
     zeros,
-    flip,
 )
 from numpy.typing import NDArray
 
 
 @njit(cache=True)
-def integration_coeficients(method="adams_moulton_4th_order"):
-    if method == "adams_moulton_4th_order":
-        return (4, array((3 / 8, 19 / 24, -5 / 24, 1 / 24)))
-
-    elif method == "adams_moulton_3th_order":
-        return (3, array((5 / 12, 2 / 3, -1 / 12)))
-
-    elif method == "pieter":
-        return (3, array((-1.75, 2.5, 0.25)))
-
-    elif method == "adams_moulton_5th_order":
-        return (5, array((251 / 720, 646 / 720, -264 / 720, 106 / 720, -19 / 720)))
-
-    elif method == "adams_moulton_6th_order":
-        return (6, array((475, 1427, -798, 482, -173, 27)) / 1440.0)
-
-    elif method == "adams_moulton_6th_order":
-        return (6, array((475, 1427, -798, 482, -173, 27)) / 1440.0)
-
-    elif method == "adams_moulton_7th_order":
-        return (7, array((19087, 65112, -46461, 37504, -20211, 6312, -863)) / 60480.0)
-
-    elif method == "adams_moulton_8th_order":
-        return (
-            8,
-            array((36799, 139849, -121797, 123133, -88547, 41499, -11351, 1375))
-            / 120960.0,
-        )
-
-    elif method == "trapezoidal":
-        return (2, array((0.5, 0.5)))
-
-    else:
-        return (2, array((0.5, 0.5)))
-
-
-@njit(cache=True)
 def integrate(
-    time: NDArray, signal: NDArray, method="adams_moulton_4th_order"
+    time: NDArray, signal: NDArray, order=4, primary_number_of_implicit_points=1
 ) -> NDArray:
-    primary_stencil_width, primary_stencil = integration_coeficients(method=method)
+
+    primary_stencil = integration_stencil(order, primary_number_of_implicit_points)
+    primary_stencil_width = len(primary_stencil)
+
     integrated_signal = empty_like(signal)
     integrated_signal[0] = 0
+    integrated_signal[:] = 0.0
 
     number_of_constant_time_steps = 0
     prev_dt = time[1] - time[0]
     restart = True
-    for ii in range(0, len(signal)):
+
+    nt = len(signal)
+    for ii in range(1, len(signal)):
         curr_dt = time[ii] - time[ii - 1]
 
-        if abs(curr_dt - prev_dt) > 0.01 * curr_dt:
+        if ii + primary_number_of_implicit_points - 1 < nt:
+            future_dt = (
+                time[ii + primary_number_of_implicit_points - 1]
+                - time[ii + primary_number_of_implicit_points - 2]
+            )
+        else:
+            future_dt = curr_dt
+            restart = True
+
+        if abs(future_dt - prev_dt) > 0.01 * curr_dt:
             # Jitter in the timestep, fall back to a lower order method that can handle this.
             restart = True
             number_of_constant_time_steps = 0
@@ -76,7 +53,8 @@ def integrate(
         if restart:
             number_of_constant_time_steps += 1
             stencil_width = 2
-            stencil = (0.5, 0.5)
+            stencil = array([0.5, 0.5])
+            number_of_implicit_points = 1
 
             if number_of_constant_time_steps == primary_stencil_width:
                 # We know have a series of enough constant timesteps to go to the higher order method.
@@ -85,52 +63,13 @@ def integrate(
         else:
             stencil_width = primary_stencil_width
             stencil = primary_stencil
+            number_of_implicit_points = primary_number_of_implicit_points
 
         delta = 0.0
-        for jj in range(0, stencil_width):
-            delta += stencil[jj] * signal[ii - jj]
-
-        integrated_signal[ii] = integrated_signal[ii - 1] + delta * curr_dt
-        prev_dt = curr_dt
-
-    return integrated_signal
-
-
-@njit(cache=True)
-def integratev2(
-    time: NDArray, signal: NDArray, method="adams_moulton_4th_order"
-) -> NDArray:
-    primary_stencil_width, primary_stencil = integration_coeficients(method=method)
-    integrated_signal = empty_like(signal)
-    integrated_signal[0] = 0
-
-    number_of_constant_time_steps = 0
-    prev_dt = time[1] - time[0]
-    restart = True
-    for ii in range(0, len(signal)):
-        curr_dt = time[ii] - time[ii - 1]
-
-        if abs(curr_dt - prev_dt) > 0.01 * curr_dt:
-            # Jitter in the timestep, fall back to a lower order method that can handle this.
-            restart = True
-            number_of_constant_time_steps = 0
-
-        if restart:
-            number_of_constant_time_steps += 1
-            stencil_width = 2
-            stencil = (0.5, 0.5)
-
-            if number_of_constant_time_steps == primary_stencil_width:
-                # We know have a series of enough constant timesteps to go to the higher order method.
-                restart = False
-
-        else:
-            stencil_width = primary_stencil_width
-            stencil = primary_stencil
-
-        delta = 0.0
-        for jj in range(0, stencil_width):
-            delta += stencil[jj] * signal[ii - jj]
+        jstart = -(stencil_width - number_of_implicit_points)
+        jend = number_of_implicit_points
+        for jj in range(jstart, jend):
+            delta += stencil[jj - jstart] * signal[ii + jj]
 
         integrated_signal[ii] = integrated_signal[ii - 1] + delta * curr_dt
         prev_dt = curr_dt
@@ -176,38 +115,17 @@ def cumulative_distance(latitudes, longitudes):
 
 
 @njit(cache=True)
-def complex_response(normalized_frequency, method="adams_moulton_4th_order"):
-    stencil_width, stencil = integration_coeficients(method=method)
-
-    normalized_omega = 1j * 2 * pi * normalized_frequency
-    response_factor = zeros_like(normalized_frequency, dtype="complex_")
-
-    for ii in range(0, stencil_width):
-        response_factor += stencil[ii] * exp(-normalized_omega * ii)
-
-    for index, omega in enumerate(normalized_omega):
-        if omega == 0.0 + 0.0j:
-            response_factor[index] = 1.0 + 0.0j
-        else:
-            response_factor[index] = response_factor[index] * (
-                omega / ((1 - exp(-omega)))
-            )
-
-    return response_factor
-
-
-@njit(cache=True)
-def complex_responsev2(normalized_frequency, order, number_of_implicit_points=1):
+def complex_response(normalized_frequency, order, number_of_implicit_points=1):
     number_of_explicit_points = order - number_of_implicit_points
-    stencil = get_stencil(order, number_of_implicit_points)
+    stencil = integration_stencil(order, number_of_implicit_points)
 
     normalized_omega = 1j * 2 * pi * normalized_frequency
     response_factor = zeros_like(normalized_frequency, dtype="complex_")
 
-    for ii in range(-number_of_implicit_points + 1, number_of_explicit_points + 1):
-        response_factor += stencil[ii + number_of_implicit_points - 1] * exp(
-            -normalized_omega * ii
-        )
+    jstart = -number_of_explicit_points
+    jend = number_of_implicit_points
+    for ii in range(jstart, jend):
+        response_factor += stencil[ii - jstart] * exp(normalized_omega * ii)
 
     for index, omega in enumerate(normalized_omega):
         if omega == 0.0 + 0.0j:
@@ -221,34 +139,75 @@ def complex_responsev2(normalized_frequency, order, number_of_implicit_points=1)
 
 
 @njit(cache=True)
-def lagrange_poly(order, which):
-    poly = zeros(order)
-    poly[0] = 1
+def lagrange_base_polynomial_coef(order, base_polynomial_index):
+    """
+    We consider the interpolation of Y[0] Y[1] ... Y[order] spaced 1 apart at 0, 1,... point_index, ... order in terms
+    of the Lagrange polynomial:
 
+    Y[x]  =   L_0[x] Y[0] + L_1[x] Y[1] + .... L_order[x] Y[order].
+
+    Here each of the lagrange polynomial coefficients L_n is expressed as a polynomial in x
+
+    L_n = a_0 x**(order-1) + a_1 x**(order-2) + ... a_order
+
+    where the coeficients may be found from the standard definition of the base polynomial (e.g. for L_0)
+
+          ( x - x_1) * ... * (x - x_order )         ( x- 1) * (x-2) * ... * (x - order)
+    L_0 = ------------------------------------  =  -------------------------------------
+          (x_0 -x_1) * .... * (x_0 - x_order)        -1 * -2 * .... * -order
+
+    where the right hand side follows after substituting x_n = n (i.e. 1 spacing). This function returns the set of
+    coefficients [ a_0, a_1, ..., a_order ].
+
+    :param order: order of the base polynomials.
+    :param base_polynomial_index: which of the base polynomials to calculate
+    :return: set of polynomial coefficients [ a_0, a_1, ..., a_order ]
+    """
+    poly = zeros(order + 1)
+    poly[0] = 1
     denominator = 1
     jj = 0
-    for ii in range(0, order):
-        if ii == which:
+    for ii in range(0, order + 1):
+        if ii == base_polynomial_index:
             continue
         jj += 1
-        denominator = denominator * (which - ii)
+
+        # calculate the denomitor by repeated multiplication
+        denominator = denominator * (base_polynomial_index - ii)
+
+        # Calculate the polynomial coeficients. We start with a constant function (a_0=1) of order 0 and multiply this
+        # polynomial with the next term ( x - x_0), (x-x_1) etc.
         poly[1 : jj + 1] += -ii * poly[0:jj]
 
     return poly / denominator
 
 
 @njit(cache=True)
-def integrated_lagrange_poly(order, which):
-    poly = zeros(order + 1)
-    poly[0:order] = lagrange_poly(order, which)
+def integrated_lagrange_base_polynomial_coef(order, base_polynomial_index):
+    """
+    Calculate the polynomial coefficents of the integrated base polynomial.
 
+    :param order: polynomial order of the interated base_polynomial.
+    :param base_polynomial_index: which of the base polynomials to calculate
+    :return: set of polynomial coefficients [ a_0, a_1, ..., a_[order-1], 0 ]
+    """
+    poly = zeros(order + 1)
+    poly[0:order] = lagrange_base_polynomial_coef(order - 1, base_polynomial_index)
+
+    # Calculate the coefficients of the integrated polynimial.
     for ii in range(order - 1):
         poly[ii] = poly[ii] / (order - ii)
     return poly
 
 
 @njit(cache=True)
-def eval_poly(poly, x):
+def evaluate_polynomial(poly, x):
+    """
+    Eval a polynomial at location x.
+    :param poly: polynomial coeficients [a_0, a_1, ..., a_[order+1]]
+    :param x: location to evaluate the polynomial/
+    :return: value of the polynomial at the location
+    """
     res = 0
     order = len(poly) - 1
     for ii in range(0, order + 1):
@@ -257,29 +216,15 @@ def eval_poly(poly, x):
 
 
 @njit(cache=True)
-def integrated_lagrange_coef(order, which, x0, x1):
-    poly = integrated_lagrange_poly(order, which)
-    return eval_poly(poly, x1) - eval_poly(poly, x0)
+def integration_stencil(order, number_of_implicit_points=1):
 
-
-@njit(cache=True)
-def get_lagrange_weights(order, istart=None):
     weights = zeros(order)
-    if istart is None:
-        istart = order - 2
+    istart = order - number_of_implicit_points - 1
 
     for ii in range(0, order):
-        weights[ii] = integrated_lagrange_coef(order, ii, istart, istart + 1)
-    return flip(weights)
+        base_poly = integrated_lagrange_base_polynomial_coef(order, ii)
+        weights[ii] = evaluate_polynomial(base_poly, istart + 1) - evaluate_polynomial(
+            base_poly, istart
+        )
 
-
-@njit(cache=True)
-def get_stencil(order, number_of_implicit_points=1):
-    number_of_explicit_points = order - number_of_implicit_points
-    return get_lagrange_weights(order, number_of_explicit_points - 1)
-
-
-if __name__ == "__main__":
-    stencil = get_stencil(3, 1)
-    print(array((3 / 8, 19 / 24, -5 / 24, 1 / 24)))
-    print(stencil)
+    return weights

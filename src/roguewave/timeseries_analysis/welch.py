@@ -193,7 +193,7 @@ def welch(
         options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
 
     segment_length_seconds = options.get("segment_length_seconds", 1800.0)
-    sampling_frequency = options.get("segment_length_seconds", 2.5)
+    sampling_frequency = options.get("sampling_frequency", 2.5)
     segments = segment_timeseries(epoch_time, segment_length_seconds)
 
     number_of_spectra = len(segments)
@@ -294,6 +294,8 @@ def estimate_frequency_spectrum(
     if window is None:
         window = get_window("hann", 256)
 
+    options = _to_numba_dict(options)
+
     spectral_time, frequencies, co_spectra = welch(
         epoch_time,
         (x, y, z),
@@ -318,3 +320,13 @@ def estimate_frequency_spectrum(
         coords={"time": spectral_time.astype("<M8[s]"), "frequency": frequencies},
     )
     return FrequencySpectrum(dataset)
+
+
+def _to_numba_dict(mapping) -> Dict:
+    numba_mapping = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
+
+    if mapping is not None:
+        for key, item in mapping.items():
+            numba_mapping[key] = item
+
+    return numba_mapping

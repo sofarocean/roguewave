@@ -17,15 +17,29 @@ from numpy.typing import NDArray
 
 
 @njit(cache=True)
-def integrate(
-    time: NDArray, signal: NDArray, order=4, primary_number_of_implicit_points=1
-) -> NDArray:
+def integrate(time: NDArray, signal: NDArray, order=4, n=1, start_value=0.0) -> NDArray:
+    """
+    Cumulatively integrate the given discretely sampled signal in time using a Newton-Coases like formulation of
+    requested order and layout. Note that higher order methods are only used in regions where the timestep is constant
+    across the integration stencil- otherwise we fall back to the trapezoidal rule which can handle variable timesteps.
+    A small amount of jitter (<1%) in timesteps is permitted though (and effectively ignored).
 
-    primary_stencil = integration_stencil(order, primary_number_of_implicit_points)
+    NOTE: by default we start at 0.0 - which in general means that for a zero-mean process we will pick up a random
+          offset that will need to be corracted afterwards. (out is not zero-mean).
+
+    :param time: ndarray of length nt containing the elapsed time in seconds.
+    :param signal: ndarray of length nt containing the signal to be integrated
+    :param order: Order of the returned Newton-Coates integration approximation.
+    :param n: number of future points in the integration stencil.
+    :param start_value: Starting value of the integrated signal.
+    :return: NDARRAY of length nt that contains the integrated signal that starts at the requested start_value.
+    """
+
+    primary_stencil = integration_stencil(order, n)
     primary_stencil_width = len(primary_stencil)
 
     integrated_signal = empty_like(signal)
-    integrated_signal[0] = 0
+    integrated_signal[0] = start_value
     integrated_signal[:] = 0.0
 
     number_of_constant_time_steps = 0
@@ -36,11 +50,8 @@ def integrate(
     for ii in range(1, len(signal)):
         curr_dt = time[ii] - time[ii - 1]
 
-        if ii + primary_number_of_implicit_points - 1 < nt:
-            future_dt = (
-                time[ii + primary_number_of_implicit_points - 1]
-                - time[ii + primary_number_of_implicit_points - 2]
-            )
+        if ii + n - 1 < nt:
+            future_dt = time[ii + n - 1] - time[ii + n - 2]
         else:
             future_dt = curr_dt
             restart = True
@@ -63,7 +74,7 @@ def integrate(
         else:
             stencil_width = primary_stencil_width
             stencil = primary_stencil
-            number_of_implicit_points = primary_number_of_implicit_points
+            number_of_implicit_points = n
 
         delta = 0.0
         jstart = -(stencil_width - number_of_implicit_points)
@@ -115,24 +126,36 @@ def cumulative_distance(latitudes, longitudes):
 
 
 @njit(cache=True)
-def complex_response(normalized_frequency, order, number_of_implicit_points=1):
+def complex_response(
+    normalized_frequency: NDArray, order: int, number_of_implicit_points: int = 1
+):
+    """
+    The frequency complex response factor of the numerical integration scheme with given order and number of
+    implicit points.
+
+    :param normalized_frequency: Frequency normalized with the sampling frequency to calculate response factor at
+    :param order: Order of the returned Newton-Coates integration approximation.
+    :param number_of_implicit_points: number of future points in the integration stencil.
+    :return: complex NDArray of same length as the input frequency containing the response factor at the given
+             frequencies
+    """
     number_of_explicit_points = order - number_of_implicit_points
     stencil = integration_stencil(order, number_of_implicit_points)
 
-    normalized_omega = 1j * 2 * pi * normalized_frequency
-    response_factor = zeros_like(normalized_frequency, dtype="complex_")
+    normalized_omega = 2j * pi * normalized_frequency
 
-    jstart = -number_of_explicit_points
-    jend = number_of_implicit_points
-    for ii in range(jstart, jend):
-        response_factor += stencil[ii - jstart] * exp(normalized_omega * ii)
+    response_factor = zeros_like(normalized_frequency, dtype="complex_")
+    for ii in range(-number_of_explicit_points, number_of_implicit_points):
+        response_factor += stencil[ii + number_of_explicit_points] * exp(
+            normalized_omega * ii
+        )
 
     for index, omega in enumerate(normalized_omega):
         if omega == 0.0 + 0.0j:
             response_factor[index] = 1.0 + 0.0j
         else:
             response_factor[index] = response_factor[index] * (
-                omega / ((1 - exp(-omega)))
+                omega / (1 - exp(-omega))
             )
 
     return response_factor
@@ -216,15 +239,47 @@ def evaluate_polynomial(poly, x):
 
 
 @njit(cache=True)
-def integration_stencil(order, number_of_implicit_points=1):
+def integration_stencil(order: int, number_of_implicit_points: int = 1) -> NDArray:
+    """
+    Find the Newton-Coastes like- integration stencil given the desired order and the number of "implicit" points.
+    Specicially, let the position z at instance t[j-1] be known, and we wish to approximate z at time t[j], where
+    t[j] - t[j-1] = dt  for all j, given the velocities w[j]. This implies we solve
 
+            dz
+           ---- = w    ->    z[j] = z[j-1] + dz     with dz = Integral[w] ~ dt * F[w]
+            dt
+
+    To solve the integral we use Newton-Coates like approximation and express w(t) as a function of points w[j+i],
+    where i = -m-1 ... n-1 using a Lagrange Polynomial. Specifically we consider points in the past and future as we
+    anticipate we can buffer w values in any application.
+
+    In this framework the interval of interest lies between j-1, and j  (i=0 and 1).
+
+        j-m-1  ...  j-2  j-1   j   j+1  ...  j+n-1
+          |    |    |    |----|    |    |    |
+
+    The number of points used will be refered to ast the order = n+m+1. The number of points with i>=0 will be referred to as
+    the number of implicit points, so that n = number_of_implicit_points. The number of points i<0 is the number of
+    explicit points m = order - n - 1.
+
+    This function calculates the weights such that
+
+    dz  =    weights[0] w[j-m] + ... +  weights[m-1] w[j-1] + weights[m] w[j] + ... weights[order-1] w[j+n-1]
+
+    :param order: Order of the returned Newton-Coates set of coefficients.
+    :param number_of_implicit_points: number of points for which i>0
+    :return: Numpy array of length Order with the weights.
+    """
     weights = zeros(order)
-    istart = order - number_of_implicit_points - 1
+    number_of_explicit_points = order - number_of_implicit_points
 
     for ii in range(0, order):
+        # Get the polynomial coefficients assocated with the ii'th lagrangian base polynomial l_ii
         base_poly = integrated_lagrange_base_polynomial_coef(order, ii)
-        weights[ii] = evaluate_polynomial(base_poly, istart + 1) - evaluate_polynomial(
-            base_poly, istart
-        )
+
+        # Calculate the dz from the evaluation of the indeterminate integrals
+        weights[ii] = evaluate_polynomial(
+            base_poly, number_of_explicit_points
+        ) - evaluate_polynomial(base_poly, number_of_explicit_points - 1)
 
     return weights

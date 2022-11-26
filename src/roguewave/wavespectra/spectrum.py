@@ -875,6 +875,57 @@ class WaveSpectrum(DatasetWrapper):
     def save_as_netcdf(self, path):
         self.dataset.to_netcdf(path)
 
+    def multiply(
+        self, array: numpy.ndarray, dimensions: List[str] = None, inplace=False
+    ) -> _T:
+        """
+        Multiply the variance density with the given numpy array. Broadcasting is performed automatically if dimensions
+        are provided. If no dimensions are provided the array needs to have the exact same shape as the variance
+        density array.
+
+        :param array: Array to multiply with variance density
+        :param dimension: Dimensions of the array
+        :return: self
+        """
+        if inplace:
+            output = self
+        else:
+            output = self.copy()
+
+        coords = {}
+        shape = array.shape
+        if dimensions is None:
+            if shape != self.shape():
+                raise ValueError(
+                    "If no dimensions are provided the array must have the exact same shape as the"
+                    "variance density array."
+                )
+
+            output.dataset[NAME_E] = self.dataset[NAME_E] * array
+            return output
+
+        if len(shape) != len(dimensions):
+            raise ValueError(
+                "The dimensions of the input array must match the number of dimension labels"
+            )
+
+        for length, dimension in zip(shape, dimensions):
+            if dimension not in self.dims:
+                raise ValueError(
+                    f"Dimension {dimension} not a valid dimension of the spectral object."
+                )
+            coords[dimension] = self.dataset[dimension].values
+
+            if len(self.dataset[dimension].values) != length:
+                raise ValueError(
+                    f"Array length along the dimension {dimension} does not match the length of the"
+                    f"coordinate of the same name in the spctral object."
+                )
+
+        data = DataArray(data=array, coords=coords, dims=dimensions)
+        output.dataset[NAME_E] = self.dataset[NAME_E] * data
+        return output
+
 
 class FrequencyDirectionSpectrum(WaveSpectrum):
     def __init__(self, dataset: Dataset):
@@ -964,19 +1015,6 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
                 dataset[name] = self.dataset[name]
 
         return FrequencySpectrum(Dataset(dataset))
-        # return create_1d_spectrum(
-        #     self.frequency.values,
-        #     self.e.values,
-        #     self.time.values,
-        #     self.latitude.values,
-        #     self.longitude.values,
-        #     self.a1.values,
-        #     self.b1.values,
-        #     self.a2.values,
-        #     self.b2.values,
-        #     depth=self.depth.values,
-        #     dims=self.dims_space_time + [NAME_F],
-        # )
 
     def spectrum_1d(self) -> "FrequencySpectrum":
         """
@@ -984,7 +1022,7 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
         :return:
         """
         warn(
-            'spectrum_1d method will be removed, use "as_frequency_spectru" instead',
+            'spectrum_1d method will be removed, use "as_frequency_spectrum" instead',
             DeprecationWarning,
             stacklevel=2,
         )

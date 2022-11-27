@@ -74,7 +74,7 @@ def colocate_model_spotter(
     )
     spotters = {
         key: value.drop(columns="spotter_id")
-        for (key, value) in df.groupby(["spotter_id"])
+        for (key, value) in df.groupby("spotter_id")
     }
 
     for spotter_id in list(spotters.keys()):

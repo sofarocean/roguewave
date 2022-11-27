@@ -11,4 +11,5 @@ from .analysis import (
     spectra_from_displacement,
     displacement_from_gps_doppler_velocities,
     displacement_from_gps_positions,
+    spotter_frequency_response_correction,
 )

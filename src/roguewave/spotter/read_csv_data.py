@@ -21,6 +21,7 @@ from numpy import (
     pi,
     timedelta64,
     all,
+    nan,
 )
 
 _pattern = {
@@ -129,6 +130,9 @@ def load_as_dataframe(
         return df
 
     source_files = list(files_to_parse)
+    if len(source_files) == 0:
+        raise FileNotFoundError("No files to parse")
+
     data_frames = [process_file(source_file) for source_file in source_files]
 
     # Fragmentation occurs for spectral data- to avoid performance issues we recreate the dataframe after the concat
@@ -167,6 +171,7 @@ def read_data(
     end_date: datetime = None,
 ) -> DataFrame:
     files = files_to_parse(path, _pattern[data_type], start_date, end_date)
+
     format = get_format(data_type)
     dataframe = load_as_dataframe(files, format, sampling_interval)
 
@@ -183,11 +188,44 @@ def read_data(
 
 def read_gps(
     path,
-    postprocess=True,
-    config: SpotterConstants = None,
     start_date: datetime = None,
     end_date: datetime = None,
+    postprocess=True,
+    config: SpotterConstants = None,
 ) -> DataFrame:
+    """
+    Load raw GPS text files and return a pandas dataframe containing the data. By default the data is postprocessed into
+    a more  convinient form (without loss of information) unless raw data is specifically requested
+
+    :param path: Path containing Spotter CSV files
+    :param postprocess: whether to postprocess the data. Postprocessing converts heading and velocity magnitude to
+                        velocity components, and combines latitude and lituted minutes into a single double latitude
+                        (same for longitudes).
+
+    :param config: set of default settings in the spotter processing pipeline. Only needed for development purposes.
+
+    :param start_date: If only a subset of the data is needed we can avoid loading all data, this denotes the start
+                       date of the desired interval. If given, only data after the start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid loading all data, this denotes the end
+                       date of the desired interval. If given, only data before the end_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :return: Pandas Dataframe. If postprocess is false it just contains the raw columns of the GPS file (see file for
+             description) If True (default) returns dataframe with columns
+
+             "time": epoch time (UTC, epoch of 1970-1-1, i.e. Unix Epoch).
+             "latitude": Latitude in decimal degrees
+             "longitude": Longitude in decimal degrees
+             "z": raw vertical elevation from GPS in meter
+             "u': eastward velocity, m/s
+             "v': northward velocity, m/s
+             "w": vertical velocity, m/s
+             "group id": Identifier that indicates continuous data groups. (data from "same deployment).
+
+    """
+
     if config is None:
         config = spotter_constants()
 
@@ -229,12 +267,46 @@ def read_gps(
 
 
 def read_displacement(
-    path,
-    postprocess=True,
+    path: str,
+    postprocess: bool = True,
     config: SpotterConstants = None,
     start_date: datetime = None,
     end_date: datetime = None,
 ) -> DataFrame:
+
+    """
+    Load displacement dataand return a pandas dataframe containing the data.
+    By default the data is postprocessed to apply an inverse pass of the
+    IIR filter to correct for phase differences.
+
+    :param path: Path containing Spotter CSV files
+    :param postprocess: whether to apply the phase correction
+
+    :param config: set of default settings in the spotter processing
+                   pipeline. Only needed for development purposes.
+
+    :param start_date: If only a subset of the data is needed we can avoid
+                       loading all data, this denotes the start date of the
+                       desired interval. If given, only data after the
+                       start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid
+                     loading all data, this denotes the end date of the
+                     desired interval. If given, only data before the
+                     end_date is loaded (if available).
+                     NOTE: this requires that LOC files are present.
+
+    :return: Pandas Dataframe. Returns dataframe with columns
+
+             "time": epoch time (UTC, epoch of 1970-1-1, i.e. Unix Epoch).
+             "x": filteresd displacement data (Eastings)
+             "y': filteresd displacement data (Northings)
+             "z': vertical displacement from local mean.
+             "group id": Identifier that indicates continuous data groups.
+                         (data from "same deployment).
+    """
+
     if config is None:
         config = spotter_constants()
 
@@ -290,6 +362,113 @@ def read_location(
     return dataframe
 
 
+def read_spectra(
+    path: str,
+    start_date: datetime = None,
+    end_date: datetime = None,
+    depth: float = inf,
+    config: SpotterConstants = None,
+) -> FrequencySpectrum:
+    """
+    Read spectral data from csv files. The raw spectral data is transformed into
+    a roguewave Spectral 1D spectrum object (which includes all directional moments a1,b1,a2,b2 as well as energy for
+    the given time period).
+
+    :param path: Path containing Spotter CSV files
+    :param postprocess: Whether to apply the phase correction
+
+    :param start_date: If only a subset of the data is needed we can avoid
+                       loading all data, this denotes the start date of the
+                       desired interval. If given, only data after the
+                       start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid
+                     loading all data, this denotes the end date of the
+                     desired interval. If given, only data before the
+                     end_date is loaded (if available).
+                     NOTE: this requires that LOC files are present.
+
+    :param depth: Local water depth,  by default set to inf (deep water).
+                  Not required, but is set on the returned spectral object
+                  (and factors in transformations thereof, e.g. to get wavenumbers).
+
+    :param config: set of default settings in the spotter processing
+                   pipeline. Only needed for development purposes.
+
+    :return: frequency spectra as a FrequencySpectrum object.
+    """
+
+    if config is None:
+        config = spotter_constants()
+
+    data = read_raw_spectra(path, start_date=start_date, end_date=end_date)
+    sampling_interval = config["sampling_interval_gps"] / timedelta64(1, "s")
+    df = 1 / (config["number_of_samples"] * sampling_interval)
+    frequencies = (
+        linspace(
+            0,
+            config["number_of_frequencies"],
+            config["number_of_frequencies"],
+            endpoint=False,
+        )
+        * df
+    )
+
+    spectral_values = data[list(range(0, config["number_of_frequencies"]))].values
+    time = data["time"].values
+    time = time[data["kind"] == "Szz_re"]
+
+    Szz = spectral_values[data["kind"] == "Szz_re", :]
+    Sxx = spectral_values[data["kind"] == "Sxx_re", :]
+    Syy = spectral_values[data["kind"] == "Syy_re", :]
+    Cxy = spectral_values[data["kind"] == "Sxy_re", :]
+    Qzx = spectral_values[data["kind"] == "Szx_im", :]
+    Qzy = spectral_values[data["kind"] == "Szy_im", :]
+
+    with errstate(invalid="ignore", divide="ignore"):
+        # Supress divide by 0; silently produce NaN
+        a1 = Qzx / sqrt(Szz * (Sxx + Syy))
+        a2 = (Sxx - Syy) / (Sxx + Syy)
+        b1 = Qzy / sqrt(Szz * (Sxx + Syy))
+        b2 = 2.0 * Cxy / (Sxx + Syy)
+
+    try:
+        location = read_location(path, postprocess=True, config=config)
+        latitude = interp(
+            datetime64_to_timestamp(time),
+            datetime64_to_timestamp(location["time"].values),
+            location["latitude"].values,
+        )
+        longitude = interp(
+            datetime64_to_timestamp(time),
+            datetime64_to_timestamp(location["time"].values),
+            location["longitude"].values,
+        )
+
+    except FileNotFoundError:
+        # No location files find to get latitude/longitude. Just fill with NaN.
+        latitude = full_like(time, nan)
+        longitude = full_like(time, nan)
+
+    depth = full_like(time, depth)
+
+    dataset = Dataset(
+        data_vars={
+            "variance_density": (["time", "frequency"], Szz),
+            "a1": (["time", "frequency"], a1),
+            "b1": (["time", "frequency"], b1),
+            "a2": (["time", "frequency"], a2),
+            "b2": (["time", "frequency"], b2),
+            "depth": (["time"], depth),
+            "latitude": (["time"], latitude),
+            "longitude": (["time"], longitude),
+        },
+        coords={"time": to_datetime(time), "frequency": frequencies},
+    )
+    return FrequencySpectrum(dataset)
+
+
 def read_raw_spectra(
     path,
     postprocess=True,
@@ -328,77 +507,6 @@ def read_raw_spectra(
     data.reset_index(inplace=True)
     data.drop(columns="source_index", inplace=True)
     return data
-
-
-def read_spectra(
-    path,
-    depth=inf,
-    config: SpotterConstants = None,
-    start_date: datetime = None,
-    end_date: datetime = None,
-) -> FrequencySpectrum:
-    if config is None:
-        config = spotter_constants()
-
-    data = read_raw_spectra(path, start_date=start_date, end_date=end_date)
-    sampling_interval = config["sampling_interval_gps"] / timedelta64(1, "s")
-    df = 1 / (config["number_of_samples"] * sampling_interval)
-    frequencies = (
-        linspace(
-            0,
-            config["number_of_frequencies"],
-            config["number_of_frequencies"],
-            endpoint=False,
-        )
-        * df
-    )
-
-    spectral_values = data[list(range(0, config["number_of_frequencies"]))].values
-    time = data["time"].values
-    time = time[data["kind"] == "Szz_re"]
-
-    Szz = spectral_values[data["kind"] == "Szz_re", :]
-    Sxx = spectral_values[data["kind"] == "Sxx_re", :]
-    Syy = spectral_values[data["kind"] == "Syy_re", :]
-    Cxy = spectral_values[data["kind"] == "Sxy_re", :]
-    Qzx = spectral_values[data["kind"] == "Szx_im", :]
-    Qzy = spectral_values[data["kind"] == "Szy_im", :]
-
-    with errstate(invalid="ignore", divide="ignore"):
-        # Supress divide by 0; silently produce NaN
-        a1 = Qzx / sqrt(Szz * (Sxx + Syy))
-        a2 = (Sxx - Syy) / (Sxx + Syy)
-        b1 = Qzy / sqrt(Szz * (Sxx + Syy))
-        b2 = 2.0 * Cxy / (Sxx + Syy)
-
-    location = read_location(path, postprocess=True, config=config)
-    latitude = interp(
-        datetime64_to_timestamp(time),
-        datetime64_to_timestamp(location["time"].values),
-        location["latitude"].values,
-    )
-    longitude = interp(
-        datetime64_to_timestamp(time),
-        datetime64_to_timestamp(location["time"].values),
-        location["longitude"].values,
-    )
-
-    depth = full_like(time, depth)
-
-    dataset = Dataset(
-        data_vars={
-            "variance_density": (["time", "frequency"], Szz),
-            "a1": (["time", "frequency"], a1),
-            "b1": (["time", "frequency"], b1),
-            "a2": (["time", "frequency"], a2),
-            "b2": (["time", "frequency"], b2),
-            "depth": (["time"], depth),
-            "latitude": (["time"], latitude),
-            "longitude": (["time"], longitude),
-        },
-        coords={"time": to_datetime(time), "frequency": frequencies},
-    )
-    return FrequencySpectrum(dataset)
 
 
 def quality_control(dataframe: DataFrame) -> DataFrame:

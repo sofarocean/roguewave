@@ -75,8 +75,8 @@ def estimate_frequency_spectrum(
     if response_functions is not None:
         for m in range(0, 3):
             for n in range(m, 3):
-                response = response_functions[m] * numpy.conjugate(
-                    response_functions[n]
+                response = response_functions[m](frequencies) * numpy.conjugate(
+                    response_functions[n](frequencies)
                 )
                 co_spectra[:, m, n, :] = co_spectra[:, m, n, :] * response
 

@@ -89,6 +89,7 @@ def spectral_pipeline(
     latlon_input=False,
     window=None,
     segment_length_seconds=1800,
+    sampling_frequency=2.5,
     spectral_window=None,
     response_correction=False,
 ) -> FrequencySpectrum:
@@ -146,7 +147,8 @@ def spectral_pipeline(
         z,
         window,
         segment_length_seconds,
-        spectral_window,
+        sampling_frequency=sampling_frequency,
+        spectral_window=spectral_window,
         response_functions=response_functions,
     )
 
@@ -193,6 +195,9 @@ def apply_filter(
     elif name == "exponential":
         options = to_numba_kwargs(kwargs)
         return exponential_filter(time_seconds, signal, options)
+
+    elif name == "identity":
+        return signal
 
     else:
         raise Exception(f"unknown filter: {name}")

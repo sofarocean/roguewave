@@ -25,6 +25,13 @@ def interpolate_dataframe_time(dataframe: DataFrame, new_time: numpy.ndarray):
         if name == "time":
             continue
 
+        # Interpolation does not work on anything other than numeric types. If we have an object - we just ignore it
+        # (do not include column in output). Fixes a crash due to the new "processing_source" adding a string to
+        # Spotter Api data that descibes where the data was processed.
+        if dataframe[name].dtype == numpy.dtype(object):
+            print(name)
+            continue
+
         output[name] = interpolate_periodic(
             old_time.astype("float64"),
             dataframe[name].values,

@@ -71,7 +71,5 @@ from roguewave.colocate import (
     colocated_tracks_as_dataset,
     colocate_model_spotter_spectra,
 )
-
 from roguewave.spotterapi import get_spotter_data, get_spectrum
-
 from roguewave.spotter import spotter_frequency_response_correction

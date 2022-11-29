@@ -15,9 +15,14 @@ from numpy import (
 )
 from numpy.typing import NDArray
 
+DEFAULT_ORDER = 4
+DEFAULT_N = 1
+
 
 @njit(cache=True)
-def integrate(time: NDArray, signal: NDArray, order=4, n=1, start_value=0.0) -> NDArray:
+def integrate(
+    time: NDArray, signal: NDArray, order=DEFAULT_ORDER, n=DEFAULT_N, start_value=0.0
+) -> NDArray:
     """
     Cumulatively integrate the given discretely sampled signal in time using a Newton-Coases like formulation of
     requested order and layout. Note that higher order methods are only used in regions where the timestep is constant

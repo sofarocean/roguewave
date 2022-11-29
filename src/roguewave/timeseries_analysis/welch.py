@@ -39,6 +39,7 @@ def estimate_frequency_spectrum(
     sampling_frequency=2.5,
     options=None,
     spectral_window=None,
+    response_functions=None,
     **kwargs
 ) -> FrequencySpectrum:
     """
@@ -70,6 +71,17 @@ def estimate_frequency_spectrum(
         options,
         spectral_window,
     )
+
+    if response_functions is not None:
+        for m in range(0, 3):
+            for n in range(m, 3):
+                response = response_functions[m] * numpy.conjugate(
+                    response_functions[n]
+                )
+                co_spectra[:, m, n, :] = co_spectra[:, m, n, :] * response
+
+                if m != n:
+                    co_spectra[:, n, m, :] = co_spectra[:, m, n, :]
 
     szz, a1, b1, a2, b2 = _extract_moments(co_spectra, index_x=0, index_y=1, index_z=2)
 

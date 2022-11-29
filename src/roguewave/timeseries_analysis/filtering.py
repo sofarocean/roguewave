@@ -9,9 +9,7 @@ from scipy.signal import sosfilt, sosfiltfilt, butter
 
 
 @njit(cache=True)
-def exponential_filter(
-    time_seconds, signal, sampling_frequency=2.5, options: dict = None
-):
+def exponential_filter(time_seconds, signal, options: dict = None):
     """
     Exponential filter that operates on the differences between succesive values.
 
@@ -26,6 +24,7 @@ def exponential_filter(
 
     smoothing_factor = options.get("smoothing_factor", 0.004)
     maximum_gap_size = options.get("maximum_gap_size", 3)
+    sampling_frequency = options.get("sampling_frequency", 2.5)
     sampling_interval = 1 / sampling_frequency
 
     # Initialize empty array
@@ -53,9 +52,7 @@ def exponential_filter(
 
 
 @njit(cache=True)
-def exponential_delta_filter(
-    time_seconds, signal, sampling_frequency=2.5, options: dict = None
-):
+def exponential_delta_filter(time_seconds, signal, options: dict = None):
     """
     Exponential filter that operates on the differences between succesive values.
 
@@ -70,6 +67,7 @@ def exponential_delta_filter(
 
     smoothing_factor = options.get("smoothing_factor", 0.004)
     maximum_gap_size = options.get("maximum_gap_size", 3)
+    sampling_frequency = options.get("sampling_frequency", 2.5)
     sampling_interval = 1 / sampling_frequency
 
     # Initialize empty array
@@ -141,7 +139,7 @@ def cumulative_filter(signal: NDArray, options: dict = None) -> NDArray:
     if options is None:
         options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
 
-    smoothing_factor = options.get("smoothing_factor", 0.01)
+    smoothing_factor = options.get("cumulative_smoothing_factor", 0.01)
     scale_factor = options.get("scale_factor", 5.0)
 
     # Allocate the output filtered signal and set the first value to the first entry in the signal.
@@ -196,15 +194,20 @@ def cumulative_filter(signal: NDArray, options: dict = None) -> NDArray:
 
 
 def sos_filter(
-    signal: NDArray, direction: Literal["backward", "forward", "filtfilt"], sos=None
+    signal: NDArray, direction: Literal["backward", "forward", "filtfilt"], **kwargs
 ) -> NDArray:
     #
     # Apply forward/backward/filtfilt sos filter
     #
     # Get SOS coefficients
+
+    sos = kwargs.get("sos", None)
     if sos is None:
         sos = butter(4, 0.033, btype="high", output="sos", fs=2.5)
     #
+    if len(signal) < 33:
+        sos = butter(4, 0.033, btype="high", output="sos", fs=2.5)
+
     if direction == "backward":
         return flip(sosfilt(sos, flip(signal)))
 

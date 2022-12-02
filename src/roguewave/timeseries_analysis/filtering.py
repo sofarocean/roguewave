@@ -204,9 +204,6 @@ def sos_filter(
     sos = kwargs.get("sos", None)
     if sos is None:
         sos = butter(4, 0.033, btype="high", output="sos", fs=2.5)
-    #
-    if len(signal) < 33:
-        sos = butter(4, 0.033, btype="high", output="sos", fs=2.5)
 
     if direction == "backward":
         return flip(sosfilt(sos, flip(signal)))

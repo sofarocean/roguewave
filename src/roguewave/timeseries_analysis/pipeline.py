@@ -34,7 +34,7 @@ DEFAULT_VELOCITY_PIPELINE = [
         "sos",
         {
             "direction": "forward",
-            "sos": butter(4, 0.04, btype="high", output="sos", fs=2.5),
+            "sos": butter(4, 0.033, btype="high", output="sos", fs=2.5),
         },
     ),
 ]

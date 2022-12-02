@@ -73,7 +73,7 @@ def integrate(
             number_of_implicit_points = 1
 
             if number_of_constant_time_steps == primary_stencil_width:
-                # We know have a series of enough constant timesteps to go to the higher order method.
+                # We now have a series of enough constant timesteps to go to the higher order method.
                 restart = False
 
         else:

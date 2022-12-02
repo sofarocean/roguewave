@@ -33,7 +33,7 @@ DEFAULT_VELOCITY_PIPELINE = [
     (
         "sos",
         {
-            "direction": "filtfilt",
+            "direction": "forward",
             "sos": butter(4, 0.04, btype="high", output="sos", fs=2.5),
         },
     ),
@@ -45,9 +45,9 @@ DEFAULT_DISPLACEMENT_PIPELINE = [
         {"smoothing_factor": 0.004, "maximum_gap_size": 3, "sampling_frequency": 2.5},
     ),
     (
-        "sos_filtfilt",
+        "sos",
         {
-            "direction": "filtfilt",
+            "direction": "forward",
             "sos": butter(4, 0.04, btype="high", output="sos", fs=2.5),
         },
     ),

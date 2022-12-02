@@ -11,7 +11,10 @@ def upsample(signal, factor: int, t0=0, sampling_frequency=2.5):
     :return:
     """
     n = len(signal)
-    upsampled_time = linspace(0, n * factor, n * factor, endpoint=False) / (
-        sampling_frequency * factor
+    upsampled_time = (
+        linspace(0, n * factor, n * factor, endpoint=False)
+        / (sampling_frequency * factor)
+        + t0
     )
+
     return upsampled_time, irfft(rfft(signal) * factor, n * factor)

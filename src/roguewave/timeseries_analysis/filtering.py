@@ -11,7 +11,7 @@ from scipy.signal import sosfilt, sosfiltfilt, butter
 @njit(cache=True)
 def exponential_filter(time_seconds, signal, options: dict = None):
     """
-    Exponential filter that operates on the differences between succesive values.
+    Exponential filter that operates on the differences between successive values.
 
     :param time_seconds:
     :param signal:

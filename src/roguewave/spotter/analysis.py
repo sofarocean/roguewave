@@ -1,4 +1,8 @@
-from roguewave.timeseries_analysis import pipeline, DEFAULT_SPOTTER_PIPELINE
+from roguewave.timeseries_analysis import (
+    pipeline,
+    DEFAULT_SPOTTER_PIPELINE,
+    DEFAULT_DISPLACEMENT_PIPELINE,
+)
 from roguewave.timeseries_analysis.time_integration import (
     cumulative_distance,
     complex_response,
@@ -33,10 +37,7 @@ def displacement_from_gps_doppler_velocities(
 
 
 def displacement_from_gps_positions(path) -> DataFrame:
-    pipeline_stages = [
-        "exponential_delta",
-        "sos",
-    ]
+    pipeline_stages = DEFAULT_DISPLACEMENT_PIPELINE
 
     gps_location_data = read_gps(path, postprocess=True)
 

@@ -175,7 +175,7 @@ def calculate_co_spectra(
         options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
 
     window_overlap_fraction = options.get("window_overlap_fraction", 0.5)
-    timebase_jitter_fraction = options.get("timebase_jitter_fraction", 2.5)
+    timebase_jitter_fraction = options.get("timebase_jitter_fraction", 0.01)
 
     # STEP 0: Preliminaries
     # ---------------------------------------------------------------------------

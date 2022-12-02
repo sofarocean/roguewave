@@ -5,6 +5,15 @@ from ._spotter_constants import SpotterConstants, spotter_constants
 _T = TypeVar("_T")
 
 
+file_name_pattern = {
+    "GPS": "????_GPS.csv",
+    "FLT": "????_FLT.csv",
+    "LOC": "????_LOC.csv",
+    "SPC": "????_SPC.csv",
+    "TIME": "????_LOC.csv",
+}
+
+
 def do_nothing(x: _T) -> _T:
     return x
 

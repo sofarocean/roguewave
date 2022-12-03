@@ -21,7 +21,7 @@ def tst_read_displacement(path=PATH):
     assert "y" in displacement, "y is not displacement"
     assert "z" in displacement, "z is not displacement"
     assert "time" in displacement, "time is not displacement"
-    assert displacement["x"][5] == 0.1824284208824179
+    assert displacement["x"][5] == 0.1824284208824179, displacement["x"][5]
 
 
 def tst_read_spectra(path=PATH):

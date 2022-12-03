@@ -4,7 +4,6 @@ from ._spotter_constants import SpotterConstants, spotter_constants
 
 _T = TypeVar("_T")
 
-
 file_name_pattern = {
     "GPS": "????_GPS.csv",
     "FLT": "????_FLT.csv",
@@ -13,248 +12,189 @@ file_name_pattern = {
     "TIME": "????_LOC.csv",
 }
 
-
-def do_nothing(x: _T) -> _T:
-    return x
-
-
-class ColumnParseParameters(TypedDict):
-    header_name: str
-    column_name: str
-    dtype: type
-    include: bool
-    convert: Callable[[_T], _T]
-
-
 _formats = {
-    "GPS": [
-        ColumnParseParameters(
-            header_name="millis",
-            column_name="milliseconds",
-            dtype=float32,
-            include=False,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="GPS_Epoch_Time(s)",
-            column_name="time",
-            dtype=float64,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="lat(deg)",
-            column_name="latitude degrees",
-            dtype=float64,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="lat(min*1e5)",
-            column_name="latitude minutes",
-            dtype=float64,
-            include=True,
-            convert=lambda x: x / 1e5,
-        ),
-        ColumnParseParameters(
-            header_name="lon(deg)",
-            column_name="longitude degrees",
-            dtype=float64,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="long(min*1e5)",
-            column_name="longitude minutes",
-            dtype=float64,
-            include=True,
-            convert=lambda x: x / 1e5,
-        ),
-        ColumnParseParameters(
-            header_name="el(m)",
-            column_name="z",
-            dtype=float32,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="SOG(mm/s)",
-            column_name="speed over ground",
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / 1000,
-        ),
-        ColumnParseParameters(
-            header_name="COG(deg*1000)",
-            column_name="course over ground",
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / 1000,
-        ),
-        ColumnParseParameters(
-            header_name="vert_vel(mm/s)",
-            column_name="w",
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / 1000,
-        ),
-    ],
-    "FLT": [
-        ColumnParseParameters(
-            header_name="millis",
-            column_name="milliseconds",
-            dtype=float32,
-            include=False,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="GPS_Epoch_Time(s)",
-            column_name="time",
-            dtype=float64,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="outx(mm)",
-            column_name="x",
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / 1000,
-        ),
-        ColumnParseParameters(
-            header_name="outy(mm)",
-            column_name="y",
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / 1000,
-        ),
-        ColumnParseParameters(
-            header_name="outz(mm)",
-            column_name="z",
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / 1000,
-        ),
-        ColumnParseParameters(
-            header_name="",
-            column_name="init flag",
-            dtype=str,
-            include=False,
-            convert=do_nothing,
-        ),
-    ],
-    "LOC": [
-        ColumnParseParameters(
-            header_name="GPS_Epoch_Time(s)",
-            column_name="time",
-            dtype=float64,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="lat(deg)",
-            column_name="latitude degrees",
-            dtype=float32,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="at(min*1e5)",
-            column_name="latitude minutes",
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / 1e5,
-        ),
-        ColumnParseParameters(
-            header_name="lon(deg)",
-            column_name="longitude degrees",
-            dtype=float32,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="long(min*1e5)",
-            column_name="longitude minutes",
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / 1e5,
-        ),
-    ],
-    "TIME": [
-        ColumnParseParameters(
-            header_name="GPS_Epoch_Time(s)",
-            column_name="time",
-            dtype=float64,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="lat(deg)",
-            column_name="latitude degrees",
-            dtype=float32,
-            include=False,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="at(min*1e5)",
-            column_name="latitude minutes",
-            dtype=float32,
-            include=False,
-            convert=lambda x: x / 1e5,
-        ),
-        ColumnParseParameters(
-            header_name="lon(deg)",
-            column_name="longitude degrees",
-            dtype=float32,
-            include=False,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="long(min*1e5)",
-            column_name="longitude minutes",
-            dtype=float32,
-            include=False,
-            convert=lambda x: x / 1e5,
-        ),
-    ],
-    "SPC": [
-        ColumnParseParameters(
-            header_name="type",
-            column_name="type",
-            dtype=str,
-            include=False,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="millis",
-            column_name="milliseconds",
-            dtype=float32,
-            include=False,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="t0_GPS_Epoch_Time(s)",
-            column_name="time",
-            dtype=float64,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="tN_GPS_Epoch_Time(s)",
-            column_name="tN time",
-            dtype=float64,
-            include=True,
-            convert=do_nothing,
-        ),
-        ColumnParseParameters(
-            header_name="ens_count",
-            column_name="ensemble count",
-            dtype=int32,
-            include=True,
-            convert=do_nothing,
-        ),
-    ],
+    "GPS":
+        {
+            "sampling_interval_seconds": 0.4,
+            "time_column": "GPS_Epoch_Time(s)",
+            "pattern": "????_GPS.csv",
+            "columns": [
+                {
+                    "name": "millis",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "GPS_Epoch_Time(s)",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "lat(deg)",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "lat(min*1e5)",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "long(deg)",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "long(min*1e5)",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "el(m)",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "SOG(mm/s)",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "COG(deg*1000)",
+                    "dtype": 'float64',
+                },
+                {
+                    "name": "vert_vel(mm/s)",
+                    "dtype": 'float64',
+                },
+            ],
+        },
+    "FLT": {
+        "sampling_interval_seconds": 0.4,
+        "time_column": "GPS_Epoch_Time(s)",
+        "pattern": "????_FLT.csv",
+        "columns": [
+            {
+                "name": "millis",
+                "dtype": 'float64',
+            },
+            {
+                "name": "GPS_Epoch_Time(s)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "outx(mm)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "outy(mm)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "outz(mm)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "flag",
+                "dtype": 'str',
+            },
+        ],
+    },
+    "LOC": {
+        "sampling_interval_seconds": 60,
+        "time_column": "GPS_Epoch_Time(s)",
+        "pattern": "????_LOC.csv",
+        "columns": [
+            {
+                "name": "GPS_Epoch_Time(s)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "lat(deg)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "lat(min*1e5)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "long(deg)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "long(min*1e5)",
+                "dtype": 'float64',
+            },
+        ],
+    },
+    "TIME": {
+        "sampling_interval_seconds": 60,
+        "time_column": "GPS_Epoch_Time(s)",
+        "pattern": "????_LOC.csv",
+        "columns": [
+            {
+                "name": "GPS_Epoch_Time(s)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "lat(deg)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "lat(min*1e5)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "long(deg)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "long(min*1e5)",
+                "dtype": 'float64',
+            },
+        ],
+    },
+    "SPC": {
+        "sampling_interval_seconds": 3600,
+        "time_column": "t0_GPS_Epoch_Time(s)",
+        "pattern": "????_SPC.csv",
+        "columns": [
+            {
+                "name": "type",
+                "dtype": 'str',
+            },
+            {
+                "name": "millis",
+                "dtype": 'float64',
+            },
+            {
+                "name": "t0_GPS_Epoch_Time(s)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "tN_GPS_Epoch_Time(s)",
+                "dtype": 'float64',
+            },
+            {
+                "name": "ens_count",
+                "dtype": "int64",
+            },
+        ],
+    },
+    "GMN": {
+        "sampling_interval_seconds": 0.4,
+        "time_column": "millis",
+        "pattern": "????_GPS.csv",
+        "columns": [
+            {
+                "name": "millis",
+                "dtype": 'float64',
+            },
+            {
+                "name": "noisePerMs",
+                "dtype": 'float64',
+            },
+            {
+                "name": "agcCnt",
+                "dtype": 'float64',
+            },
+        ],
+    }
 }
+# millis,noisePerMs,agcCnt,aStatus,aPower,jamInd,jamStat,ofsI,magI,ofsQ,magQ,VN(mm/s),VE(mm/s),VD(mm/s),avgSignalStrength,SVs_used,SVs_tracked,signal_strengths
+
 
 _spectral_column_names = {
     "default": [
@@ -308,31 +248,25 @@ def spectral_column_names(groupedby="frequency", config: SpotterConstants = None
         raise ValueError("Unknown grouping")
 
 
-def create_spectral_format(config: SpotterConstants) -> List[ColumnParseParameters]:
+def create_spectral_format(config: SpotterConstants):
     if config is None:
         config = spotter_constants()
 
-    _format = _formats["SPC"]
-    sampling_interval = config["sampling_interval_gps"] / timedelta64(1, "s")
-
-    sampling_frequency = 1 / (config["number_of_samples"] * sampling_interval)
-
-    def _create(name) -> ColumnParseParameters:
-        return ColumnParseParameters(
-            header_name=name,
-            column_name=name,
-            dtype=float32,
-            include=True,
-            convert=lambda x: x / (1000000.0 * sampling_frequency),
-        )
+    _format = _formats["SPC"].copy()
+    def _create(name):
+        return {
+            "name": name,
+            "dtype": 'float64',
+        }
 
     column_names = spectral_column_names("flat", config)
-    return _format + [_create(name) for name in column_names]
+    _format['columns'] += [_create(name) for name in column_names]
+    return _format
 
 
 def get_format(
-    file_type, config: SpotterConstants = None
-) -> List[ColumnParseParameters]:
+        file_type, config: SpotterConstants = None
+):
     if file_type == "SPC":
         return create_spectral_format(config)
     else:

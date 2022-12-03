@@ -20,7 +20,6 @@ Public Functions:
 
 from ._csv_file_layouts import (
     get_format,
-    ColumnParseParameters,
     spectral_column_names,
     file_name_pattern,
 )
@@ -47,6 +46,7 @@ from numpy import (
     timedelta64,
     all,
     nan,
+    zeros
 )
 
 
@@ -100,24 +100,23 @@ def read_gps(
     data = _read_data(
         path,
         "GPS",
-        sampling_interval=config["sampling_interval_gps"],
         start_date=start_date,
         end_date=end_date,
     )
     if not postprocess:
         return data
-    u = data["speed over ground"].values * cos(
-        (90 - data["course over ground"].values) * pi / 180
+    u = data["SOG(mm/s)"].values / 1000 * cos(
+        (90 - data["COG(deg*1000)"].values / 1000) * pi / 180
     )
-    v = data["speed over ground"].values * sin(
-        (90 - data["course over ground"].values) * pi / 180
+    v = data["SOG(mm/s)"].values / 1000 * sin(
+        (90 - data["COG(deg*1000)"].values/1000) * pi / 180
     )
-    w = data["w"].values
-    time = data["time"].values
+    w = data["vert_vel(mm/s)"].values / 1000
+    time = data["GPS_Epoch_Time(s)"].values
 
-    latitude = data["latitude degrees"].values + data["latitude minutes"].values / 60
-    longitude = data["longitude degrees"].values + data["longitude minutes"].values / 60
-    z = data["z"].values
+    latitude = data["lat(deg)"].values + data["lat(min*1e5)"].values / 60e5
+    longitude = data["long(deg)"].values + data["long(min*1e5)"].values / 60e5
+    z = data["el(m)"].values
 
     return DataFrame(
         data={
@@ -175,13 +174,9 @@ def read_displacement(
                          (data from "same deployment).
     """
 
-    if config is None:
-        config = spotter_constants()
-
     data = _read_data(
         path,
         "FLT",
-        sampling_interval=config["sampling_interval_location"],
         start_date=start_date,
         end_date=end_date,
     )
@@ -190,10 +185,12 @@ def read_displacement(
 
     # Backward sos pass for phase correction
     def _process(_data: DataFrame):
-        _data["x"] = sos_filter(_data["x"].values, "backward")
-        _data["y"] = sos_filter(_data["y"].values, "backward")
-        _data["z"] = sos_filter(_data["z"].values, "backward")
-        return _data
+        _df = DataFrame()
+        _df["time"] = _data["time"]
+        _df["x"] = sos_filter(_data["outx(mm)"].values/1000.0, "backward")
+        _df["y"] = sos_filter(_data["outy(mm)"].values/1000.0, "backward")
+        _df["z"] = sos_filter(_data["outz(mm)"].values/1000.0, "backward")
+        return _df
 
     return apply_to_group(_process, data)
 
@@ -493,8 +490,7 @@ def _files_to_parse(
 
 def _load_as_dataframe(
     files_to_parse: Iterator[str],
-    csv_parsing_options: List[ColumnParseParameters],
-    sampling_interval=0.4,
+    csv_format,
 ) -> DataFrame:
 
     """
@@ -504,36 +500,31 @@ def _load_as_dataframe(
     :param sampling_interval:
     :return:
     """
-
-    column_names = [x["column_name"] for x in csv_parsing_options]
-    usecols = [x["column_name"] for x in csv_parsing_options if x["include"]]
-    dtype = {x["column_name"]: x["dtype"] for x in csv_parsing_options}
-    convert = [x["convert"] for x in csv_parsing_options if x["include"]]
-
     def process_file(file):
         df = read_csv(
             file,
             index_col=False,
             delimiter=",",
             header=0,
-            names=column_names,
+            names= [x["name"] for x in csv_format['columns']],
             on_bad_lines="skip",
-            usecols=usecols,
             low_memory=False,
         )
 
-        for key in usecols:
-            if dtype[key] == str:
+        df['time'] = df[csv_format['time_column']]
+
+        for column in csv_format['columns']:
+            name = column['name']
+            if column['dtype'] == 'str':
                 continue
-            df[key] = to_numeric(df[key], errors="coerce")
+
+
+            df[name] = to_numeric(df[name], errors="coerce")
 
         df = _quality_control(df)
 
         if "time" in df:
             df["time"] = to_datetime(df["time"], unit="s")
-
-        for name, function in zip(usecols, convert):
-            df[name] = function(df[name])
 
         return df
 
@@ -549,20 +540,19 @@ def _load_as_dataframe(
         data_frames, keys=source_files, names=["source files", "file index"]
     ).copy()
     dataframe.reset_index(inplace=True)
-    return _mark_continuous_groups(dataframe, sampling_interval)
+    return _mark_continuous_groups(dataframe, csv_format['sampling_interval_seconds'])
 
 
 def _read_data(
     path,
     data_type,
-    sampling_interval,
     start_date: datetime = None,
     end_date: datetime = None,
 ) -> DataFrame:
     files = _files_to_parse(path, file_name_pattern[data_type], start_date, end_date)
 
     format = get_format(data_type)
-    dataframe = _load_as_dataframe(files, format, sampling_interval)
+    dataframe = _load_as_dataframe(files, format)
 
     if start_date is not None:
         start_date = to_datetime64(start_date)
@@ -586,6 +576,10 @@ def _quality_control(dataframe: DataFrame) -> DataFrame:
     # Here we check for negative intervals and only keep data with positive intervals. It needs to be recursively
     # applied since when removing an interval we may introduce a new negative interval. There are definitely more
     # efficient ways to implement this and if this ever is a bottleneck we should - until then we do it the ugly way :-)
+
+    if not 'time' in dataframe:
+        return dataframe
+
     while True:
         positive_time = dataframe["time"].diff() > 0.0
         if all(positive_time.values[1:]):
@@ -596,7 +590,7 @@ def _quality_control(dataframe: DataFrame) -> DataFrame:
     return dataframe
 
 
-def _mark_continuous_groups(df: DataFrame, sampling_interval):
+def _mark_continuous_groups(df: DataFrame, sampling_interval_seconds):
     """
     This function adds a column that has unique number for each continuous block of data (i.e. data without gaps).
     It does so by:
@@ -609,9 +603,13 @@ def _mark_continuous_groups(df: DataFrame, sampling_interval):
     :return:
     """
 
-    df["group id"] = (
-        df["time"].diff() > sampling_interval + timedelta64(100, "ms")
-    ).cumsum()
+    if 'time' in df:
+        sampling_interval_seconds = timedelta64( int(sampling_interval_seconds*1e9), 'ns' )
+        df["group id"] = (
+            df["time"].diff() > sampling_interval_seconds + timedelta64(100, "ms")
+        ).cumsum()
+    else:
+        df["group id"] = zeros( df.shape[0],dtype='int64')
     return df
 
 

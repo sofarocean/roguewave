@@ -1,5 +1,6 @@
 import json
 import os
+import pandas
 from typing import Literal
 from datetime import datetime
 from glob import glob
@@ -8,8 +9,6 @@ from numpy import timedelta64, zeros, float64
 from numpy.typing import NDArray
 from roguewave import to_datetime_utc
 from roguewave.tools.time import to_datetime64
-
-import pandas
 
 
 CSV_TYPES = Literal[

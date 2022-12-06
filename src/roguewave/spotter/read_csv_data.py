@@ -464,7 +464,15 @@ def read_raw_spectra(
     start_date: datetime = None,
     end_date: datetime = None,
 ) -> DataFrame:
+    """
+    Read raw spectral files and return a dataframe
 
+    :param path:
+    :param postprocess:
+    :param start_date:
+    :param end_date:
+    :return:
+    """
     if not postprocess:
         return read_and_concatenate_spotter_csv(
             path,
@@ -473,23 +481,47 @@ def read_raw_spectra(
             end_date=end_date,
         )
 
+    # We want to collect all spectra of the same type (Sxx_re or Syy_im) in a single dataframe, with frequencies as
+    # rows. First, we list all of the columns associated with a particular variable.
     spec_format = get_csv_file_format("SPC")
     column_names = {}
+
+    # Loop over the columns in the spec format
     for column in spec_format["columns"]:
+        # If it is not one of the spectral columns, continue (e.g. time)
         if column["name"][0:3] not in ["Sxx", "Syy", "Szz", "Sxy", "Szx", "Szy"]:
             continue
 
+        # Get the full name of the column (Sxx_re, or Sxy_im) without the frequency enumeration. This is the variable
+        # of interest
         name = column["name"][0:6]
+
+        # add full column name to the list of columns belonging to this variable. e.g. we get for
+        # {
+        #   "Szz_re": ["Szz_re_0", "Szz_re_1", ..., "Szz_re_128"],
+        #   ....         ....         ....     ....       ....
+        #   "Szy_re": ["Szy_im_0", "Szy_im_1", ..., "Szy_im_128"]
+        # }
         if name not in column_names:
             column_names[name] = []
+
         column_names[name].append(column["name"])
 
+    # initialize
     dataframes = []
-    raw_data = read_and_concatenate_spotter_csv(path, "SPC")
-
     data_types = []
+    raw_data = read_and_concatenate_spotter_csv(path, "SPC")
+    frequency_resolution = 1 / (
+        spec_format["sampling_interval_gps"] * spec_format["nfft"]
+    )
+
+    # Construct a dataframe for each variable and add to the list of dataframes.
     for data_type, freq_column_names in column_names.items():
-        df = raw_data[["time"] + freq_column_names]
+        df = raw_data.loc[:, ["time"] + freq_column_names]
+        df.loc[:, freq_column_names] = df[freq_column_names] / (
+            1000000.0 * frequency_resolution
+        )
+
         rename_mapping = {name: index for index, name in enumerate(freq_column_names)}
         df = df.rename(rename_mapping, axis=1)
         data_types.append(data_type)

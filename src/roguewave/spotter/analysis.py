@@ -11,7 +11,8 @@ from roguewave.timeseries_analysis import estimate_frequency_spectrum
 from roguewave.tools.time import datetime64_to_timestamp
 from pandas import DataFrame
 from roguewave import FrequencySpectrum
-from .read_csv_data import read_displacement, apply_to_group, read_gps
+from .read_csv_data import read_displacement, read_gps
+from .parser import apply_to_group
 from numpy import real, conjugate
 
 

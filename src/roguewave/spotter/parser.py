@@ -1,12 +1,14 @@
 import json
 import os
 import pandas
-from typing import Literal
+from typing import Literal, Callable
 from datetime import datetime
 from glob import glob
 from typing import Iterator, Mapping
-from numpy import timedelta64, zeros, float64
+from numpy import timedelta64, zeros, float64, full
 from numpy.typing import NDArray
+from pandas import DataFrame, concat
+
 from roguewave import to_datetime_utc
 from roguewave.tools.time import to_datetime64
 
@@ -330,3 +332,23 @@ def _milis_to_epoch(millis: NDArray[float64], millis_file: str) -> NDArray[float
 
     # Add the epoch to millis converted to seconds and return result.
     return epoch + millis / 1000
+
+
+def apply_to_group(function: Callable[[DataFrame], DataFrame], dataframe: DataFrame):
+    """
+    Apply a function to each group seperately and recombine the result into a single dataframe.
+
+    :param function: Function to appply
+    :param dataframe: Dataframe to apply function to
+    :return:
+    """
+    groups = dataframe.groupby("group id")
+
+    dataframes = []
+    for group_id, df in groups:
+        _df = function(df)
+        if "group id" not in _df:
+            _df["group id"] = full(_df.shape[0], group_id)
+        dataframes.append(_df)
+
+    return concat(dataframes)

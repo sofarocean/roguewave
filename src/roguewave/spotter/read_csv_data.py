@@ -11,21 +11,27 @@ Routines read csv data stored on SD-Cards and return in a convenient form.
 
 Public Functions:
 
+- `read_baro`, read ????_BARO.csv files and return a dataframe.
+- `read_baro_raw`, read ????_BARO_RAW.csv files and return a dataframe.
+- `read_gmn`, read ????_GMN.csv files and return a dataframe.
+- `read_raindb`, read ????_RAINDB.csv files and return a dataframe.
+- `read_sst`, read ????_SST.csv files and return a dataframe.
 - `read_displacement`, read ????_FLT.csv files that contain displacement data
 - `read_gps`, read ????_GPS.csv files that contain raw GPS strings.
-- `location`, read ????_LOC.csv files that containt the location if the instrument.
+- `read_location`, read ????_LOC.csv files that containt the location if the instrument.
 - `read_raw_spectra`, read ????_SPC.csv files that contain raw spectral data.
 - `read_spectra`, read ????_SPC.csv files and return a spectral object.
+
 """
 
 from pandas import DataFrame, concat, to_datetime
 
-from roguewave.spotter._parser import (
+from roguewave.spotter.parser import (
     read_and_concatenate_spotter_csv,
     get_csv_file_format,
+    apply_to_group,
 )
 from roguewave.timeseries_analysis.filtering import sos_filter
-from typing import Callable
 from xarray import Dataset
 from roguewave import FrequencySpectrum
 from roguewave.tools.time import datetime64_to_timestamp
@@ -493,20 +499,3 @@ def read_raw_spectra(
     data.reset_index(inplace=True)
     data.drop(columns="source_index", inplace=True)
     return data
-
-
-# Utility Functions
-# ---------------------------------
-
-
-def apply_to_group(function: Callable[[DataFrame], DataFrame], dataframe: DataFrame):
-    """
-    Apply a function to each group seperately and recombine the result into a single dataframe
-
-    :param function: Function to appply
-    :param dataframe: Dataframe to apply function to
-    :return:
-    """
-    groups = dataframe.groupby("group id")
-    dataframes = [function(x[1]) for x in groups]
-    return concat(dataframes)

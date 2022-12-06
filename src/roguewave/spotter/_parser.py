@@ -6,9 +6,10 @@ from glob import glob
 from typing import Iterator, Mapping
 from numpy import timedelta64, zeros, float64
 from numpy.typing import NDArray
-from pandas import read_csv, to_numeric, to_datetime, DataFrame, concat
 from roguewave import to_datetime_utc
 from roguewave.tools.time import to_datetime64
+
+import pandas
 
 
 CSV_TYPES = Literal[
@@ -24,7 +25,7 @@ def read_and_concatenate_spotter_csv(
     csv_type: CSV_TYPES,
     start_date: datetime = None,
     end_date: datetime = None,
-) -> DataFrame:
+) -> pandas.DataFrame:
 
     """
     Read data for a given data type from the given path.
@@ -59,7 +60,7 @@ def read_and_concatenate_spotter_csv(
 
     # Fragmentation occurs for spectral data- to avoid performance issues we recreate the dataframe after the concat
     # here.
-    dataframe = concat(
+    dataframe = pandas.concat(
         data_frames, keys=source_files, names=["source files", "file index"]
     ).copy()
     dataframe.reset_index(inplace=True)
@@ -123,7 +124,7 @@ def _files_to_parse(
         for file, time_file in zip(sorted(files), sorted(time_files)):
 
             # Read the time base file to get the time range in the XXXX_VAR.csv file
-            time = read_csv(
+            time = pandas.read_csv(
                 time_file,
                 index_col=False,
                 delimiter=",",
@@ -163,8 +164,17 @@ def _files_to_parse(
 
 
 def _process_file(file, csv_format, nrows=None):
+    """
+    Process a _single_ csv file of the form ????_TYPE.csv
+
+    :param file: file name
+    :param csv_format: the format of the csv file
+    :param nrows: how many rows to read (default:None implies all rows)
+    :return: dataframe containing date in the CSV file after quality control (filtering of nan rows etc.)
+    """
+
     if not csv_format.get("ragged", False):
-        df = read_csv(
+        df = pandas.read_csv(
             file,
             index_col=False,
             delimiter=",",
@@ -177,7 +187,7 @@ def _process_file(file, csv_format, nrows=None):
     else:
         # Some spotter files are ragged (e.g. GMN) and may contain a variable number of columns. To handle
         # this we need to use the python parser.
-        df = read_csv(
+        df = pandas.read_csv(
             file,
             index_col=False,
             delimiter=",",
@@ -188,23 +198,34 @@ def _process_file(file, csv_format, nrows=None):
             nrows=nrows,
         )
 
+    # Assign the designated time column.
     df["time"] = df[csv_format["time_column"]]
+
+    # If the time is in millis (milliseconds since system start) convert to unix epoch time in seconds (still float type
+    # here)
     if csv_format["time_column"] == "millis":
         df["time"] = _milis_to_epoch(df["time"], file)
 
+    # Convert the columns into the correct type. Coerce bad values to NaN values for numeric types.
+    # (to note this is the reason we want to define numerics as floats, since integer do not contain a natural missing
+    # value type)
     for column in csv_format["columns"]:
         name = column["name"]
         if column["dtype"] == "str":
-            # Fill missing values in strings with blanks.
+            # Fill missing values in strings with blanks. Some Spotter files (FLT) contain a trailing string column
+            # that does not always contain data and that gets filled with NA values. If we do not replace these with
+            # blanks the subsequent dropping on NaN's in quality control would filter good data.
             df[name] = df[name].astype("string").fillna("")
 
         else:
-            df[name] = to_numeric(df[name], errors="coerce")
+            # TODO: what to do with malformed data in integer columns???
+            df[name] = pandas.to_numeric(df[name], errors="coerce")
 
+    # Drop NaN rows and remove any instances where we go back in time (only needed for raw GPS files).
     df = _quality_control(df, csv_format.get("dropna", True))
 
-    if "time" in df:
-        df["time"] = to_datetime(df["time"], unit="s")
+    # Convert time to proper pandas datetime format
+    df["time"] = pandas.to_datetime(df["time"], unit="s")
 
     return df
 
@@ -213,7 +234,7 @@ def _process_file(file, csv_format, nrows=None):
 # ---------------------------------
 
 
-def _quality_control(dataframe: DataFrame, dropna) -> DataFrame:
+def _quality_control(dataframe: pandas.DataFrame, dropna) -> pandas.DataFrame:
     # Remove any rows with nan entries
 
     if dropna:
@@ -240,7 +261,7 @@ def _quality_control(dataframe: DataFrame, dropna) -> DataFrame:
     return dataframe
 
 
-def _mark_continuous_groups(df: DataFrame, sampling_interval_seconds):
+def _mark_continuous_groups(df: pandas.DataFrame, sampling_interval_seconds):
     """
     This function adds a column that has unique number for each continuous block of data (i.e. data without gaps).
     It does so by:

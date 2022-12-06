@@ -181,6 +181,7 @@ def _process_file(file, csv_format, nrows=None):
             delimiter=",",
             skiprows=1,
             names=[x["name"] for x in csv_format["columns"]],
+            on_bad_lines="skip",
             low_memory=False,
             nrows=nrows,
         )

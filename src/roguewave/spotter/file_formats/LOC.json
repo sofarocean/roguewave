@@ -1,0 +1,27 @@
+{
+    "sampling_interval_seconds": 60,
+    "time_column": "GPS_Epoch_Time(s)",
+    "pattern": "????_LOC.csv",
+    "columns": [
+        {
+            "name": "GPS_Epoch_Time(s)",
+            "dtype": "float64"
+        },
+        {
+            "name": "lat(deg)",
+            "dtype": "float64"
+        },
+        {
+            "name": "lat(min*1e5)",
+            "dtype": "float64"
+        },
+        {
+            "name": "long(deg)",
+            "dtype": "float64"
+        },
+        {
+            "name": "long(min*1e5)",
+            "dtype": "float64"
+        }
+    ]
+}

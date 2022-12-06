@@ -1,9 +1,15 @@
 from roguewave.spotter import (
-    read_gps,
-    read_displacement,
-    read_location,
     read_spectra,
+    read_displacement,
+    read_gps,
     read_raw_spectra,
+    read_baro,
+    read_raindb,
+    read_baro_raw,
+    read_sst,
+    read_gmn,
+    read_location,
+    read_data,
 )
 from roguewave import FrequencySpectrum
 
@@ -21,7 +27,7 @@ def tst_read_displacement(path=PATH):
     assert "y" in displacement, "y is not displacement"
     assert "z" in displacement, "z is not displacement"
     assert "time" in displacement, "time is not displacement"
-    assert displacement["x"][5] == 0.1824284208824179, displacement["x"][5]
+    assert displacement["x"][5] == 0.1824284178119656, displacement["x"][5]
 
 
 def tst_read_spectra(path=PATH):
@@ -48,6 +54,30 @@ def tst_read_raw_spectra(path=PATH):
     return read_raw_spectra(path=path)
 
 
+def tst_read_csv_data(path=PATH):
+    return read_data(path, "BARO_RAW")
+
+
+def tst_read_baro(path=PATH):
+    return read_baro(path)
+
+
+def tst_read_baro_raw(path=PATH):
+    return read_baro_raw(path)
+
+
+def tst_read_sst(path=PATH):
+    return read_sst(path)
+
+
+def tst_read_raindb(path=PATH):
+    return read_raindb(path)
+
+
+def tst_read_gmn(path=PATH):
+    return read_gmn(path)
+
+
 if __name__ == "__main__":
     tst_read_gps()
     tst_read_displacement()
@@ -55,3 +85,9 @@ if __name__ == "__main__":
     tst_read_location()
     tst_read_raw_spectra()
     tst_read_spectra()
+    tst_read_csv_data()
+    tst_read_gmn()
+    tst_read_raindb()
+    tst_read_sst()
+    tst_read_baro_raw()
+    tst_read_baro()

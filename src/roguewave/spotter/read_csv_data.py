@@ -18,21 +18,14 @@ Public Functions:
 - `read_spectra`, read ????_SPC.csv files and return a spectral object.
 """
 
-from ._csv_file_layouts import (
-    get_format,
-    spectral_column_names,
-    file_name_pattern,
-)
-from ._spotter_constants import spotter_constants, SpotterConstants
 from pandas import DataFrame, read_csv, concat, to_datetime, to_numeric
 from roguewave.timeseries_analysis.filtering import sos_filter
-from typing import Iterator, List, Callable
+from typing import Iterator, Callable
 from xarray import Dataset
 from glob import glob
 from roguewave import FrequencySpectrum
 from roguewave.tools.time import datetime64_to_timestamp, to_datetime_utc, to_datetime64
 from datetime import datetime
-import os
 from numpy import (
     linspace,
     errstate,
@@ -46,8 +39,10 @@ from numpy import (
     timedelta64,
     all,
     nan,
-    zeros
+    zeros,
 )
+import os
+import json
 
 
 # Main Functions
@@ -59,7 +54,6 @@ def read_gps(
     start_date: datetime = None,
     end_date: datetime = None,
     postprocess=True,
-    config: SpotterConstants = None,
 ) -> DataFrame:
     """
     Load raw GPS text files and return a pandas dataframe containing the data. By default the data is postprocessed into
@@ -69,8 +63,6 @@ def read_gps(
     :param postprocess: whether to postprocess the data. Postprocessing converts heading and velocity magnitude to
                         velocity components, and combines latitude and lituted minutes into a single double latitude
                         (same for longitudes).
-
-    :param config: set of default settings in the spotter processing pipeline. Only needed for development purposes.
 
     :param start_date: If only a subset of the data is needed we can avoid loading all data, this denotes the start
                        date of the desired interval. If given, only data after the start_date is loaded (if available).
@@ -94,10 +86,7 @@ def read_gps(
 
     """
 
-    if config is None:
-        config = spotter_constants()
-
-    data = _read_data(
+    data = read_data(
         path,
         "GPS",
         start_date=start_date,
@@ -105,14 +94,18 @@ def read_gps(
     )
     if not postprocess:
         return data
-    u = data["SOG(mm/s)"].values / 1000 * cos(
-        (90 - data["COG(deg*1000)"].values / 1000) * pi / 180
+    u = (
+        data["SOG(mm/s)"].values
+        / 1000
+        * cos((90 - data["COG(deg*1000)"].values / 1000) * pi / 180)
     )
-    v = data["SOG(mm/s)"].values / 1000 * sin(
-        (90 - data["COG(deg*1000)"].values/1000) * pi / 180
+    v = (
+        data["SOG(mm/s)"].values
+        / 1000
+        * sin((90 - data["COG(deg*1000)"].values / 1000) * pi / 180)
     )
     w = data["vert_vel(mm/s)"].values / 1000
-    time = data["GPS_Epoch_Time(s)"].values
+    time = to_datetime(data["GPS_Epoch_Time(s)"].values, unit="s")
 
     latitude = data["lat(deg)"].values + data["lat(min*1e5)"].values / 60e5
     longitude = data["long(deg)"].values + data["long(min*1e5)"].values / 60e5
@@ -137,7 +130,6 @@ def read_displacement(
     start_date: datetime = None,
     end_date: datetime = None,
     postprocess: bool = True,
-    config: SpotterConstants = None,
 ) -> DataFrame:
 
     """
@@ -161,9 +153,6 @@ def read_displacement(
 
     :param postprocess: whether to apply the phase correction
 
-    :param config: set of default settings in the spotter processing
-                   pipeline. Only needed for development purposes.
-
     :return: Pandas Dataframe. Returns dataframe with columns
 
              "time": epoch time (UTC, epoch of 1970-1-1, i.e. Unix Epoch).
@@ -174,7 +163,7 @@ def read_displacement(
                          (data from "same deployment).
     """
 
-    data = _read_data(
+    data = read_data(
         path,
         "FLT",
         start_date=start_date,
@@ -187,12 +176,52 @@ def read_displacement(
     def _process(_data: DataFrame):
         _df = DataFrame()
         _df["time"] = _data["time"]
-        _df["x"] = sos_filter(_data["outx(mm)"].values/1000.0, "backward")
-        _df["y"] = sos_filter(_data["outy(mm)"].values/1000.0, "backward")
-        _df["z"] = sos_filter(_data["outz(mm)"].values/1000.0, "backward")
+        _df["x"] = sos_filter(_data["outx(mm)"].values / 1000.0, "backward")
+        _df["y"] = sos_filter(_data["outy(mm)"].values / 1000.0, "backward")
+        _df["z"] = sos_filter(_data["outz(mm)"].values / 1000.0, "backward")
         return _df
 
     return apply_to_group(_process, data)
+
+
+def read_baro(
+    path: str,
+    start_date: datetime = None,
+    end_date: datetime = None,
+):
+    return read_data(path, "BARO", start_date, end_date)
+
+
+def read_baro_raw(
+    path: str,
+    start_date: datetime = None,
+    end_date: datetime = None,
+):
+    return read_data(path, "BARO_RAW", start_date, end_date)
+
+
+def read_sst(
+    path: str,
+    start_date: datetime = None,
+    end_date: datetime = None,
+):
+    return read_data(path, "sst", start_date, end_date)
+
+
+def read_raindb(
+    path: str,
+    start_date: datetime = None,
+    end_date: datetime = None,
+):
+    return read_data(path, "RAINDB", start_date, end_date)
+
+
+def read_gmn(
+    path: str,
+    start_date: datetime = None,
+    end_date: datetime = None,
+):
+    return read_data(path, "GMN", start_date, end_date)
 
 
 def read_location(
@@ -200,7 +229,6 @@ def read_location(
     start_date: datetime = None,
     end_date: datetime = None,
     postprocess: bool = True,
-    config: SpotterConstants = None,
 ) -> DataFrame:
     """
 
@@ -220,9 +248,6 @@ def read_location(
 
     :param postprocess: whether to apply the phase correction
 
-    :param config: set of default settings in the spotter processing
-                   pipeline. Only needed for development purposes.
-
     :return: Pandas Dataframe. Returns dataframe with columns
 
              "time": epoch time (UTC, epoch of 1970-1-1, i.e. Unix Epoch).
@@ -231,14 +256,9 @@ def read_location(
              "group id": Identifier that indicates continuous data groups.
                          (data from "same deployment).
     """
-
-    if config is None:
-        config = spotter_constants()
-
-    raw_data = _read_data(
+    raw_data = read_data(
         path,
         "LOC",
-        config["sampling_interval_location"],
         start_date=start_date,
         end_date=end_date,
     )
@@ -247,11 +267,12 @@ def read_location(
 
     dataframe = DataFrame()
     dataframe["time"] = raw_data["time"]
+
     dataframe["latitude"] = (
-        raw_data["latitude degrees"] + raw_data["latitude minutes"] / 60
+        raw_data["lat(deg)"].values + raw_data["lat(min*1e5)"].values / 60e5
     )
     dataframe["longitude"] = (
-        raw_data["longitude degrees"] + raw_data["longitude minutes"] / 60
+        raw_data["long(deg)"].values + raw_data["long(min*1e5)"].values / 60e5
     )
     dataframe["group id"] = raw_data["group id"]
     return dataframe
@@ -262,7 +283,6 @@ def read_spectra(
     start_date: datetime = None,
     end_date: datetime = None,
     depth: float = inf,
-    config: SpotterConstants = None,
 ) -> FrequencySpectrum:
     """
     Read spectral data from csv files. The raw spectral data is transformed into
@@ -288,29 +308,25 @@ def read_spectra(
                   Not required, but is set on the returned spectral object
                   (and factors in transformations thereof, e.g. to get wavenumbers).
 
-    :param config: set of default settings in the spotter processing
-                   pipeline. Only needed for development purposes.
-
     :return: frequency spectra as a FrequencySpectrum object.
     """
 
-    if config is None:
-        config = spotter_constants()
-
     data = read_raw_spectra(path, start_date=start_date, end_date=end_date)
-    sampling_interval = config["sampling_interval_gps"] / timedelta64(1, "s")
-    df = 1 / (config["number_of_samples"] * sampling_interval)
+    spectral_file_format = get_format("SPC")
+    df = 1 / (
+        spectral_file_format["nfft"] * spectral_file_format["sampling_interval_gps"]
+    )
     frequencies = (
         linspace(
             0,
-            config["number_of_frequencies"],
-            config["number_of_frequencies"],
+            spectral_file_format["nfft"] // 2,
+            spectral_file_format["nfft"] // 2,
             endpoint=False,
         )
         * df
     )
 
-    spectral_values = data[list(range(0, config["number_of_frequencies"]))].values
+    spectral_values = data[list(range(0, spectral_file_format["nfft"] // 2))].values
     time = data["time"].values
     time = time[data["kind"] == "Szz_re"]
 
@@ -329,7 +345,7 @@ def read_spectra(
         b2 = 2.0 * Cxy / (Sxx + Syy)
 
     try:
-        location = read_location(path, postprocess=True, config=config)
+        location = read_location(path, postprocess=True)
         latitude = interp(
             datetime64_to_timestamp(time),
             datetime64_to_timestamp(location["time"].values),
@@ -367,31 +383,34 @@ def read_spectra(
 def read_raw_spectra(
     path,
     postprocess=True,
-    config: SpotterConstants = None,
     start_date: datetime = None,
     end_date: datetime = None,
 ) -> DataFrame:
-    if config is None:
-        config = spotter_constants()
+
     if not postprocess:
-        return _read_data(
+        return read_data(
             path,
             "SPC",
-            config["sampling_interval_spectra"],
             start_date=start_date,
             end_date=end_date,
         )
 
-    if config is None:
-        config = spotter_constants()
+    spec_format = get_format("SPC")
+    column_names = {}
+    for column in spec_format["columns"]:
+        if column["name"][0:3] not in ["Sxx", "Syy", "Szz", "Sxy", "Szx", "Szy"]:
+            continue
 
-    column_names = spectral_column_names(groupedby="kind", config=config)
+        name = column["name"][0:6]
+        if name not in column_names:
+            column_names[name] = []
+        column_names[name].append(column["name"])
 
     dataframes = []
-    raw_data = _read_data(path, "SPC", config["sampling_interval_spectra"])
+    raw_data = read_data(path, "SPC")
 
     data_types = []
-    for data_type, freq_column_names in column_names:
+    for data_type, freq_column_names in column_names.items():
         df = raw_data[["time"] + freq_column_names]
         rename_mapping = {name: index for index, name in enumerate(freq_column_names)}
         df = df.rename(rename_mapping, axis=1)
@@ -426,6 +445,7 @@ def _files_to_parse(
     # For Spotter these are the location files, 0000_LOC.csv, 0001_LOC.csv, etc.
     files = glob(os.path.join(path, pattern))
 
+    time_file_format = get_format("TIME")
     if (start_date is not None) or (end_date is not None):
         # If we are only interested in a range of data we do not want to parse all the text files. Specifically the
         # location, gps and spectral files can get very large (hundreds of mb) and consequenlty slow to read. Spotter
@@ -435,7 +455,7 @@ def _files_to_parse(
         # and use that to determine which files we read.
 
         # Read the files containing the timebase.
-        time_files = glob(os.path.join(path, file_name_pattern["TIME"]))
+        time_files = glob(os.path.join(path, time_file_format["pattern"]))
         csv_parsing_options = get_format("TIME")
 
         if not (len(time_files) == len(files)):
@@ -488,9 +508,56 @@ def _files_to_parse(
             yield file
 
 
+def process_file(file, csv_format, nrows=None):
+    if not csv_format.get("ragged", False):
+        df = read_csv(
+            file,
+            index_col=False,
+            delimiter=",",
+            skiprows=1,
+            names=[x["name"] for x in csv_format["columns"]],
+            low_memory=False,
+            nrows=nrows,
+        )
+
+    else:
+        # Some spotter files are ragged (e.g. GMN) and may contain a variable number of columns. To handle
+        # this we need to use the python parser.
+        df = read_csv(
+            file,
+            index_col=False,
+            delimiter=",",
+            skiprows=1,
+            names=[x["name"] for x in csv_format["columns"]],
+            on_bad_lines="skip",
+            engine="python",
+            nrows=nrows,
+        )
+
+    df["time"] = df[csv_format["time_column"]]
+    if csv_format["time_column"] == "millis":
+        df["time"] = milis_to_epoch(df["time"], file)
+
+    for column in csv_format["columns"]:
+        name = column["name"]
+        if column["dtype"] == "str":
+            # Fill missing values in strings with blanks.
+            df[name] = df[name].astype("string").fillna("")
+
+        else:
+            df[name] = to_numeric(df[name], errors="coerce")
+
+    df = _quality_control(df, csv_format.get("dropna", True))
+
+    if "time" in df:
+        df["time"] = to_datetime(df["time"], unit="s")
+
+    return df
+
+
 def _load_as_dataframe(
     files_to_parse: Iterator[str],
-    csv_format,
+    csv_format: dict,
 ) -> DataFrame:
 
     """
@@ -500,39 +567,14 @@ def _load_as_dataframe(
     :param sampling_interval:
     :return:
     """
-    def process_file(file):
-        df = read_csv(
-            file,
-            index_col=False,
-            delimiter=",",
-            header=0,
-            names= [x["name"] for x in csv_format['columns']],
-            on_bad_lines="skip",
-            low_memory=False,
-        )
-
-        df['time'] = df[csv_format['time_column']]
-
-        for column in csv_format['columns']:
-            name = column['name']
-            if column['dtype'] == 'str':
-                continue
-
-
-            df[name] = to_numeric(df[name], errors="coerce")
-
-        df = _quality_control(df)
-
-        if "time" in df:
-            df["time"] = to_datetime(df["time"], unit="s")
-
-        return df
 
     source_files = list(files_to_parse)
     if len(source_files) == 0:
         raise FileNotFoundError("No files to parse")
 
-    data_frames = [process_file(source_file) for source_file in source_files]
+    data_frames = [
+        process_file(source_file, csv_format) for source_file in source_files
+    ]
 
     # Fragmentation occurs for spectral data- to avoid performance issues we recreate the dataframe after the concat
     # here.
@@ -540,18 +582,18 @@ def _load_as_dataframe(
         data_frames, keys=source_files, names=["source files", "file index"]
     ).copy()
     dataframe.reset_index(inplace=True)
-    return _mark_continuous_groups(dataframe, csv_format['sampling_interval_seconds'])
+    return _mark_continuous_groups(dataframe, csv_format["sampling_interval_seconds"])
 
 
-def _read_data(
+def read_data(
     path,
     data_type,
     start_date: datetime = None,
     end_date: datetime = None,
 ) -> DataFrame:
-    files = _files_to_parse(path, file_name_pattern[data_type], start_date, end_date)
-
     format = get_format(data_type)
+    files = _files_to_parse(path, format["pattern"], start_date, end_date)
+
     dataframe = _load_as_dataframe(files, format)
 
     if start_date is not None:
@@ -569,19 +611,25 @@ def _read_data(
 # ---------------------------------
 
 
-def _quality_control(dataframe: DataFrame) -> DataFrame:
+def _quality_control(dataframe: DataFrame, dropna) -> DataFrame:
     # Remove any rows with nan entries
-    dataframe = dataframe.dropna()
+
+    if dropna:
+        dataframe = dataframe.dropna()
 
     # Here we check for negative intervals and only keep data with positive intervals. It needs to be recursively
     # applied since when removing an interval we may introduce a new negative interval. There are definitely more
     # efficient ways to implement this and if this ever is a bottleneck we should - until then we do it the ugly way :-)
 
-    if not 'time' in dataframe:
+    if "time" not in dataframe:
+        return dataframe
+
+    if dataframe.shape[0] < 1:
         return dataframe
 
     while True:
         positive_time = dataframe["time"].diff() > 0.0
+        positive_time[0] = True
         if all(positive_time.values[1:]):
             break
         else:
@@ -603,13 +651,15 @@ def _mark_continuous_groups(df: DataFrame, sampling_interval_seconds):
     :return:
     """
 
-    if 'time' in df:
-        sampling_interval_seconds = timedelta64( int(sampling_interval_seconds*1e9), 'ns' )
+    if "time" in df:
+        sampling_interval_seconds = timedelta64(
+            int(sampling_interval_seconds * 1e9), "ns"
+        )
         df["group id"] = (
             df["time"].diff() > sampling_interval_seconds + timedelta64(100, "ms")
         ).cumsum()
     else:
-        df["group id"] = zeros( df.shape[0],dtype='int64')
+        df["group id"] = zeros(df.shape[0], dtype="int64")
     return df
 
 
@@ -624,3 +674,25 @@ def apply_to_group(function: Callable[[DataFrame], DataFrame], dataframe: DataFr
     groups = dataframe.groupby("group id")
     dataframes = [function(x[1]) for x in groups]
     return concat(dataframes)
+
+
+def get_format(file_type):
+    with open(
+        os.path.join(os.path.dirname(__file__), f"file_formats/{file_type}.json")
+    ) as file:
+        format = json.loads(file.read())
+    return format
+
+
+def milis_to_epoch(millis, milis_file: str):
+    if len(millis) == 0:
+        return millis
+
+    split = milis_file.split("_")
+    path = os.path.dirname(milis_file)
+
+    flt_file = os.path.join(path, split[-2] + "_FLT.csv")
+    csv_format = get_format("FLT")
+    data = process_file(flt_file, csv_format, 1)
+    epoch = data[csv_format["time_column"]].values[0] - data["millis"].values[0] / 1000
+    return epoch + millis / 1000

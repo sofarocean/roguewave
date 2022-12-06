@@ -1,0 +1,17 @@
+{
+    "sampling_interval_seconds": 60,
+    "time_column": "timestamp (ticks/UTC)",
+    "pattern": "????_BARO.csv",
+    "ragged": false,
+    "dropna": true,
+    "columns": [
+        {
+            "name": "timestamp (ticks/UTC)",
+            "dtype": "float64"
+        },
+        {
+            "name": "pressure (mbar)",
+            "dtype": "float64"
+        }
+    ]
+}

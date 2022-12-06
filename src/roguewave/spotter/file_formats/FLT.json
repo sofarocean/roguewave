@@ -1,0 +1,31 @@
+{
+    "sampling_interval_seconds": 0.4,
+    "time_column": "GPS_Epoch_Time(s)",
+    "pattern": "????_FLT.csv",
+    "columns": [
+        {
+            "name": "millis",
+            "dtype": "float64"
+        },
+        {
+            "name": "GPS_Epoch_Time(s)",
+            "dtype": "float64"
+        },
+        {
+            "name": "outx(mm)",
+            "dtype": "float64"
+        },
+        {
+            "name": "outy(mm)",
+            "dtype": "float64"
+        },
+        {
+            "name": "outz(mm)",
+            "dtype": "float64"
+        },
+        {
+            "name": "flag",
+            "dtype": "str"
+        }
+    ]
+}

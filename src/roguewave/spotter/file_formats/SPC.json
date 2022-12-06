@@ -1,0 +1,6173 @@
+{
+    "sampling_interval_seconds": 3600,
+    "sampling_interval_gps": 0.4,
+    "nfft": 256,
+    "time_column": "t0_GPS_Epoch_Time(s)",
+    "pattern": "????_SPC.csv",
+    "columns": [
+        {
+            "name": "type",
+            "dtype": "str"
+        },
+        {
+            "name": "millis",
+            "dtype": "float64"
+        },
+        {
+            "name": "t0_GPS_Epoch_Time(s)",
+            "dtype": "float64"
+        },
+        {
+            "name": "tN_GPS_Epoch_Time(s)",
+            "dtype": "float64"
+        },
+        {
+            "name": "ens_count",
+            "dtype": "int64"
+        },
+        {
+            "name": "Sxx_re_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_0",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_1",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_2",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_3",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_4",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_5",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_6",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_7",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_8",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_9",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_10",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_11",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_12",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_13",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_14",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_15",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_16",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_17",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_18",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_19",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_20",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_21",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_22",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_23",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_24",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_25",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_26",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_27",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_28",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_29",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_30",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_31",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_32",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_33",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_34",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_35",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_36",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_37",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_38",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_39",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_40",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_41",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_42",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_43",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_44",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_45",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_46",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_47",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_48",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_49",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_50",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_51",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_52",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_53",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_54",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_55",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_56",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_57",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_58",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_59",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_60",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_61",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_62",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_63",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_64",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_65",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_66",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_67",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_68",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_69",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_70",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_71",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_72",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_73",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_74",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_75",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_76",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_77",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_78",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_79",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_80",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_81",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_82",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_83",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_84",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_85",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_86",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_87",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_88",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_89",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_90",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_91",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_92",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_93",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_94",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_95",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_96",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_97",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_98",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_99",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_100",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_101",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_102",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_103",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_104",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_105",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_106",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_107",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_108",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_109",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_110",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_111",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_112",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_113",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_114",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_115",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_116",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_117",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_118",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_119",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_120",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_121",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_122",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_123",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_124",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_125",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_126",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_re_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_re_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_re_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_re_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_re_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_re_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxx_im_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Syy_im_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szz_im_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Sxy_im_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szx_im_127",
+            "dtype": "float64"
+        },
+        {
+            "name": "Szy_im_127",
+            "dtype": "float64"
+        }
+    ]
+}

@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewave",
-    version="0.1.93",
+    version="0.1.94",
     license="Apache 2 License",
     install_requires=[
         "pysofar>=0.1.13",
@@ -40,4 +40,10 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     project_urls={"Sofar Ocean Site": "https://www.sofarocean.com"},
+    data_files=[
+        (
+            "roguewave/spotter/file_formats/",
+            ["./src/roguewave/spotter/file_formats/BARO.json"],
+        )
+    ],
 )

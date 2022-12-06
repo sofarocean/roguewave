@@ -9,7 +9,7 @@ from roguewave.spotter import (
     read_sst,
     read_gmn,
     read_location,
-    read_data,
+    read_and_concatenate_spotter_csv,
 )
 from roguewave import FrequencySpectrum
 
@@ -55,7 +55,7 @@ def tst_read_raw_spectra(path=PATH):
 
 
 def tst_read_csv_data(path=PATH):
-    return read_data(path, "BARO_RAW")
+    return read_and_concatenate_spotter_csv(path, "BARO_RAW")
 
 
 def tst_read_baro(path=PATH):

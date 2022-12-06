@@ -18,31 +18,19 @@ Public Functions:
 - `read_spectra`, read ????_SPC.csv files and return a spectral object.
 """
 
-from pandas import DataFrame, read_csv, concat, to_datetime, to_numeric
-from roguewave.timeseries_analysis.filtering import sos_filter
-from typing import Iterator, Callable
-from xarray import Dataset
-from glob import glob
-from roguewave import FrequencySpectrum
-from roguewave.tools.time import datetime64_to_timestamp, to_datetime_utc, to_datetime64
-from datetime import datetime
-from numpy import (
-    linspace,
-    errstate,
-    sqrt,
-    interp,
-    full_like,
-    inf,
-    cos,
-    sin,
-    pi,
-    timedelta64,
-    all,
-    nan,
-    zeros,
+from pandas import DataFrame, concat, to_datetime
+
+from roguewave.spotter._parser import (
+    read_and_concatenate_spotter_csv,
+    get_csv_file_format,
 )
-import os
-import json
+from roguewave.timeseries_analysis.filtering import sos_filter
+from typing import Callable
+from xarray import Dataset
+from roguewave import FrequencySpectrum
+from roguewave.tools.time import datetime64_to_timestamp
+from datetime import datetime
+from numpy import linspace, errstate, sqrt, interp, full_like, inf, cos, sin, pi, nan
 
 
 # Main Functions
@@ -86,7 +74,7 @@ def read_gps(
 
     """
 
-    data = read_data(
+    data = read_and_concatenate_spotter_csv(
         path,
         "GPS",
         start_date=start_date,
@@ -163,7 +151,7 @@ def read_displacement(
                          (data from "same deployment).
     """
 
-    data = read_data(
+    data = read_and_concatenate_spotter_csv(
         path,
         "FLT",
         start_date=start_date,
@@ -189,7 +177,24 @@ def read_baro(
     start_date: datetime = None,
     end_date: datetime = None,
 ):
-    return read_data(path, "BARO", start_date, end_date)
+    """
+    Read filtered barometer files.
+
+    :param path: Path containing Spotter CSV files
+
+    :param start_date: If only a subset of the data is needed we can avoid
+                       loading all data, this denotes the start date of the
+                       desired interval. If given, only data after the
+                       start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid
+                     loading all data, this denotes the end date of the
+                     desired interval. If given, only data before the
+                     end_date is loaded (if available).
+                     NOTE: this requires that LOC files are present.
+    """
+    return read_and_concatenate_spotter_csv(path, "BARO", start_date, end_date)
 
 
 def read_baro_raw(
@@ -197,7 +202,24 @@ def read_baro_raw(
     start_date: datetime = None,
     end_date: datetime = None,
 ):
-    return read_data(path, "BARO_RAW", start_date, end_date)
+    """
+    Read raw barometer files (no filtering)
+
+    :param path: Path containing Spotter CSV files
+
+    :param start_date: If only a subset of the data is needed we can avoid
+                       loading all data, this denotes the start date of the
+                       desired interval. If given, only data after the
+                       start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid
+                     loading all data, this denotes the end date of the
+                     desired interval. If given, only data before the
+                     end_date is loaded (if available).
+                     NOTE: this requires that LOC files are present.
+    """
+    return read_and_concatenate_spotter_csv(path, "BARO_RAW", start_date, end_date)
 
 
 def read_sst(
@@ -205,7 +227,24 @@ def read_sst(
     start_date: datetime = None,
     end_date: datetime = None,
 ):
-    return read_data(path, "sst", start_date, end_date)
+    """
+    Read SST data.
+
+    :param path: Path containing Spotter CSV files
+
+    :param start_date: If only a subset of the data is needed we can avoid
+                       loading all data, this denotes the start date of the
+                       desired interval. If given, only data after the
+                       start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid
+                     loading all data, this denotes the end date of the
+                     desired interval. If given, only data before the
+                     end_date is loaded (if available).
+                     NOTE: this requires that LOC files are present.
+    """
+    return read_and_concatenate_spotter_csv(path, "sst", start_date, end_date)
 
 
 def read_raindb(
@@ -213,7 +252,24 @@ def read_raindb(
     start_date: datetime = None,
     end_date: datetime = None,
 ):
-    return read_data(path, "RAINDB", start_date, end_date)
+    """
+    Read sound volume in decibel.
+
+    :param path: Path containing Spotter CSV files
+
+    :param start_date: If only a subset of the data is needed we can avoid
+                       loading all data, this denotes the start date of the
+                       desired interval. If given, only data after the
+                       start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid
+                     loading all data, this denotes the end date of the
+                     desired interval. If given, only data before the
+                     end_date is loaded (if available).
+                     NOTE: this requires that LOC files are present.
+    """
+    return read_and_concatenate_spotter_csv(path, "RAINDB", start_date, end_date)
 
 
 def read_gmn(
@@ -221,7 +277,24 @@ def read_gmn(
     start_date: datetime = None,
     end_date: datetime = None,
 ):
-    return read_data(path, "GMN", start_date, end_date)
+    """
+    Read gps metric files- for development purposes only.
+
+    :param path: Path containing Spotter CSV files
+
+    :param start_date: If only a subset of the data is needed we can avoid
+                       loading all data, this denotes the start date of the
+                       desired interval. If given, only data after the
+                       start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid
+                     loading all data, this denotes the end date of the
+                     desired interval. If given, only data before the
+                     end_date is loaded (if available).
+                     NOTE: this requires that LOC files are present.
+    """
+    return read_and_concatenate_spotter_csv(path, "GMN", start_date, end_date)
 
 
 def read_location(
@@ -231,7 +304,6 @@ def read_location(
     postprocess: bool = True,
 ) -> DataFrame:
     """
-
     :param path: Path containing Spotter CSV files
 
     :param start_date: If only a subset of the data is needed we can avoid
@@ -256,7 +328,7 @@ def read_location(
              "group id": Identifier that indicates continuous data groups.
                          (data from "same deployment).
     """
-    raw_data = read_data(
+    raw_data = read_and_concatenate_spotter_csv(
         path,
         "LOC",
         start_date=start_date,
@@ -312,7 +384,7 @@ def read_spectra(
     """
 
     data = read_raw_spectra(path, start_date=start_date, end_date=end_date)
-    spectral_file_format = get_format("SPC")
+    spectral_file_format = get_csv_file_format("SPC")
     df = 1 / (
         spectral_file_format["nfft"] * spectral_file_format["sampling_interval_gps"]
     )
@@ -388,14 +460,14 @@ def read_raw_spectra(
 ) -> DataFrame:
 
     if not postprocess:
-        return read_data(
+        return read_and_concatenate_spotter_csv(
             path,
             "SPC",
             start_date=start_date,
             end_date=end_date,
         )
 
-    spec_format = get_format("SPC")
+    spec_format = get_csv_file_format("SPC")
     column_names = {}
     for column in spec_format["columns"]:
         if column["name"][0:3] not in ["Sxx", "Syy", "Szz", "Sxy", "Szx", "Szy"]:
@@ -407,7 +479,7 @@ def read_raw_spectra(
         column_names[name].append(column["name"])
 
     dataframes = []
-    raw_data = read_data(path, "SPC")
+    raw_data = read_and_concatenate_spotter_csv(path, "SPC")
 
     data_types = []
     for data_type, freq_column_names in column_names.items():
@@ -423,244 +495,8 @@ def read_raw_spectra(
     return data
 
 
-# Private Functions
-# ---------------------------------
-
-
-def _files_to_parse(
-    path: str, pattern: str, start_date: datetime = None, end_date: datetime = None
-) -> Iterator[str]:
-    """
-    Create a generator that yields files that conform to a given filename pattern and that contain data within the
-    requested interval. Returns an iterator.
-
-    :param path: path containing Spotter data files
-    :param pattern: file pattern to look for
-    :param start_date: start date of the interval, if none no lower interval is imposed.
-    :param end_date: end date of the interval, if none no upper interval is imposed.
-    :return: generator that yields files qith data conforming to the request.
-    """
-
-    # Get the files conforming to a specific pattern- say ????_LOC.csv
-    # For Spotter these are the location files, 0000_LOC.csv, 0001_LOC.csv, etc.
-    files = glob(os.path.join(path, pattern))
-
-    time_file_format = get_format("TIME")
-    if (start_date is not None) or (end_date is not None):
-        # If we are only interested in a range of data we do not want to parse all the text files. Specifically the
-        # location, gps and spectral files can get very large (hundreds of mb) and consequenlty slow to read. Spotter
-        # saves this data onboard split across multiple files (e.g. 0000_FLT.csv, 0001_FLT.csv etc) so we could just
-        # load only those files containing the time range we need. We do not in general know which files contain which
-        # time range though. Here we there try to read the timebase from the smallest data files (location files)
-        # and use that to determine which files we read.
-
-        # Read the files containing the timebase.
-        time_files = glob(os.path.join(path, time_file_format["pattern"]))
-        csv_parsing_options = get_format("TIME")
-
-        if not (len(time_files) == len(files)):
-            # We need an equal number of files - otherwise something is amiss
-            raise ValueError(
-                "Number of location files needs to be the same as the number of files being read to use"
-                "time filtering"
-            )
-
-        # For each data file and time base file do
-        for file, time_file in zip(sorted(files), sorted(time_files)):
-
-            # Read the time base file to get the time range in the XXXX_VAR.csv file
-            time = read_csv(
-                time_file,
-                index_col=False,
-                delimiter=",",
-                header=0,
-                names=[x["column_name"] for x in csv_parsing_options],
-                dtype={x["column_name"]: x["dtype"] for x in csv_parsing_options},
-                on_bad_lines="skip",
-                usecols=[x["column_name"] for x in csv_parsing_options if x["include"]],
-            )
-            file_in_range = False
-            if time.shape[0] == 0:
-                # If empty- continue
-                continue
-
-            # If a start date is given- check if any data in the file has a timestamp after the start date
-            if start_date is not None:
-                start_date_timestamp = to_datetime_utc(start_date).timestamp()
-                file_in_range = not (
-                    start_date_timestamp > time["time"].values[-1] + 60.0
-                )
-
-            # If an end date is given- check if any data in the file has a timestamp before the end date
-            if end_date is not None:
-                end_date_timestamp = to_datetime_utc(end_date).timestamp()
-                file_in_range = file_in_range and not (
-                    end_date_timestamp <= time["time"].values[0]
-                )
-
-            if file_in_range:
-                yield file
-            else:
-                continue
-
-    else:
-        for file in sorted(files):
-            yield file
-
-
-def process_file(file, csv_format, nrows=None):
-    if not csv_format.get("ragged", False):
-        df = read_csv(
-            file,
-            index_col=False,
-            delimiter=",",
-            skiprows=1,
-            names=[x["name"] for x in csv_format["columns"]],
-            low_memory=False,
-            nrows=nrows,
-        )
-
-    else:
-        # Some spotter files are ragged (e.g. GMN) and may contain a variable number of columns. To handle
-        # this we need to use the python parser.
-        df = read_csv(
-            file,
-            index_col=False,
-            delimiter=",",
-            skiprows=1,
-            names=[x["name"] for x in csv_format["columns"]],
-            on_bad_lines="skip",
-            engine="python",
-            nrows=nrows,
-        )
-
-    df["time"] = df[csv_format["time_column"]]
-    if csv_format["time_column"] == "millis":
-        df["time"] = milis_to_epoch(df["time"], file)
-
-    for column in csv_format["columns"]:
-        name = column["name"]
-        if column["dtype"] == "str":
-            # Fill missing values in strings with blanks.
-            df[name] = df[name].astype("string").fillna("")
-
-        else:
-            df[name] = to_numeric(df[name], errors="coerce")
-
-    df = _quality_control(df, csv_format.get("dropna", True))
-
-    if "time" in df:
-        df["time"] = to_datetime(df["time"], unit="s")
-
-    return df
-
-
-def _load_as_dataframe(
-    files_to_parse: Iterator[str],
-    csv_format: dict,
-) -> DataFrame:
-
-    """
-    Main data loading function.
-    :param files_to_parse:
-    :param csv_parsing_options:
-    :param sampling_interval:
-    :return:
-    """
-
-    source_files = list(files_to_parse)
-    if len(source_files) == 0:
-        raise FileNotFoundError("No files to parse")
-
-    data_frames = [
-        process_file(source_file, csv_format) for source_file in source_files
-    ]
-
-    # Fragmentation occurs for spectral data- to avoid performance issues we recreate the dataframe after the concat
-    # here.
-    dataframe = concat(
-        data_frames, keys=source_files, names=["source files", "file index"]
-    ).copy()
-    dataframe.reset_index(inplace=True)
-    return _mark_continuous_groups(dataframe, csv_format["sampling_interval_seconds"])
-
-
-def read_data(
-    path,
-    data_type,
-    start_date: datetime = None,
-    end_date: datetime = None,
-) -> DataFrame:
-    format = get_format(data_type)
-    files = _files_to_parse(path, format["pattern"], start_date, end_date)
-
-    dataframe = _load_as_dataframe(files, format)
-
-    if start_date is not None:
-        start_date = to_datetime64(start_date)
-        dataframe = dataframe[dataframe["time"] >= start_date]
-
-    if end_date is not None:
-        end_date = to_datetime64(end_date)
-        dataframe = dataframe[dataframe["time"] < end_date]
-
-    return dataframe
-
-
 # Utility Functions
 # ---------------------------------
-
-
-def _quality_control(dataframe: DataFrame, dropna) -> DataFrame:
-    # Remove any rows with nan entries
-
-    if dropna:
-        dataframe = dataframe.dropna()
-
-    # Here we check for negative intervals and only keep data with positive intervals. It needs to be recursively
-    # applied since when removing an interval we may introduce a new negative interval. There are definitely more
-    # efficient ways to implement this and if this ever is a bottleneck we should - until then we do it the ugly way :-)
-
-    if "time" not in dataframe:
-        return dataframe
-
-    if dataframe.shape[0] < 1:
-        return dataframe
-
-    while True:
-        positive_time = dataframe["time"].diff() > 0.0
-        positive_time[0] = True
-        if all(positive_time.values[1:]):
-            break
-        else:
-            dataframe = dataframe.loc[positive_time]
-
-    return dataframe
-
-
-def _mark_continuous_groups(df: DataFrame, sampling_interval_seconds):
-    """
-    This function adds a column that has unique number for each continuous block of data (i.e. data without gaps).
-    It does so by:
-        - calculating the time difference
-        - creating a boolean mask where the time difference is larger than a threshold
-        - taking the cumulative sum over that mask- this sum mask will only increase if there is a gap between succesive
-          entries - and can thus serve as a group marker.
-    :param df: data frame contaning a time epoch key
-    :param sampling_interval: sampling interval used
-    :return:
-    """
-
-    if "time" in df:
-        sampling_interval_seconds = timedelta64(
-            int(sampling_interval_seconds * 1e9), "ns"
-        )
-        df["group id"] = (
-            df["time"].diff() > sampling_interval_seconds + timedelta64(100, "ms")
-        ).cumsum()
-    else:
-        df["group id"] = zeros(df.shape[0], dtype="int64")
-    return df
 
 
 def apply_to_group(function: Callable[[DataFrame], DataFrame], dataframe: DataFrame):
@@ -674,25 +510,3 @@ def apply_to_group(function: Callable[[DataFrame], DataFrame], dataframe: DataFr
     groups = dataframe.groupby("group id")
     dataframes = [function(x[1]) for x in groups]
     return concat(dataframes)
-
-
-def get_format(file_type):
-    with open(
-        os.path.join(os.path.dirname(__file__), f"file_formats/{file_type}.json")
-    ) as file:
-        format = json.loads(file.read())
-    return format
-
-
-def milis_to_epoch(millis, milis_file: str):
-    if len(millis) == 0:
-        return millis
-
-    split = milis_file.split("_")
-    path = os.path.dirname(milis_file)
-
-    flt_file = os.path.join(path, split[-2] + "_FLT.csv")
-    csv_format = get_format("FLT")
-    data = process_file(flt_file, csv_format, 1)
-    epoch = data[csv_format["time_column"]].values[0] - data["millis"].values[0] / 1000
-    return epoch + millis / 1000

@@ -9,7 +9,7 @@ from .read_csv_data import (
     read_sst,
     read_gmn,
     read_location,
-    read_data,
+    read_and_concatenate_spotter_csv,
 )
 
 from .analysis import (

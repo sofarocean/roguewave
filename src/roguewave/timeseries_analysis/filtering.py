@@ -143,7 +143,7 @@ def cumulative_filter(signal: NDArray, options: dict = None) -> NDArray:
 
     smoothing_factor = options.get("cumulative_smoothing_factor", 0.01)
     scale_factor = options.get("scale_factor", 5.0)
-    correct = options.get("correct", 0.0)
+    correct = options.get("correct", 1.0)
 
     # Allocate the output filtered signal and set the first value to the first entry in the signal.
     filtered_signal = empty_like(signal)

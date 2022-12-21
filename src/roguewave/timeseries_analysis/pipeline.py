@@ -4,6 +4,7 @@ from roguewave.timeseries_analysis.filtering import (
     exponential_delta_filter,
     exponential_filter,
     cumulative_filter,
+    cumsum,
 )
 from roguewave import FrequencySpectrum
 from roguewave.timeseries_analysis.time_integration import (
@@ -191,6 +192,10 @@ def apply_filter(
     elif name == "cumulative":
         options = to_numba_kwargs(kwargs)
         return cumulative_filter(signal, options)
+
+    elif name == "cumsum":
+        options = to_numba_kwargs(kwargs)
+        return cumsum(signal, options)
 
     elif name == "exponential":
         options = to_numba_kwargs(kwargs)

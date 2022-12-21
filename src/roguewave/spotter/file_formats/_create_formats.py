@@ -5,6 +5,9 @@ _formats = {
         "sampling_interval_seconds": 0.4,
         "time_column": "GPS_Epoch_Time(s)",
         "pattern": "????_GPS.csv",
+        "ragged": False,
+        "dropna": True,
+        "drop": [],
         "columns": [
             {
                 "name": "millis",
@@ -35,7 +38,7 @@ _formats = {
                 "dtype": "float64",
             },
             {
-                "name": "SOG(mm/s)",
+                "name": "SOG(mm_s)",
                 "dtype": "float64",
             },
             {
@@ -43,7 +46,7 @@ _formats = {
                 "dtype": "float64",
             },
             {
-                "name": "vert_vel(mm/s)",
+                "name": "vert_vel(mm_s)",
                 "dtype": "float64",
             },
         ],
@@ -52,6 +55,9 @@ _formats = {
         "sampling_interval_seconds": 0.4,
         "time_column": "GPS_Epoch_Time(s)",
         "pattern": "????_FLT.csv",
+        "ragged": False,
+        "dropna": True,
+        "drop": ["flag"],
         "columns": [
             {
                 "name": "millis",
@@ -83,6 +89,9 @@ _formats = {
         "sampling_interval_seconds": 60,
         "time_column": "GPS_Epoch_Time(s)",
         "pattern": "????_LOC.csv",
+        "ragged": False,
+        "dropna": True,
+        "drop": [],
         "columns": [
             {
                 "name": "GPS_Epoch_Time(s)",
@@ -110,6 +119,9 @@ _formats = {
         "sampling_interval_seconds": 60,
         "time_column": "GPS_Epoch_Time(s)",
         "pattern": "????_LOC.csv",
+        "ragged": False,
+        "dropna": True,
+        "drop": [],
         "columns": [
             {
                 "name": "GPS_Epoch_Time(s)",
@@ -139,6 +151,7 @@ _formats = {
         "pattern": "????_GMN.csv",
         "ragged": True,
         "dropna": False,
+        "drop": [],
         "columns": [
             {
                 "name": "millis",
@@ -185,15 +198,15 @@ _formats = {
                 "dtype": "float64",
             },
             {
-                "name": "VN(mm/s)",
+                "name": "VN(mm_s)",
                 "dtype": "float64",
             },
             {
-                "name": "VE(mm/s)",
+                "name": "VE(mm_s)",
                 "dtype": "float64",
             },
             {
-                "name": "VD(mm/s)",
+                "name": "VD(mm_s)",
                 "dtype": "float64",
             },
             {
@@ -296,6 +309,7 @@ _formats = {
         "pattern": "????_BARO_RAW.csv",
         "ragged": False,
         "dropna": True,
+        "drop": [],
         "columns": [
             {
                 "name": "timestamp (ticks/UTC)",
@@ -317,6 +331,7 @@ _formats = {
         "pattern": "????_BARO.csv",
         "ragged": False,
         "dropna": True,
+        "drop": [],
         "columns": [
             {
                 "name": "timestamp (ticks/UTC)",
@@ -334,6 +349,7 @@ _formats = {
         "pattern": "????_SST.csv",
         "ragged": False,
         "dropna": True,
+        "drop": [],
         "columns": [
             {
                 "name": "timestamp (ticks/UTC)",
@@ -351,6 +367,7 @@ _formats = {
         "pattern": "????_SST.csv",
         "ragged": False,
         "dropna": True,
+        "drop": [],
         "columns": [
             {
                 "name": "timestamp (ticks/UTC)",

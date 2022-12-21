@@ -4,6 +4,7 @@
     "pattern": "????_GMN.csv",
     "ragged": true,
     "dropna": false,
+    "drop": [],
     "columns": [
         {
             "name": "millis",
@@ -50,15 +51,15 @@
             "dtype": "float64"
         },
         {
-            "name": "VN(mm/s)",
+            "name": "VN(mm_s)",
             "dtype": "float64"
         },
         {
-            "name": "VE(mm/s)",
+            "name": "VE(mm_s)",
             "dtype": "float64"
         },
         {
-            "name": "VD(mm/s)",
+            "name": "VD(mm_s)",
             "dtype": "float64"
         },
         {

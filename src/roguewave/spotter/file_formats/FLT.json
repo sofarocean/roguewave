@@ -2,6 +2,11 @@
     "sampling_interval_seconds": 0.4,
     "time_column": "GPS_Epoch_Time(s)",
     "pattern": "????_FLT.csv",
+    "ragged": false,
+    "dropna": true,
+    "drop": [
+        "flag"
+    ],
     "columns": [
         {
             "name": "millis",

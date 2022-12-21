@@ -193,7 +193,7 @@ def calculate_co_spectra(
 
     # Correct the signals for mean contribution (detrend)
     for index, signal in enumerate(signals):
-        zero_mean_signals[index, :] = signal - numpy.mean(signal)
+        zero_mean_signals[index, :] = signal - numpy.nanmean(signal)
 
     # Scale the time so that it runs as [0,1,...]. Note, while we may have some jitter (not exactly integeres) here
     # it is assumed there are no gaps in the signal.
@@ -216,8 +216,19 @@ def calculate_co_spectra(
         if iend > nt:
             break
 
+        # check if there are any nan's in the signal signalling that this part of the signal is to be ignored in the
+        # spectral analysis (e.g. due to quality control).
+        nan_in_signal = False
+        for index in range(nsig):
+            if numpy.any(numpy.isnan(zero_mean_signals[index, istart:iend])):
+                nan_in_signal = True
+                break
+
         # If there are any time delta's larger than the sample time step we reject the realization
-        if numpy.any(time_delta[istart:iend] > 1 + timebase_jitter_fraction):
+        if (
+            numpy.any(time_delta[istart:iend] > 1 + timebase_jitter_fraction)
+            or nan_in_signal
+        ):
             istart = istart + len(window) - overlap
             continue
 

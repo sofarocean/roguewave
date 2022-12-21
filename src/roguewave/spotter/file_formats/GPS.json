@@ -2,6 +2,9 @@
     "sampling_interval_seconds": 0.4,
     "time_column": "GPS_Epoch_Time(s)",
     "pattern": "????_GPS.csv",
+    "ragged": false,
+    "dropna": true,
+    "drop": [],
     "columns": [
         {
             "name": "millis",
@@ -32,7 +35,7 @@
             "dtype": "float64"
         },
         {
-            "name": "SOG(mm/s)",
+            "name": "SOG(mm_s)",
             "dtype": "float64"
         },
         {
@@ -40,7 +43,7 @@
             "dtype": "float64"
         },
         {
-            "name": "vert_vel(mm/s)",
+            "name": "vert_vel(mm_s)",
             "dtype": "float64"
         }
     ]

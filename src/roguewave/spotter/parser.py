@@ -8,14 +8,14 @@ from typing import Iterator, Mapping
 from numpy import timedelta64, zeros, float64, full
 from numpy.typing import NDArray
 from pandas import DataFrame, concat
-
 from roguewave import to_datetime_utc
 from roguewave.tools.time import to_datetime64
-
+import xarray
 
 CSV_TYPES = Literal[
     "FLT", "SPC", "GPS", "GMT", "LOC", "BARO", "BARO_RAW", "SST", "RAINDB"
 ]
+
 
 # Main Functions
 # ---------------------------------
@@ -26,8 +26,8 @@ def read_and_concatenate_spotter_csv(
     csv_type: CSV_TYPES,
     start_date: datetime = None,
     end_date: datetime = None,
+    cache_as_netcdf=False,
 ) -> pandas.DataFrame:
-
     """
     Read data for a given data type from the given path.
 
@@ -47,6 +47,11 @@ def read_and_concatenate_spotter_csv(
                      end_date is loaded (if available).
                      NOTE: this requires that LOC files are present.
     """
+    if cache_as_netcdf:
+        if os.path.exists(_netcdf_filename(path, csv_type)):
+            dataset = xarray.open_dataset(_netcdf_filename(path, csv_type))
+            return dataset.to_dataframe()
+
     csv_format = get_csv_file_format(csv_type)
     source_files = list(
         _files_to_parse(path, csv_format["pattern"], start_date, end_date)
@@ -61,9 +66,7 @@ def read_and_concatenate_spotter_csv(
 
     # Fragmentation occurs for spectral data- to avoid performance issues we recreate the dataframe after the concat
     # here.
-    dataframe = pandas.concat(
-        data_frames, keys=source_files, names=["source files", "file index"]
-    ).copy()
+    dataframe = pandas.concat(data_frames).copy()
     dataframe.reset_index(inplace=True)
     dataframe = _mark_continuous_groups(
         dataframe, csv_format["sampling_interval_seconds"]
@@ -77,6 +80,9 @@ def read_and_concatenate_spotter_csv(
     if end_date is not None:
         end_date = to_datetime64(end_date)
         dataframe = dataframe[dataframe["time"] < end_date]
+
+    if cache_as_netcdf:
+        save_as_netcdf(dataframe, path, csv_type)
 
     return dataframe
 
@@ -229,11 +235,22 @@ def _process_file(file, csv_format, nrows=None):
     # Convert time to proper pandas datetime format
     df["time"] = pandas.to_datetime(df["time"], unit="s")
 
+    columns_to_drop = csv_format.get("drop", [])
+    if columns_to_drop:
+        df = df.drop(columns_to_drop, axis=1)
+
     return df
 
 
 # Utility Functions
 # ---------------------------------
+def _netcdf_filename(path: str, csv_type: str) -> str:
+    return os.path.join(path, f"{csv_type}.nc")
+
+
+def save_as_netcdf(df: DataFrame, path, csv_type: CSV_TYPES) -> None:
+    dataset = xarray.Dataset.from_dataframe(df)
+    dataset.to_netcdf(_netcdf_filename(path, csv_type))
 
 
 def _quality_control(dataframe: pandas.DataFrame, dropna) -> pandas.DataFrame:

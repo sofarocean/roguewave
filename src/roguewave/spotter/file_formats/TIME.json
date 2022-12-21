@@ -2,6 +2,9 @@
     "sampling_interval_seconds": 60,
     "time_column": "GPS_Epoch_Time(s)",
     "pattern": "????_LOC.csv",
+    "ragged": false,
+    "dropna": true,
+    "drop": [],
     "columns": [
         {
             "name": "GPS_Epoch_Time(s)",

@@ -38,10 +38,11 @@ def exponential_filter(time_seconds, signal, options: dict = None):
         if (
             time_seconds[ii] - time_seconds[ii - 1]
             > maximum_gap_size * sampling_interval
-        ):
+        ) or (not isfinite(signal[ii])):
             # Restart
             exponential_mean = 0.0
             filtered_signal[ii] = 0.0
+            continue
 
         exponential_mean = (
             exponential_mean * (1 - smoothing_factor) + signal[ii] * smoothing_factor
@@ -83,10 +84,11 @@ def exponential_delta_filter(time_seconds, signal, options: dict = None):
         if (
             time_seconds[ii] - time_seconds[ii - 1]
             > maximum_gap_size * sampling_interval
-        ):
+        ) or (not isfinite(signal_delta)):
             # Restart
             exponential_mean = 0.0
             filtered_signal[ii] = 0.0
+            continue
 
         exponential_mean = (
             exponential_mean * (1 - smoothing_factor) + signal_delta * smoothing_factor
@@ -141,6 +143,7 @@ def cumulative_filter(signal: NDArray, options: dict = None) -> NDArray:
 
     smoothing_factor = options.get("cumulative_smoothing_factor", 0.01)
     scale_factor = options.get("scale_factor", 5.0)
+    correct = options.get("correct", 0.0)
 
     # Allocate the output filtered signal and set the first value to the first entry in the signal.
     filtered_signal = empty_like(signal)
@@ -172,9 +175,16 @@ def cumulative_filter(signal: NDArray, options: dict = None) -> NDArray:
 
             else:
                 # Step change. Remove the linear trend from the current position to the last known zero-crossing.
-                filtered_signal[idx_last_zero:current_idx] = filtered_signal[
-                    idx_last_zero:current_idx
-                ] - cumulative_distance * linspace(0, 1, current_idx - idx_last_zero)
+                if correct == 1.0:
+                    filtered_signal[idx_last_zero:current_idx] = filtered_signal[
+                        idx_last_zero:current_idx
+                    ] - cumulative_distance * linspace(
+                        0, 1, current_idx - idx_last_zero
+                    )
+                else:
+                    filtered_signal[idx_last_zero + 1 : current_idx - 1] = nan
+                    filtered_signal[current_idx - 1] = filtered_signal[idx_last_zero]
+
             idx_last_zero = current_idx
             cumulative_distance = 0.0
             change_in_mean_detected = False
@@ -193,6 +203,84 @@ def cumulative_filter(signal: NDArray, options: dict = None) -> NDArray:
     return filtered_signal
 
 
+@njit(cache=True)
+def cumsum(signal: NDArray, options: dict = None) -> NDArray:
+    """
+    Filter an input signal to remove step-like changes according to a cumulative filter approach.
+
+    :param signal: Input signal at a constant sampling interval. The signal and its first order difference are
+    observations of zero-mean processes.
+    :param options: optional dictionary to set algorithm parameters.
+    :return: Filtered signal with step like changes to the mean removed.
+    """
+
+    if options is None:
+        options = Dict.empty(key_type=types.unicode_type, value_type=types.float64)
+
+    smoothing_factor = options.get("cumulative_smoothing_factor", 0.004)
+    # scale_factor = options.get("scale_factor", 5.0)
+    # correct = options.get("correct", 0.0)
+
+    # Allocate the output filtered signal and set the first value to the first entry in the signal.
+    filtered_signal = empty_like(signal)
+    filtered_signal[0] = signal[0]
+
+    # Initialize algorithm paramteres
+    cumsum_h = 0.0
+    cumsum_l = 0.0
+
+    idx_last_zero = 0  # Index of the last sign change
+
+    signal_variance = 0.0
+    signal_mean = 0.0
+    drift = 0.0
+
+    prev_drift = 0
+    was_unstable = False
+    last_stable_drift = 0
+    for current_idx in range(1, len(signal)):
+        velocity = signal[current_idx] - signal[current_idx - 1]
+
+        signal_mean = signal_mean * (1 - smoothing_factor) + velocity * smoothing_factor
+        signal_variance = (
+            signal_variance * (1 - smoothing_factor)
+            + (signal[current_idx] - signal_mean) ** 2
+        )
+
+        cumsum_h = cumsum_h + (
+            velocity - signal_mean
+        )  # - 0.000001  #(velocity - signal_mean)
+        cumsum_l = cumsum_l - (
+            velocity - signal_mean
+        )  # - 0.000001   #(velocity - signal_mean)
+
+        if cumsum_h < 0.0:
+            drift += cumsum_h
+            cumsum_h = 0.0
+
+        if cumsum_l < 0.0:
+            drift -= cumsum_l
+            cumsum_l = 0.0
+
+        if drift == prev_drift:
+
+            if was_unstable:
+                if abs(drift - last_stable_drift) > 2:
+                    filtered_signal[idx_last_zero + 1 : current_idx - 1] = -10
+                    filtered_signal[current_idx - 1] = filtered_signal[idx_last_zero]
+
+            idx_last_zero = current_idx
+            was_unstable = False
+            last_stable_drift = drift
+        else:
+            was_unstable = True
+
+        prev_drift = drift
+        filtered_signal[current_idx] = filtered_signal[current_idx - 1] + velocity
+
+    return filtered_signal
+
+
 def sos_filter(
     signal: NDArray, direction: Literal["backward", "forward", "filtfilt"], **kwargs
 ) -> NDArray:
@@ -201,21 +289,29 @@ def sos_filter(
     #
     # Get SOS coefficients
 
+    mask = ~isfinite(signal)
+    output = signal.copy()
+    output = nan_interpolate(
+        linspace(0, len(signal), len(signal), endpoint=False), output
+    )
+
     sos = kwargs.get("sos", None)
     if sos is None:
         sos = butter(4, 0.033, btype="high", output="sos", fs=2.5)
 
     if direction == "backward":
-        return flip(sosfilt(sos, flip(signal)))
+        output = flip(sosfilt(sos, flip(output)))
 
     elif direction == "forward":
-        return sosfilt(sos, signal)
+        output = sosfilt(sos, output)
 
     elif direction == "filtfilt":
-        return sosfiltfilt(sos, signal)
+        output = sosfiltfilt(sos, output)
 
     else:
         raise ValueError(f"Unknown direction {direction}")
+    output[mask] = nan
+    return output
 
 
 @njit(cache=True)

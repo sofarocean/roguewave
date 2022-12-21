@@ -48,6 +48,7 @@ def read_gps(
     start_date: datetime = None,
     end_date: datetime = None,
     postprocess=True,
+    cache_as_netcdf=False,
 ) -> DataFrame:
     """
     Load raw GPS text files and return a pandas dataframe containing the data. By default the data is postprocessed into
@@ -85,20 +86,21 @@ def read_gps(
         "GPS",
         start_date=start_date,
         end_date=end_date,
+        cache_as_netcdf=cache_as_netcdf,
     )
     if not postprocess:
         return data
     u = (
-        data["SOG(mm/s)"].values
+        data["SOG(mm_s)"].values
         / 1000
         * cos((90 - data["COG(deg*1000)"].values / 1000) * pi / 180)
     )
     v = (
-        data["SOG(mm/s)"].values
+        data["SOG(mm_s)"].values
         / 1000
         * sin((90 - data["COG(deg*1000)"].values / 1000) * pi / 180)
     )
-    w = data["vert_vel(mm/s)"].values / 1000
+    w = data["vert_vel(mm_s)"].values / 1000
     time = to_datetime(data["GPS_Epoch_Time(s)"].values, unit="s")
 
     latitude = data["lat(deg)"].values + data["lat(min*1e5)"].values / 60e5
@@ -124,6 +126,7 @@ def read_displacement(
     start_date: datetime = None,
     end_date: datetime = None,
     postprocess: bool = True,
+    cache_as_netcdf=False,
 ) -> DataFrame:
 
     """
@@ -162,6 +165,7 @@ def read_displacement(
         "FLT",
         start_date=start_date,
         end_date=end_date,
+        cache_as_netcdf=cache_as_netcdf,
     )
     if not postprocess:
         return data
@@ -361,6 +365,7 @@ def read_spectra(
     start_date: datetime = None,
     end_date: datetime = None,
     depth: float = inf,
+    cache_as_netcdf=False,
 ) -> FrequencySpectrum:
     """
     Read spectral data from csv files. The raw spectral data is transformed into
@@ -389,7 +394,9 @@ def read_spectra(
     :return: frequency spectra as a FrequencySpectrum object.
     """
 
-    data = read_raw_spectra(path, start_date=start_date, end_date=end_date)
+    data = read_raw_spectra(
+        path, start_date=start_date, end_date=end_date, cache_as_netcdf=cache_as_netcdf
+    )
     spectral_file_format = get_csv_file_format("SPC")
     df = 1 / (
         spectral_file_format["nfft"] * spectral_file_format["sampling_interval_gps"]
@@ -463,6 +470,7 @@ def read_raw_spectra(
     postprocess=True,
     start_date: datetime = None,
     end_date: datetime = None,
+    cache_as_netcdf=False,
 ) -> DataFrame:
     """
     Read raw spectral files and return a dataframe
@@ -473,13 +481,15 @@ def read_raw_spectra(
     :param end_date:
     :return:
     """
+    raw_data = read_and_concatenate_spotter_csv(
+        path,
+        "SPC",
+        start_date=start_date,
+        end_date=end_date,
+        cache_as_netcdf=cache_as_netcdf,
+    )
     if not postprocess:
-        return read_and_concatenate_spotter_csv(
-            path,
-            "SPC",
-            start_date=start_date,
-            end_date=end_date,
-        )
+        return raw_data
 
     # We want to collect all spectra of the same type (Sxx_re or Syy_im) in a single dataframe, with frequencies as
     # rows. First, we list all of the columns associated with a particular variable.
@@ -510,7 +520,7 @@ def read_raw_spectra(
     # initialize
     dataframes = []
     data_types = []
-    raw_data = read_and_concatenate_spotter_csv(path, "SPC")
+
     frequency_resolution = 1 / (
         spec_format["sampling_interval_gps"] * spec_format["nfft"]
     )

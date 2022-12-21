@@ -17,12 +17,12 @@ from numpy import real, conjugate
 
 
 def displacement_from_gps_doppler_velocities(
-    path, pipeline_stages=None, **kwargs
+    path, pipeline_stages=None, cache_as_netcdf=False
 ) -> DataFrame:
     if pipeline_stages is None:
         pipeline_stages = DEFAULT_SPOTTER_PIPELINE
 
-    doppler_velocities = read_gps(path)
+    doppler_velocities = read_gps(path, cache_as_netcdf=cache_as_netcdf)
 
     def process(data: DataFrame):
         time = data["time"].values

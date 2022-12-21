@@ -4,6 +4,7 @@
     "pattern": "????_SST.csv",
     "ragged": false,
     "dropna": true,
+    "drop": [],
     "columns": [
         {
             "name": "timestamp (ticks/UTC)",

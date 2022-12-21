@@ -189,6 +189,7 @@ def cumulative_filter(signal: NDArray, options: dict = None) -> NDArray:
             cumulative_distance = 0.0
             change_in_mean_detected = False
         else:
+            #
             # Check how far have we moved up (or down) since the last channge in sign of the velocity signal. If the
             # cumulative change is larger than a typical change we assume that there has been a change in the mean. Note
             # That no corrective action is taken here. We only correct the signal once velocities have flipped sign.

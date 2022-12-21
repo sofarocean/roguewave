@@ -1,5 +1,5 @@
 [flake8]
-ignore = E203
+ignore = E203, W504, W503
 max-line-length = 120
 per-file-ignores = __init__.py:F401
 max-complexity = 20

@@ -32,6 +32,7 @@ from io import BytesIO
 from roguewave import to_datetime_utc, filecache
 from xarray import Dataset, open_dataset, DataArray
 import boto3
+from botocore.errorfactory import ClientError
 import tempfile
 
 
@@ -131,7 +132,7 @@ class NumpyEncoder(json.JSONEncoder):
 def object_hook(dictionary: dict):
     if "__class__" in dictionary:
         if dictionary["__class__"] == "DataFrame":
-            #
+            # This is a mess- needs to be refactored.
             df = read_json(dictionary["data"])
             if "timestamp" in df:
                 df["timestamp"] = df["timestamp"].apply(lambda x: x.tz_localize("utc"))
@@ -203,17 +204,25 @@ def load(filename: str, force_redownload_if_remote=False) -> _UNION:
     return json.loads(data, object_hook=object_hook)
 
 
-def save(_input: _UNION, filename: str):
+def save(_input: _UNION, filename: str, overwrite=True, s3_overwrite=False):
     """
-    Save spectral data, possible in nested form as returned by the spectral
-    partition/reconstruction/etc. functions. Data is saved in JSON form
-    compressed with gzip.
+    Save roguewave data in JSON form compressed with gzip.
 
     :param _input:
         - Data containing python primitives (dict/list) or any of the RogueWave
           classes.
 
-    :param filename: path to save data.
+    :param filename: path to save data. If an s3 uri is given (of the form s3://bucket/key) the  file is
+        saved to s3. If a local file already exists with the same name the file is overwritten if overwrite = True
+        (default), otherwise an error is raised. If an s3 object with the same uri exists we raise an error (unless
+        s3_overwrite = True).
+
+    :param overwrite: Default True. If False an error is raised if a file with the same name already exists. By default
+        we simply overwrite under the assumption we are aware of local context.
+
+    :param s3_overwrite: Default False. If False an error is raised if an object with the same uri already exists on s3.
+        By default we raise an error as we may clash with keys from others.
+
     :return: None
     """
 
@@ -228,6 +237,17 @@ def save(_input: _UNION, filename: str):
 
             bucket, key = filename.removeprefix("s3://").split("/", 1)
             s3 = boto3.client("s3")
+
+            try:
+                s3.head_object(Bucket=bucket, Key=key)
+                if not s3_overwrite:
+                    raise FileExistsError(
+                        f"Key {key} already exists in bucket {bucket}. To overwrite the file (if"
+                        f"desired) set s3_overwrite=True"
+                    )
+            except ClientError:
+                # Not found
+                pass
 
             s3.upload_fileobj(temp_file, bucket, key)
 

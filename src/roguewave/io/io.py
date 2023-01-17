@@ -26,12 +26,13 @@ from typing import Union, Dict, List
 from datetime import datetime
 import gzip
 import json
-import os
 import numpy
 import base64
 from io import BytesIO
-from roguewave import to_datetime_utc
+from roguewave import to_datetime_utc, filecache
 from xarray import Dataset, open_dataset, DataArray
+import boto3
+import tempfile
 
 
 _UNION = Union[
@@ -178,25 +179,31 @@ def object_hook(dictionary: dict):
         return dictionary
 
 
-def load(filename: str) -> _UNION:
+def load(filename: str, force_redownload_if_remote=False) -> _UNION:
     """
     Load spectral data as saved by "save_spectrum" from the given file and
     return a (nested) object. The precise format of the output depends on what
     was saved.
 
-    :param filename: path to file to load.
+    :param filename: path to file to load. If an s3 uri is given (of the form s3://bucket/key) the remote file is
+        downloaded and cached locally. Future requests of the same uri are retrieved from the cache.
+
     :return:
         - Data in the same form it was saved.
     """
+
+    if filename.startswith("s3://"):
+        # Get the file from s3 and cache locally
+        if force_redownload_if_remote:
+            filecache.delete_files(filename, error_if_not_in_cache=False)
+        filename = filecache.filepaths([filename])[0]
 
     with gzip.open(filename, "rb") as file:
         data = file.read().decode("utf-8")
     return json.loads(data, object_hook=object_hook)
 
 
-def save(
-    _input: _UNION, filename: str, format="json", separate_spotters_into_files=False
-):
+def save(_input: _UNION, filename: str):
     """
     Save spectral data, possible in nested form as returned by the spectral
     partition/reconstruction/etc. functions. Data is saved in JSON form
@@ -210,19 +217,19 @@ def save(
     :return: None
     """
 
-    def write(filename, _input, format):
-        if format == "json":
-            with gzip.open(filename, "wt") as file:
-                json.dump(_input, file, cls=NumpyEncoder)
-                # file.write(data.encode('utf-8'))
-        else:
-            raise Exception("Unknown output format")
+    def write(filename, _input):
+        with gzip.open(filename, "wt") as file:
+            json.dump(_input, file, cls=NumpyEncoder)
 
-    if separate_spotters_into_files:
-        os.makedirs(filename, exist_ok=True)
-        for key in _input:
-            name = os.path.join(filename, key)
-            write(name, _input[key], format)
+    if filename.startswith("s3://"):
+        with tempfile.TemporaryFile() as temp_file:
+            write(temp_file, _input)
+            temp_file.seek(0)
+
+            bucket, key = filename.removeprefix("s3://").split("/", 1)
+            s3 = boto3.client("s3")
+
+            s3.upload_fileobj(temp_file, bucket, key)
 
     else:
-        write(filename, _input, format)
+        write(filename, _input)

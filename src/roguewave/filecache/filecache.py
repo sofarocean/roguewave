@@ -177,7 +177,9 @@ def delete_default():
         delete_cache(DEFAULT_CACHE_NAME)
 
 
-def delete_files(uris: Union[str, Iterable[str]], cache_name: str) -> None:
+def delete_files(
+    uris: Union[str, Iterable[str]], cache_name: str = None, error_if_not_in_cache=True
+) -> None:
     """
     Remove given key(s) from the cache
     :param uris: list of keys to remove
@@ -188,8 +190,14 @@ def delete_files(uris: Union[str, Iterable[str]], cache_name: str) -> None:
         uris = [uris]
 
     cache = get_cache(cache_name)
+
     for key in uris:
-        cache.remove(key)
+        try:
+            cache.remove(key)
+
+        except ValueError as e:
+            if error_if_not_in_cache:
+                raise e
 
 
 def get_cache(cache_name: str) -> FileCache:

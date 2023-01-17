@@ -305,7 +305,6 @@ def get_spotter_data(
 
         data.reset_index(inplace=True)
         data.drop(columns="time index", inplace=True)
-
     return data
 
 

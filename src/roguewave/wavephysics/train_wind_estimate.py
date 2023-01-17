@@ -1,25 +1,28 @@
 import numpy
 from typing import List
 from numpy import isnan, ones, abs, sign, median, squeeze, where
-from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum
+from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectrum
 from xarray import DataArray
 from roguewave.wavephysics.balance import SourceTermBalance
 from roguewave.wavephysics.windestimate import estimate_u10_from_spectrum
 from scipy.optimize import minimize
 
 
-def rmse(target, actual, jacobian_actual=None):
+def rmse(target, actual, jacobian_actual=None, weights=None):
     N = len(target)
-    error = sum((actual - target) ** 2) / 2 / N
+    if weights is None:
+        weights = 1 / N
+
+    mean_error = sum(weights * (actual - target) ** 2) / 2
 
     if jacobian_actual is not None:
-        error_gradient = ((actual - target)[None, :] @ jacobian_actual) / N
-        return error, squeeze(error_gradient)
+        error_gradient = (weights * (actual - target))[None, :] @ jacobian_actual
+        return mean_error, squeeze(error_gradient)
     else:
-        return error
+        return mean_error
 
 
-def mae(target, actual, jacobian_actual=None):
+def mae(target, actual, jacobian_actual=None, weights=None):
     N = len(target)
     error = sum(abs(actual - target)) / N
 
@@ -30,7 +33,37 @@ def mae(target, actual, jacobian_actual=None):
         return error
 
 
-def huber(target, actual, jacobian_actual=None):
+def create_weighted_metric(name, binsize, number_of_bins, target):
+    bins = numpy.linspace(0, number_of_bins * binsize, number_of_bins, endpoint=False)
+    index = numpy.digitize(target, bins)
+    weights = numpy.zeros(len(target))
+    for ii in range(number_of_bins + 1):
+        mask = ii == index
+        n = numpy.sum(mask)
+
+        if n == 0:
+            continue
+
+        weights[mask] = 1 / (n * number_of_bins)
+
+    return create_metric(name, weights)
+
+
+def create_metric(name, weights=None):
+    if name == "rmse":
+        func = rmse
+    elif name == "mae":
+        func = mae
+    elif name == "huber":
+        func = huber
+
+    def _closure(target, actual, jacobian_actual=None):
+        return func(target, actual, jacobian_actual, weights=weights)
+
+    return _closure
+
+
+def huber(target, actual, jacobian_actual=None, weights=None):
     diff = actual - target
     delta = abs(diff)
     N = len(target)
@@ -54,9 +87,7 @@ def calibrate_wind_estimate_from_spectrum(
 ):
     if parameter_names is None:
         parameter_names = [
-            "directional_spreading_constant",
             "phillips_constant_beta",
-            "charnock_constant",
         ]
 
     estimate_default_parameters = {
@@ -66,6 +97,7 @@ def calibrate_wind_estimate_from_spectrum(
     }
 
     scale = {}
+
     for parameter_name in parameter_names:
         scale[parameter_name] = estimate_default_parameters[parameter_name]
 
@@ -91,7 +123,7 @@ def calibrate_wind_estimate_from_spectrum(
         target = target_u10.values / velocity_scale
         return loss_function(target, actual)
 
-    bounds = [(0.1, 10) for x in x0]
+    bounds = [(0.01, 100) for x in x0]
     options = {"maxiter": 100, "disp": True}
 
     res = minimize(
@@ -108,7 +140,6 @@ def calibrate_wind_estimate_from_balance(
     spectrum: FrequencyDirectionSpectrum,
     loss_function=None,
     velocity_scale=None,
-    threshold=5,
 ):
     dissipation = balance.dissipation
     generation = balance.generation
@@ -162,7 +193,7 @@ def calibrate_wind_estimate_from_balance(
         return (err, grad_err)
 
     x0 = ones(len(parameter_names))
-    bounds = [(0.1, 10) for x in x0]
+    bounds = [(0.01, 100) for x in x0]
     options = {"maxiter": 100, "disp": True}
 
     res = minimize(
@@ -175,3 +206,15 @@ def calibrate_wind_estimate_from_balance(
     )
 
     return {key: x * scale[key] for key, x in zip(parameter_names, res.x)}
+
+
+def prep_data(
+    spectrum: WaveSpectrum, target_u10: DataArray, threshold=(-numpy.inf, numpy.inf)
+):
+    mask = (
+        (spectrum.is_valid())
+        & (target_u10.values >= threshold[0])
+        & (target_u10.values <= threshold[1])
+    )
+
+    return spectrum.where(mask), target_u10[mask.values]

@@ -170,6 +170,7 @@ def equilibrium_range_values(
 
     if method == "peak":
         scaled_spec = spectrum.variance_density * spectrum.frequency**power
+        scaled_spec = scaled_spec.fillna(0)
         indices = scaled_spec.argmax(dim="frequency")
         a1 = spectrum.a1.isel({"frequency": indices}).values
         b1 = spectrum.b1.isel({"frequency": indices}).values

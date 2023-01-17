@@ -823,25 +823,23 @@ class WaveSpectrum(DatasetWrapper):
         tail_a2 = a2.isel(frequency=-1) * ones_like(tail_frequency)
         tail_b2 = b2.isel(frequency=-1) * ones_like(tail_frequency)
 
-        e = concat((e, tail_power), dim="frequency")
-        a1 = concat((a1, tail_a1), dim="frequency")
-        b1 = concat((b1, tail_b1), dim="frequency")
-        a2 = concat((a2, tail_a2), dim="frequency")
-        b2 = concat((b2, tail_b2), dim="frequency")
-
-        return create_1d_spectrum(
-            e.frequency.values,
-            e.values,
-            e.time.values,
-            self.latitude.values,
-            self.longitude.values,
-            a1.values,
-            b1.values,
-            a2.values,
-            b2.values,
-            depth=self.depth.values,
-            dims=self.dims_space_time + [NAME_F],
+        dataset = Dataset(
+            {
+                "variance_density": concat((e, tail_power), dim="frequency"),
+                "a1": concat((a1, tail_a1), dim="frequency"),
+                "b1": concat((b1, tail_b1), dim="frequency"),
+                "a2": concat((a2, tail_a2), dim="frequency"),
+                "b2": concat((b2, tail_b2), dim="frequency"),
+            }
         )
+
+        for name in self.dataset:
+            if name in SPECTRAL_VARS:
+                continue
+            else:
+                dataset = dataset.assign({name: self.dataset[name]})
+
+        return FrequencySpectrum(dataset)
 
     def bandpass(self: _T, fmin=0, fmax=numpy.inf) -> _T:
 

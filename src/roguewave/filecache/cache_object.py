@@ -446,9 +446,12 @@ class FileCache:
                     # otherwise set a null function as postprocessor
                     post_process_function = do_nothing
 
+                # Remove any comments to the URI used to make it unique
+                uri_to_download = uri.split("<<")[0]
+
                 cache_misses.append(
                     CacheMiss(
-                        uri=uri,
+                        uri=uri_to_download,
                         filepath=filepath,
                         filename=hashkey,
                         allow_for_missing_files=self.allow_for_missing_files,
@@ -468,7 +471,7 @@ class FileCache:
         Get filenames corresponding to locally stored versions of the objects
         the URI points to. Note that the unparsed_uris take the form:
 
-        [ directive=option ; ... directive=option ] ":" [scheme] "://" [path]
+        [ directive=option ; ... directive=option ] ":" [scheme] "://" [path] ">>" [comment]
 
         e.g for amazon s3 where we want to perform validation and post
             processing on entries:
@@ -482,6 +485,17 @@ class FileCache:
         Cache directives are optional, but if specified the corresponding
         user defined handling function must have been set. By default no
         validation or postprocessing functions are set.
+
+        In addition, we can add a "comment" to the uri by appending
+        ">>[comment]", e.g.
+
+            s3://bucket/key>>THISISTHECOMMENT
+
+        The comment (including ">>") is stripped prior to downloading from
+        the remote resource. However, the comment part *is* included in
+        generation of the hash. This allows us to cache the same resource with
+        different names. This is primarily useful if we potentially apply
+        different postprocessing functions to the same remote resource.
 
         :param unparsed_uris: URI's that may still include directives.
         :return:
@@ -654,7 +668,9 @@ def _download_from_resources(
         with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
             output = list(
                 tqdm(
-                    pool.imap(_worker, cache_misses), desc=desc, total=len(cache_misses)
+                    pool.imap(_worker, cache_misses, chunksize=5),
+                    desc=desc,
+                    total=len(cache_misses),
                 )
             )
     else:

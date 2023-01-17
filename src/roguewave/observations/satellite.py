@@ -23,9 +23,12 @@ from datetime import datetime, timedelta
 from pandas import DataFrame
 from roguewave.modeldata.timebase import ModelTimeConfiguration, TimeSliceLead
 import boto3
-from roguewave.filecache import filepaths
+from roguewave import filecache
+import xarray
 import netCDF4
 import pandas
+import numpy
+from os import remove, rename
 
 
 SATELLITES = Literal["jason-3", "saral", "sentinal-6"]
@@ -35,7 +38,7 @@ satellite_formats = {
     "jason-3": {
         "prefix": "JA3",
         "mapping_variable_name_to_sofar": {
-            "wind_speed_alt": "windSpeed",
+            "wind_speed_alt": "windVelocity10Meter",
             "swh_ocean": "significantWaveHeight",
             "time": "time",
             "latitude": "latitude",
@@ -45,7 +48,7 @@ satellite_formats = {
     "sentinal-6": {
         "prefix": "S6A",
         "mapping_variable_name_to_sofar": {
-            "wind_speed_alt": "windSpeed",
+            "wind_speed_alt": "windVelocity10Meter",
             "swh_ocean": "significantWaveHeight",
             "time": "time",
             "latitude": "latitude",
@@ -55,7 +58,7 @@ satellite_formats = {
     "saral": {
         "prefix": "SRL",
         "mapping_variable_name_to_sofar": {
-            "wind_speed_alt": "windSpeed",
+            "wind_speed_alt": "windVelocity10Meter",
             "swh": "significantWaveHeight",
             "time": "time",
             "lat": "latitude",
@@ -65,21 +68,105 @@ satellite_formats = {
 }
 
 
+def _get_from_cache(
+    aws_keys, output_sampling_interval: timedelta, inv_mapping, variables
+) -> pandas.DataFrame:
+    """
+    Get data from the cache (if available) or download otherwise.
+
+    :param aws_keys: s3 aws keys
+    :param output_sampling_interval: desired sample rate of output (if None, use native sample rate)
+    :param inv_mapping: variable name mapping from name in netcdf stored remotely to Sofar name
+    :param variables: which variables we want to extract from the remote files (Sofar convention)
+    :return:
+    """
+
+    def postprocess(filepath: str):
+        data = _open_grouped_netcdf_file(filepath, inv_mapping, variables)
+
+        if output_sampling_interval is not None:
+            data = _resample_dataframe(data, output_sampling_interval)
+
+        dataset = xarray.Dataset.from_dataframe(data)
+        dataset.to_netcdf(filepath + ".nc", engine="netcdf4")
+        dataset.close()
+        remove(filepath)
+        rename(filepath + ".nc", filepath)
+        return None
+
+    def validate(filepath: str) -> bool:
+        data = xarray.open_dataset(filepath)
+        for var in variables:
+            if var not in data:
+                data.close()
+                return False
+        data.close()
+        return True
+
+    if output_sampling_interval is None:
+        sampling = "None"
+    else:
+        sampling = str(output_sampling_interval.total_seconds())
+
+    # Add processing for grib files
+    filecache.set_directive_function("postprocess", f"satellite{sampling}", postprocess)
+    filecache.set_directive_function("validate", f"satellite{sampling}", validate)
+    aws_keys = [
+        f"validate=satellite{sampling};postprocess=satellite{sampling}:{x}"
+        for x in aws_keys
+    ]
+
+    # Add a "comment" to the uri to make it unique for the given sampling. If we change sampling
+    # we need to re-download the original files.
+    comment = f"<<{sampling}" + "_".join(variables)
+    # print(comment)
+    aws_keys = [key + comment for key in aws_keys]
+
+    # Load data into cache and get filenames
+
+    filepaths = filecache.filepaths(aws_keys)
+
+    # Remove processing so that the cache is in the same state as before
+    filecache.remove_directive_function("postprocess", f"satellite{sampling}")
+    filecache.remove_directive_function("validate", f"satellite{sampling}")
+
+    out = []
+    for file in filepaths:
+        data = xarray.open_dataset(file)
+        # Check if the dataset contains any data- if not skip it. Xarray will otherwise crash in trying to open it.
+        if data.dims["index"] < 1:
+            data.close()
+            continue
+
+        out.append(data.to_dataframe())
+        data.close()
+        # out.append(xarray.open_dataset( file ).to_dataframe())
+
+    if len(out) < 1:
+        return None
+
+    else:
+        # Concatenate individual data frames into a single dataframe for the satellite
+        return pandas.concat(out)
+
+
 def get_satellite_data(
     start_date: datetime,
     end_date: datetime,
     satellites: Sequence[SATELLITES] = None,
-    variables=("significantWaveHeight", "windSpeed"),
+    variables=("significantWaveHeight", "windVelocity10Meter"),
+    output_sampling_interval=None,
 ) -> DataFrame:
     """
     Download satellite data that is stored on s3 for the given interval specificed by start date and end date.
 
     :param start_date: start date of interval
-    :param end_date: end date of intervak
+    :param end_date: end date of interval
     :param satellites: List of satellites to download data from - options are ['jason-3', 'saral', 'sentinal-6'], if
         None is provided as input (default) data from all available satellites is downloaded.
-    :param variables: List of Variables to download. Currently only ('significantWaveHeight', 'windSpeed') are
+    :param variables: List of Variables to download. Currently only ('significantWaveHeight', 'windVelocity10Meter') are
         supported.
+    :param output_sampling_interval: desired output sampling rate.
 
     :return: Pandas DataFrame, containing columns for latitude, longitude, the requested veriables and the satellite
         name.
@@ -102,22 +189,30 @@ def get_satellite_data(
         inv_mapping = {mapping[key]: key for key in mapping}
 
         # Open netcdf files and load data into individual Pandas Dataframes.
-        _data = []
+        data = _get_from_cache(
+            aws_keys[satellite], output_sampling_interval, inv_mapping, variables
+        )
 
-        # Download and store s3 object locally in cache (if not already available), and return paths to the
-        # local copies.
-        files = filepaths(aws_keys[satellite])
-        for file in files:
-            _data.append(_open_grouped_netcdf_file(file, inv_mapping, variables))
+        if data is None:
+            continue
 
-        # Concatenate individual data frames into a single dataframe for the satellite, and add the
-        # satellite name as a column.
-        _data = pandas.concat(_data, ignore_index=True)
-        _data["satellite"] = satellite
-        output.append(_data)
+        # Get rid of duplicate entries due to overlap in netcdf files
+        if not data.index.name == "time":
+            data = data.set_index("time")
+
+        data = data.sort_index()
+        data = data[~data.index.duplicated(keep="first")]
+        data = data.reset_index()
+
+        # add the satellite name as a column.
+        data["satellite"] = satellite
+        output.append(data)
 
     # Concatenate individual dataframes for each satellite into a single Dataframe and return.
-    return pandas.concat(output, ignore_index=True)
+    if len(output) < 1:
+        return None
+    else:
+        return pandas.concat(output, ignore_index=True)
 
 
 def get_satellite_available() -> Sequence[str]:
@@ -187,6 +282,7 @@ def _open_grouped_netcdf_file(file, inv_mapping, variables) -> DataFrame:
 
     # Ensure longitudes are within [-180, 180)
     dataframe["longitude"] = (dataframe["longitude"] + 180) % 360 - 180
+    dataframe.set_index("time", inplace=True)
     return dataframe
 
 
@@ -243,3 +339,30 @@ def _get_s3_keys(
                     keys[satellite].append(f"s3://{_bucket()}/{object.key}")
                     break
     return keys
+
+
+def _resample_dataframe(dataframe: DataFrame, output_sampling_interval) -> DataFrame:
+    """
+    Resample a dataframe ensuring that longitude is properly accounted for. Data must be sorted by time for this to
+    work.
+    :param dataframe:
+    :param output_sampling_interval:
+    :return:
+    """
+    if dataframe.index.name == "time":
+        df = dataframe
+    else:
+        df = dataframe.set_index("time")
+
+    if "longitude" in df:
+        df["longitude"] = numpy.unwrap(df["longitude"], discont=180, period=360)
+
+    # Resample the data to desired interval and take the average value to represent the bin
+    df = df.resample(output_sampling_interval).mean().reset_index()
+
+    # We may introduce NaN's when resampling over gaps in the data- lets drop those rows.
+    df = df.dropna()
+
+    if "longitude" in df:
+        df["longitude"] = (df["longitude"] + 180) % 360 - 180
+    return df

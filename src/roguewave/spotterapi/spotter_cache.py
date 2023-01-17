@@ -32,6 +32,7 @@ from roguewave.io.io import NumpyEncoder, object_hook
 import json
 from typing import List, Callable
 from pysofar.spotter import SofarApi
+import os
 
 
 # Constants
@@ -156,8 +157,21 @@ def get_data(
         for _id in spotter_ids
     ]
 
-    filepaths = filecache.filepaths(uris, cache_name=CACHE_NAME)
-    output = [load(filepath) for filepath in filepaths]
+    while True:
+        filepaths = filecache.filepaths(uris, cache_name=CACHE_NAME)
+
+        output = []
+        for filepath in filepaths:
+            try:
+                data = load(filepath)
+                output.append(data)
+            except Exception:
+                os.remove(filepath)
+                continue
+
+        else:
+            break
+
     return output
 
 

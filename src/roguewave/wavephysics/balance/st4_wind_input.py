@@ -77,8 +77,8 @@ def _st4_wind_generation_point(
     if wind_source is None:
         wind_source = empty((number_of_frequencies, number_of_directions))
 
-    # Unpack variables passed in dictionaries/tuples for ease of reference and some slight speed benifits (avoid dictionary
-    # lookup in loops).
+    # Unpack variables passed in dictionaries/tuples for ease of reference and some slight speed benifits
+    # (avoid dictionary lookup in loops).
     vonkarman_constant = st4_parameters["vonkarman_constant"]
     growth_parameter_betamax = st4_parameters["growth_parameter_betamax"]
     air_density = st4_parameters["air_density"]
@@ -129,12 +129,12 @@ def _st4_wind_generation_point(
         )
 
         for direction_index in range(number_of_directions):
+            # If the wave direction has an along wind component we continue.
             if cosine[direction_index] > 0:
 
                 # Calculate the directional factor in the wind input formulation
                 W = relative_speed * cosine[direction_index]
 
-                # If the wave direction has an along wind component we continue.
                 effective_wave_age = log(
                     wavenumber[frequency_index] * roughness_length
                 ) + vonkarman_constant / (W + wave_age_tuning_parameter)

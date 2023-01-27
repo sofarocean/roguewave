@@ -88,6 +88,7 @@ def calibrate_wind_estimate_from_spectrum(
     if parameter_names is None:
         parameter_names = [
             "phillips_constant_beta",
+            "charnock_constant",
         ]
 
     estimate_default_parameters = {

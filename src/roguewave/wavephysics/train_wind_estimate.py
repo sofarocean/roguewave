@@ -84,6 +84,7 @@ def calibrate_wind_estimate_from_spectrum(
     parameter_names: List[str] = None,
     loss_function=None,
     velocity_scale=None,
+    bounds=None,
 ):
     if parameter_names is None:
         parameter_names = [
@@ -124,11 +125,19 @@ def calibrate_wind_estimate_from_spectrum(
         target = target_u10.values / velocity_scale
         return loss_function(target, actual)
 
-    bounds = [(0.01, 100) for x in x0]
+    if bounds is None:
+        _bounds = [(0.01, 100) for x in x0]
+    else:
+        _bounds = []
+        for parameter_name in parameter_names:
+            x = bounds[parameter_name]
+            _scale = scale[parameter_name]
+            _bounds.append((x[0] / _scale, x[1] / _scale))
+
     options = {"maxiter": 100, "disp": True}
 
     res = minimize(
-        training_function, x0, method="L-BFGS-B", bounds=bounds, options=options
+        training_function, x0, method="L-BFGS-B", bounds=_bounds, options=options
     )
 
     return {key: x * scale[key] for key, x in zip(parameter_names, res.x)}

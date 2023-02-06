@@ -25,7 +25,17 @@ def charnock_roughness_length(friction_velocity: DataArray, **kwargs) -> DataArr
         "gravitational_acceleration", GRAVITATIONAL_ACCELERATION
     )
 
-    return charnock_constant * friction_velocity**2 / gravitational_acceleration
+    air_kinematic_viscosity = kwargs.get(
+        "air_kinematic_viscosity", AIR.kinematic_viscosity
+    )
+    viscous_constant = kwargs.get("viscous_constant", 0.0)
+
+    z_visc = viscous_constant * air_kinematic_viscosity / friction_velocity
+    z_visc = z_visc.where(friction_velocity > 0, 0.0)
+
+    return (
+        charnock_constant * friction_velocity**2 / gravitational_acceleration + z_visc
+    )
 
 
 def charnock_roughness_length_from_u10(speed, **kwargs) -> DataArray:

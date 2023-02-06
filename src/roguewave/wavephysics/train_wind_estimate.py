@@ -85,6 +85,7 @@ def calibrate_wind_estimate_from_spectrum(
     loss_function=None,
     velocity_scale=None,
     bounds=None,
+    params=None,
 ):
     if parameter_names is None:
         parameter_names = [
@@ -116,7 +117,7 @@ def calibrate_wind_estimate_from_spectrum(
         for parameter_name, value in zip(parameter_names, values):
             estimate_input[parameter_name] = value * scale[parameter_name]
 
-        estimate_input = estimate_default_parameters | estimate_input
+        estimate_input = estimate_default_parameters | estimate_input | params
 
         estimate = estimate_u10_from_spectrum(spectrum, method=method, **estimate_input)
 
@@ -150,9 +151,13 @@ def calibrate_wind_estimate_from_balance(
     spectrum: FrequencyDirectionSpectrum,
     loss_function=None,
     velocity_scale=None,
+    params=None,
 ):
     dissipation = balance.dissipation
     generation = balance.generation
+
+    if params is not None:
+        balance.update_parameters(params)
 
     scale = {}
     for parameter_name in parameter_names:

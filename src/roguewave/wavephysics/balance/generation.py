@@ -168,6 +168,7 @@ def _charnock_relation_point(friction_velocity, parameters):
         / parameters["gravitational_acceleration"]
         * parameters["charnock_constant"]
     )
+
     if roughness_length > parameters["charnock_maximum_roughness"]:
         roughness_length = parameters["charnock_maximum_roughness"]
     return roughness_length
@@ -282,7 +283,7 @@ def _u10_from_bulk_rate_point(
             rtol=rtol,
             numerical_stepsize=numerical_stepsize,
         )
-    except:
+    except Exception:
         u10 = nan
     return u10
 

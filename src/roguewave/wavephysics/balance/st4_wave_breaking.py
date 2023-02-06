@@ -29,7 +29,7 @@ class ST4WaveBreaking(Dissipation):
     @staticmethod
     def default_parameters() -> ST4WaveBreakingParameters:
         return ST4WaveBreakingParameters(
-            saturation_breaking_constant=3.501408748021698e-05 / 10,
+            saturation_breaking_constant=2.2e-05,
             saturation_breaking_directional_control=0,
             saturation_cosine_power=2,
             saturation_integration_width_degrees=80,
@@ -139,6 +139,10 @@ def st4_cumulative_breaking(
     cumulative_breaking = empty(
         (number_of_frequencies, number_of_directions), dtype="float64"
     )
+    if not (cumulative_breaking_constant > 0.0):
+        cumulative_breaking[:, :] = 0.0
+        return cumulative_breaking
+
     wave_speed_east = empty(
         (number_of_frequencies, number_of_directions), dtype="float64"
     )
@@ -293,6 +297,10 @@ def st4_saturation_breaking(
     saturation_breaking = empty(
         (number_of_frequencies, number_of_directions), dtype="float64"
     )
+
+    if not (saturation_breaking_constant > 0.0):
+        saturation_breaking[:, :] = 0.0
+        return saturation_breaking
 
     for frequency_index in range(number_of_frequencies):
         maximum_band_integrated_saturation = max(

@@ -283,7 +283,7 @@ def _u10_from_bulk_rate_point(
             rtol=rtol,
             numerical_stepsize=numerical_stepsize,
         )
-    except Exception:
+    except:
         u10 = nan
     return u10
 

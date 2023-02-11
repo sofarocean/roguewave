@@ -29,5 +29,6 @@ from roguewave.wavespectra.estimators.mem import mem
 # from roguewave.wavespectra.estimators.loglikelyhood import log_likelyhood
 from roguewave.wavespectra.estimators.estimate import (
     estimate_directional_distribution,
+    estimate_directional_spectrum_from_moments,
     Estimators,
 )

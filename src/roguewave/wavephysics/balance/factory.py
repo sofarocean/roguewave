@@ -2,14 +2,14 @@ from roguewave.wavephysics.balance.dissipation import Dissipation
 from typing import Literal
 from roguewave.wavephysics.balance.st6_wave_breaking import ST6WaveBreaking
 from roguewave.wavephysics.balance.st4_wave_breaking import ST4WaveBreaking
+from roguewave.wavephysics.balance.romero_wave_breaking import RomeroWaveBreaking
 
 from roguewave.wavephysics.balance.st4_wind_input import ST4WindInput
 from roguewave.wavephysics.balance.st6_wind_input import ST6WindInput
 
 from roguewave.wavephysics.balance.balance import SourceTermBalance
 
-breaking_parametrization = Literal["st6", "st4"]
-
+breaking_parametrization = Literal["st6", "st4","romero"]
 
 def create_breaking_dissipation(
     breaking_parametrization: breaking_parametrization = "st6", **kwargs
@@ -18,6 +18,8 @@ def create_breaking_dissipation(
         return ST6WaveBreaking(**kwargs)
     elif breaking_parametrization == "st4":
         return ST4WaveBreaking(**kwargs)
+    elif breaking_parametrization == "romero":
+        return RomeroWaveBreaking(**kwargs)
     else:
         raise ValueError(f"Unknown parametrization {breaking_parametrization}")
 

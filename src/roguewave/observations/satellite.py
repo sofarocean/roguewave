@@ -215,6 +215,41 @@ def get_satellite_data(
         return pandas.concat(output, ignore_index=True)
 
 
+def get_raw_satellite_data(
+    start_date: datetime,
+    end_date: datetime,
+    satellites: Sequence[SATELLITES] = None,
+) -> Dict[str,List[str]]:
+    """
+    Download satellite data that is stored on s3 for the given interval specificed by start date and end date.
+
+    :param start_date: start date of interval
+    :param end_date: end date of interval
+    :param satellites: List of satellites to download data from - options are ['jason-3', 'saral', 'sentinal-6'], if
+        None is provided as input (default) data from all available satellites is downloaded.
+    :param variables: List of Variables to download. Currently only ('significantWaveHeight', 'windVelocity10Meter') are
+        supported.
+    :param output_sampling_interval: desired output sampling rate.
+
+    :return: Pandas DataFrame, containing columns for latitude, longitude, the requested veriables and the satellite
+        name.
+    """
+
+    # If no satellite list is given assume we want data from all available satellites
+    if satellites is None:
+        satellites = get_satellite_available()
+
+    # Get the aws keys associated with the request.
+    aws_keys = _get_s3_keys(start_date, end_date, satellites)
+
+    output = {}
+    for satellite in satellites:
+        # Load data into cache and get filenames
+        output[satellite] = filecache.filepaths(aws_keys[satellite])
+
+    return output
+
+
 def get_satellite_available() -> Sequence[str]:
     return ("jason-3", "saral", "sentinal-6")
 

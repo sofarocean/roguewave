@@ -74,3 +74,4 @@ from roguewave.colocate import (
 from roguewave.spotterapi import get_spotter_data, get_spectrum
 from roguewave.spotter import spotter_frequency_response_correction
 from roguewave.observations import get_satellite_data, get_satellite_available
+from roguewave.wavespectra.estimators import estimate_directional_spectrum_from_moments

@@ -22,22 +22,36 @@ class SourceTermBalance:
         wind_speed: DataArray,
         wind_direction: DataArray,
         spectrum: FrequencyDirectionSpectrum,
+        time_derivative_spectrum: FrequencyDirectionSpectrum = None,
     ) -> DataArray:
+
+        if time_derivative_spectrum is None:
+            time_derivative_spectrum = 0.0
+        else:
+            time_derivative_spectrum = time_derivative_spectrum.variance_density
+
         return self.generation.rate(
             spectrum,
             wind_speed,
             wind_direction,
-        ) + self.dissipation.rate(spectrum)
+        ) + self.dissipation.rate(spectrum) - time_derivative_spectrum
 
     def evaluate_bulk_imbalance(
         self,
         wind_speed: DataArray,
         wind_direction: DataArray,
         spectrum: FrequencyDirectionSpectrum,
+        time_derivative_spectrum: FrequencyDirectionSpectrum = None,
     ) -> DataArray:
+
+        if time_derivative_spectrum is None:
+            time_derivative_spectrum = 0.0
+        else:
+            time_derivative_spectrum = time_derivative_spectrum.m0()
+
         return self.generation.bulk_rate(
             spectrum, wind_speed, wind_direction
-        ) + self.dissipation.bulk_rate(spectrum)
+        ) + self.dissipation.bulk_rate(spectrum) - time_derivative_spectrum
 
     def update_parameters(self, parameters: Mapping):
         for key in parameters:

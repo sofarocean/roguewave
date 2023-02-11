@@ -10,6 +10,42 @@ Estimators = Literal["mem", "mem2"]
 # -----------------------------------------------------------------------------
 #                       Boilerplate Interfaces
 # -----------------------------------------------------------------------------
+def estimate_directional_spectrum_from_moments(
+    e: numpy.ndarray,
+    a1: numpy.ndarray,
+    b1: numpy.ndarray,
+    a2: numpy.ndarray,
+    b2: numpy.ndarray,
+    direction: numpy.ndarray,
+    method: Estimators = "mem2",
+    **kwargs,
+) -> numpy.ndarray:
+    """
+    Construct a 2D directional distribution based on the directional moments and a spectral
+    reconstruction method.
+
+    :param number_of_directions: length of the directional vector for the
+    2D spectrum. Directions returned are in degrees
+
+    :param method: Choose a method in ['mem','mem2']
+        mem: maximum entrophy (in the Boltzmann sense) method
+        Lygre, A., & Krogstad, H. E. (1986). Explicit expression and
+        fast but tends to create narrow spectra anderroneous secondary peaks.
+
+        mem2: use entrophy (in the Shannon sense) to maximize. Likely
+        best method see- Benoit, M. (1993).
+
+    REFERENCES:
+    Benoit, M. (1993). Practical comparative performance survey of methods
+        used for estimating directional wave spectra from heave-pitch-roll data.
+        In Coastal Engineering 1992 (pp. 62-75).
+
+    Lygre, A., & Krogstad, H. E. (1986). Maximum entropy estimation of the
+        directional distribution in ocean wave spectra.
+        Journal of Physical Oceanography, 16(12), 2052-2060.
+
+    """
+    return estimate_directional_distribution(a1,b1,a2,b2,direction, method,**kwargs) * e[...,None]
 
 
 def estimate_directional_distribution(
@@ -22,25 +58,19 @@ def estimate_directional_distribution(
     **kwargs,
 ) -> numpy.ndarray:
     """
-    Construct a 2D spectrum based on the 1.5D spectrum and a spectral
+    Construct a 2D directional distribution based on the directional moments and a spectral
     reconstruction method.
 
     :param number_of_directions: length of the directional vector for the
     2D spectrum. Directions returned are in degrees
 
-    :param method: Choose a method in ['mem','ridge','msem']
+    :param method: Choose a method in ['mem','mem2']
         mem: maximum entrophy (in the Boltzmann sense) method
         Lygre, A., & Krogstad, H. E. (1986). Explicit expression and
         fast but tends to create narrow spectra anderroneous secondary peaks.
 
         mem2: use entrophy (in the Shannon sense) to maximize. Likely
         best method see- Benoit, M. (1993).
-
-        log: solve underdetermined constrained problem using ridge regression
-        as regulizer. Performant because efficient solutions to constrained
-        quadratic programming problems exist. The spectra compare well to
-        nlmen- though are somewhat broader in general. Does not suffer from
-        the spurious peak issue of mem. Default method for there reasons.
 
     REFERENCES:
     Benoit, M. (1993). Practical comparative performance survey of methods

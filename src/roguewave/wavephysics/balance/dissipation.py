@@ -8,8 +8,6 @@ from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
 from numba import njit, prange
 
-breaking_parametrization = Literal["st6", "st4"]
-
 
 class Dissipation(SourceTerm):
     name = "Dissipation"

@@ -9,7 +9,7 @@ from numba_progress import ProgressBar
 from numba.typed import List as NumbaList
 from numba import njit, prange
 from numpy.typing import NDArray
-from numpy import empty, isnan
+from numpy import empty, isnan, zeros
 
 
 class SourceTermBalance:
@@ -30,11 +30,15 @@ class SourceTermBalance:
         else:
             time_derivative_spectrum = time_derivative_spectrum.variance_density
 
-        return self.generation.rate(
-            spectrum,
-            wind_speed,
-            wind_direction,
-        ) + self.dissipation.rate(spectrum) - time_derivative_spectrum
+        return (
+            self.generation.rate(
+                spectrum,
+                wind_speed,
+                wind_direction,
+            )
+            + self.dissipation.rate(spectrum)
+            - time_derivative_spectrum
+        )
 
     def evaluate_bulk_imbalance(
         self,
@@ -49,9 +53,11 @@ class SourceTermBalance:
         else:
             time_derivative_spectrum = time_derivative_spectrum.m0()
 
-        return self.generation.bulk_rate(
-            spectrum, wind_speed, wind_direction
-        ) + self.dissipation.bulk_rate(spectrum) - time_derivative_spectrum
+        return (
+            self.generation.bulk_rate(spectrum, wind_speed, wind_direction)
+            + self.dissipation.bulk_rate(spectrum)
+            - time_derivative_spectrum
+        )
 
     def update_parameters(self, parameters: Mapping):
         for key in parameters:
@@ -66,6 +72,7 @@ class SourceTermBalance:
         spectrum: FrequencyDirectionSpectrum,
         jacobian=False,
         jacobian_parameters=None,
+        time_derivative_spectrum: FrequencyDirectionSpectrum = None,
     ) -> Dataset:
         """
 
@@ -76,10 +83,16 @@ class SourceTermBalance:
         :return:
         """
         disable = spectrum.number_of_spectra < 100
+        if time_derivative_spectrum is None:
+            time_derivative_spectrum = zeros(spectrum.shape())
+        else:
+            time_derivative_spectrum = time_derivative_spectrum.variance_density.values
+
         with ProgressBar(
             total=spectrum.number_of_spectra,
             disable=disable,
-            desc=f"Estimating U10 from {self.generation.name} and {self.dissipation.name} wind and dissipation source terms",
+            desc=f"Estimating U10 from {self.generation.name} and {self.dissipation.name} "
+            f"wind and dissipation source terms",
         ) as progress_bar:
             if not jacobian:
                 speed, direction = _u10_from_spectra(
@@ -92,6 +105,7 @@ class SourceTermBalance:
                     parameters_dissipation=self.dissipation.parameters,
                     spectral_grid=self.generation.spectral_grid(spectrum),
                     progress_bar=progress_bar,
+                    time_derivative_spectrum=time_derivative_spectrum,
                 )
             else:
                 if jacobian_parameters is None:
@@ -109,6 +123,7 @@ class SourceTermBalance:
                     parameters_generation=self.generation.parameters,
                     parameters_dissipation=self.dissipation.parameters,
                     spectral_grid=self.generation.spectral_grid(spectrum),
+                    time_derivative_spectrum=time_derivative_spectrum,
                     progress_bar=progress_bar,
                 )
                 grad = DataArray(data=grad)
@@ -149,6 +164,7 @@ def _u10_from_spectra(
     parameters_dissipation,
     spectral_grid,
     progress_bar: ProgressBar = None,
+    time_derivative_spectrum=None,
 ) -> Tuple[NDArray, NDArray]:
     """
 
@@ -166,6 +182,7 @@ def _u10_from_spectra(
     number_of_points = variance_density.shape[0]
     u10 = empty((number_of_points))
     direction = empty((number_of_points))
+
     for point_index in prange(number_of_points):
         if progress_bar is not None:
             progress_bar.update(1)
@@ -179,6 +196,7 @@ def _u10_from_spectra(
             parameters_generation,
             parameters_dissipation,
             spectral_grid,
+            time_derivative_spectrum[point_index, :, :],
         )
     return u10, direction
 
@@ -193,6 +211,7 @@ def _u10_from_spectra_point(
     parameters_generation,
     parameters_dissipation,
     spectral_grid,
+    time_derivative_spectrum,
 ) -> Tuple[float, float]:
     """
 
@@ -224,6 +243,7 @@ def _u10_from_spectra_point(
         spectral_grid,
         parameters_generation,
         wind_source_term_function,
+        time_derivative_spectrum,
     )
     return u10, direction
 
@@ -239,6 +259,7 @@ def _u10_parameter_gradient(
     parameters_generation,
     parameters_dissipation,
     spectral_grid,
+    time_derivative_spectrum,
 ) -> (float, float, NDArray):
     """
     Function to numerically calculate gradients for the requested coeficients
@@ -271,6 +292,7 @@ def _u10_parameter_gradient(
         spectral_grid,
         parameters_generation,
         wind_source_term_function,
+        time_derivative_spectrum,
     )
     grad = empty(len(grad_parameters))
     if isnan(u10):
@@ -308,6 +330,7 @@ def _u10_parameter_gradient(
             spectral_grid,
             perturbed_parameters_generation,
             wind_source_term_function,
+            time_derivative_spectrum,
         )
         if isnan(new_u10):
             grad[index] = 0
@@ -328,6 +351,7 @@ def _u10_from_spectra_gradient(
     parameters_generation,
     parameters_dissipation,
     spectral_grid,
+    time_derivative_spectrum,
     progress_bar: ProgressBar = None,
 ) -> Tuple[NDArray, NDArray, NDArray]:
     """
@@ -365,5 +389,6 @@ def _u10_from_spectra_gradient(
             parameters_generation,
             parameters_dissipation,
             spectral_grid,
+            time_derivative_spectrum,
         )
     return u10, direction, grad

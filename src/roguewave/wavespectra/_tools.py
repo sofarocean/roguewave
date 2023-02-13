@@ -1,42 +1,51 @@
 import numpy
+from numba import njit
 
 
-def least_squares_power(x,y, power):
-    X = numpy.sum(x)
-    Y = numpy.sum(y)
-    XY = numpy.sum(x*y)
-    XX = numpy.sum(x * x)
-    n = len(x)
-
-    inverse_matrix = numpy.zeros((2,2))
-    determinant = XX * n - X*X
-    inverse_matrix[0,0] = XX / determinant
-    inverse_matrix[0, 1] = -X / determinant
-    inverse_matrix[1, 0] = -X / determinant
-    inverse_matrix[1, 1] = n / determinant
-
-    intercept = inverse_matrix[ 0,0 ] * Y + inverse_matrix[0,1] * XY
-    slope = inverse_matrix[1, 0] * Y + inverse_matrix[1, 1] * XY
-
-    return intercept, slope
+@njit(cache=True)
+def _fit(x, y, power):
+    X = x**power
+    coef = numpy.sum(X * y) / numpy.sum(X * X)
+    goodness_of_fit = numpy.sum((coef * X - y) ** 2)
+    return coef, goodness_of_fit
 
 
-def fill_zeros_or_nan_in_tail( variance_density:numpy.ndarray, frequencies:numpy.ndarray, power=-5, zero=0.0, points_in_fit=15 ):
+@njit(cache=True)
+def tail_fit(x, y, power):
+    if power is None:
+        coef_4, goodness_of_fit_4 = _fit(x, y, -4)
+        coef_5, goodness_of_fit_5 = _fit(x, y, -5)
+        if goodness_of_fit_5 < goodness_of_fit_4:
+            return coef_5, -5
+        else:
+            return coef_4, -4
+
+    else:
+        coef, goodness_of_fit = _fit(x, y, power)
+        return coef, power
+
+
+@njit(cache=True)
+def fill_zeros_or_nan_in_tail(
+    variance_density: numpy.ndarray,
+    frequencies: numpy.ndarray,
+    power=None,
+    zero=0.0,
+    points_in_fit=10,
+):
+
     input_shape = variance_density.shape
+    number_of_elements = 1
+    for value in input_shape[:-1]:
+        number_of_elements *= value
 
-    number_of_elements = numpy.prod(input_shape[:-1])
     number_of_frequencies = input_shape[-1]
-    variance_density = variance_density.reshape( (number_of_elements,input_shape[-1]) )
+    variance_density = variance_density.reshape((number_of_elements, input_shape[-1]))
 
+    for ii in range(0, number_of_elements):
 
-    for ii in range( 0, number_of_elements ):
-        is_zero = False
-        index = number_of_frequencies - 1
-        max = numpy.max(variance_density[ii,:])
-        zero = max / 2**11
-
-        for jj in range( number_of_frequencies-1,-1,-1 ):
-            if variance_density[ii,jj] > zero:
+        for jj in range(number_of_frequencies - 1, -1, -1):
+            if variance_density[ii, jj] > zero:
                 # Note, for nan values this is also always false. No need to seperately check for that.
                 index = jj
                 break
@@ -46,25 +55,18 @@ def fill_zeros_or_nan_in_tail( variance_density:numpy.ndarray, frequencies:numpy
             # scenario I leave it in.
             continue
 
-        if index == number_of_frequencies-1:
+        if index == number_of_frequencies - 1:
             continue
-        elif index < 2*points_in_fit:
+        elif index < points_in_fit:
             continue
 
-        f = frequencies[index-points_in_fit+1:index+1]
-        e = variance_density[ii, index - points_in_fit + 1:index + 1]
+        coef, fitted_power = tail_fit(
+            x=frequencies[index - points_in_fit + 1 : index + 1],
+            y=variance_density[ii, index - points_in_fit + 1 : index + 1],
+            power=power,
+        )
 
-        # Least squares fit of the slope
-        intercept, power = least_squares(numpy.log(f),numpy.log(e))
+        for jj in range(index + 1, number_of_frequencies):
+            variance_density[ii, jj] = coef * (frequencies[jj]) ** fitted_power
 
-        #e0 = numpy.exp(intercept)
-
-        e0 = variance_density[ii, index]
-        f0 = frequencies[index]
-        e0 = numpy.exp(intercept)
-
-        print(power,e0)
-        for jj in range(index+1,number_of_frequencies):
-            variance_density[ii,jj] = e0*(frequencies[jj]) **power
-
-    return numpy.reshape(variance_density,input_shape)
+    return numpy.reshape(variance_density, input_shape)

@@ -241,6 +241,7 @@ def _u10_from_bulk_rate_point(
     spectral_grid,
     parameters,
     wind_source_term_function,
+    time_derivative_spectrum,
 ):
     """
 
@@ -264,6 +265,7 @@ def _u10_from_bulk_rate_point(
         spectral_grid,
         parameters,
         bulk_rate,
+        time_derivative_spectrum,
     )
     if bulk_rate == 0.0:
         return 0.0
@@ -443,6 +445,7 @@ def _u10_from_bulk_rate(
     wind_source_term_function,
     parameters,
     spectral_grid,
+    time_derivative_spectrum,
     progress_bar=None,
 ) -> NDArray:
     """
@@ -472,6 +475,7 @@ def _u10_from_bulk_rate(
             spectral_grid=spectral_grid,
             parameters=parameters,
             wind_source_term_function=wind_source_term_function,
+            time_derivative_spectrum=time_derivative_spectrum,
         )
     return u10
 
@@ -552,6 +556,7 @@ def _u10_iteration_function(
     spectral_grid,
     parameters,
     bulk_rate,
+    time_derivative_spectrum,
 ):
     """
     To find the 10 meter wind that generates a certain bulk input we need to solve the inverse function for the
@@ -602,8 +607,44 @@ def _u10_iteration_function(
         parameters,
     )
 
+    # Calculate the contribution of dEdt integrated over the spectrum. We only include spectral values in region where
+    # there is a positive wind input
+    bulk_time_derivative_spectrum = spectral_time_derivative_in_active_region(
+        time_derivative_spectrum,
+        generation,
+        spectral_grid,
+    )
+
     # Integrate the input and return the difference of the current guess with the desired bulk rate
-    return numba_integrate_spectral_data(generation, spectral_grid) - bulk_rate
+    return (
+        numba_integrate_spectral_data(generation, spectral_grid)
+        - bulk_rate
+        - bulk_time_derivative_spectrum
+    )
+
+
+@njit(cache=True)
+def spectral_time_derivative_in_active_region(
+    time_derivative_spectrum: NDArray,
+    generation: NDArray,
+    spectral_grid,
+):
+    frequency_step = spectral_grid["frequency_step"]
+    direction_step = spectral_grid["direction_step"]
+    number_of_directions = time_derivative_spectrum.shape[1]
+    number_of_frequencies = time_derivative_spectrum.shape[0]
+
+    bulk_time_derivative_spectrum = 0.0
+
+    for frequency_index in range(number_of_frequencies):
+        for direction_index in range(number_of_directions):
+            if generation[frequency_index, direction_index] > 0.0:
+                bulk_time_derivative_spectrum += (
+                    time_derivative_spectrum[frequency_index, direction_index]
+                    * direction_step[direction_index]
+                    * frequency_step[frequency_index]
+                )
+    return bulk_time_derivative_spectrum
 
 
 @njit(fastmath=True)

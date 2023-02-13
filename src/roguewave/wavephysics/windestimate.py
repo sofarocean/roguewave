@@ -238,7 +238,10 @@ def equilibrium_range_values(
 
 
 def estimate_u10_from_source_terms(
-    spectrum: FrequencyDirectionSpectrum, balance: SourceTermBalance, **kwargs
+    spectrum: FrequencyDirectionSpectrum,
+    balance: SourceTermBalance,
+    time_derivative_spectrum=None,
+    **kwargs,
 ) -> Dataset:
     # wind_direction = balance.dissipation.mean_direction_degrees(
     #     spectrum
@@ -250,7 +253,9 @@ def estimate_u10_from_source_terms(
         spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
     )["u10"]
 
-    u10_estimate = balance.windspeed_and_direction_from_spectra(guess, spectrum)
+    u10_estimate = balance.windspeed_and_direction_from_spectra(
+        guess, spectrum, time_derivative_spectrum=time_derivative_spectrum
+    )
     #
     # u10_estimate = balance.generation.u10_from_bulk_rate(
     #         -dissipation_bulk, guess, wind_direction, spectrum)

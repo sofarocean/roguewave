@@ -15,7 +15,15 @@ from roguewave.wavespectra.estimators import (
 )
 from ._tools import fill_zeros_or_nan_in_tail
 from typing import Iterator, Hashable, TypeVar, Union, List, Literal, Mapping
-from xarray import Dataset, DataArray, open_dataset, concat, ones_like, where, zeros_like
+from xarray import (
+    Dataset,
+    DataArray,
+    open_dataset,
+    concat,
+    ones_like,
+    where,
+    zeros_like,
+)
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
 
@@ -519,7 +527,6 @@ class WaveSpectrum(DatasetWrapper):
         """
         return self.dataset[NAME_F]
 
-
     def m0(self, fmin=0, fmax=numpy.inf) -> DataArray:
         """
         Zero order frequency moment. Also referred to as variance or energy.
@@ -802,7 +809,13 @@ class WaveSpectrum(DatasetWrapper):
     def interpolate(self: _T, coordinates) -> _T:
         return self.__class__(interpolate_dataset_grid(coordinates, self.dataset))
 
-    def extrapolate_tail(self, end_frequency, power=-5) -> "FrequencySpectrum":
+    def extrapolate_tail(self, end_frequency, power=None) -> "FrequencySpectrum":
+        """
+        Extrapolate the tail using the given power
+        :param end_frequency: frequency to extrapolate to
+        :param power: power to use. If None, a best fit -4 or -5 tail is used.
+        :return:
+        """
         e = self.e
         a1 = self.a1
         b1 = self.b1
@@ -819,19 +832,30 @@ class WaveSpectrum(DatasetWrapper):
         tail_frequency = DataArray(
             data=tail_frequency, coords={"frequency": tail_frequency}, dims="frequency"
         )
-        variance_density = concat( (e, e.isel(frequency=-1) * zeros_like(tail_frequency)), dim="frequency") # (tail_frequency / frequency[-1]) ** power
-        a1 = concat( (a1,a1.isel(frequency=-1) * ones_like(tail_frequency)), dim="frequency")
-        b1 = concat( (b1,b1.isel(frequency=-1) * ones_like(tail_frequency)), dim="frequency")
-        a2 = concat( (a2,a2.isel(frequency=-1) * ones_like(tail_frequency)), dim="frequency")
-        b2 = concat( (b2,b2.isel(frequency=-1) * ones_like(tail_frequency)), dim="frequency")
+        variance_density = concat(
+            (e, e.isel(frequency=-1) * zeros_like(tail_frequency)), dim="frequency"
+        )  # (tail_frequency / frequency[-1]) ** power
+        a1 = concat(
+            (a1, a1.isel(frequency=-1) * ones_like(tail_frequency)), dim="frequency"
+        )
+        b1 = concat(
+            (b1, b1.isel(frequency=-1) * ones_like(tail_frequency)), dim="frequency"
+        )
+        a2 = concat(
+            (a2, a2.isel(frequency=-1) * ones_like(tail_frequency)), dim="frequency"
+        )
+        b2 = concat(
+            (b2, b2.isel(frequency=-1) * ones_like(tail_frequency)), dim="frequency"
+        )
 
         # Find the last nonzero frequency
         variance_density = DataArray(
-            data=fill_zeros_or_nan_in_tail(variance_density.values,variance_density.frequency.values),
+            data=fill_zeros_or_nan_in_tail(
+                variance_density.values, variance_density.frequency.values, power
+            ),
             dims=a1.dims,
-            coords=a1.coords
+            coords=a1.coords,
         )
-
 
         dataset = Dataset(
             {
@@ -1039,19 +1063,25 @@ class FrequencyDirectionSpectrum(WaveSpectrum):
     def differentiate(self, coordinate=None, **kwargs) -> "FrequencyDirectionSpectrum":
 
         if coordinate is None:
-            coordinate = 'time'
+            coordinate = "time"
 
         if coordinate not in self.dataset:
-            raise ValueError(f'Coordinate {coordinate} does not exist in the dataset')
+            raise ValueError(f"Coordinate {coordinate} does not exist in the dataset")
 
-        data = {NAME_E: (self.dims, self.variance_density.differentiate(coordinate, **kwargs))}
+        data = {
+            NAME_E: (
+                self.dims,
+                self.variance_density.differentiate(
+                    coordinate, datetime_unit="s", **kwargs
+                ).values,
+            )
+        }
         for x in self.dataset:
             if x in SPECTRAL_VARS:
                 continue
             data[x] = (self.dims_space_time, self.dataset[x].values)
 
         return FrequencyDirectionSpectrum(Dataset(data_vars=data, coords=self.coords()))
-
 
     @property
     def number_of_directions(self) -> int:

@@ -56,10 +56,6 @@ import roguewave.spotterapi.spotter_cache as spotter_cache
 MAX_LOCAL_LIMIT = 100
 MAX_LOCAL_LIMIT_BULK = 500
 
-# Maximum number of workers in the Threadpool. Should be set to something
-# reasonable to not overload wavefleet
-MAXIMUM_NUMBER_OF_WORKERS = 40
-
 # Number of retry attemps if a download fails.
 NUMBER_OF_RETRIES = 2
 
@@ -381,8 +377,10 @@ def _unpaginate(
     :return: Data
     """
     spotter = Spotter(spotter_id, spotter_id, session=session)
+    page = 0
     while True:
         json_data = None
+        page += 1
         for retry in range(0, NUMBER_OF_RETRIES + 1):
             try:
                 if var_name == "smartMooringData":

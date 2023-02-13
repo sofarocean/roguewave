@@ -389,6 +389,6 @@ def _u10_from_spectra_gradient(
             parameters_generation,
             parameters_dissipation,
             spectral_grid,
-            time_derivative_spectrum,
+            time_derivative_spectrum[point_index, :, :],
         )
     return u10, direction, grad

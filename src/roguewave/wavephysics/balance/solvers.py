@@ -15,9 +15,9 @@ def numba_fixed_point_iteration(
     bounds=(-inf, inf),
 ) -> _T:
     """
-    Fixed point iteration on a vector function. We want to solve the parallal problem x=F(x) where x is a vector. Instead
-    of looping over each problem and solving them individualy using e.g. scipy solvers, we gain some efficiency by
-    evaluating F in parallel, and doing the iteration ourselves. Only worthwhile if F is the expensive part and/or x
+    Fixed point iteration on a vector function. We want to solve the parallal problem x=F(x) where x is a vector.
+    Instead of looping over each problem and solving them individualy using e.g. scipy solvers, we gain some efficiency
+    by evaluating F in parallel, and doing the iteration ourselves. Only worthwhile if F is the expensive part and/or x
     is large.
 
     :param function:
@@ -215,7 +215,7 @@ def numba_newton_raphson(
                 absolute_difference,
                 "(atol:",
                 atol,
-                "max rel. error:",
+                ") max rel. error:",
                 relative_difference,
                 "(rtol: ",
                 rtol,

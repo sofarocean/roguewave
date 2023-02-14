@@ -110,6 +110,9 @@ def calibrate_wind_estimate_from_spectrum(
     if velocity_scale is None:
         velocity_scale = median(target_u10)
 
+    if params is None:
+        params = {}
+
     x0 = numpy.ones(len(parameter_names))
 
     def training_function(values):
@@ -196,7 +199,6 @@ def calibrate_wind_estimate_from_balance(
             jacobian_parameters=parameter_names,
             time_derivative_spectrum=time_derivative_spectrum,
         )
-
         actual = estimate["u10"].values / velocity_scale
         actual[isnan(actual)] = 0.0
 

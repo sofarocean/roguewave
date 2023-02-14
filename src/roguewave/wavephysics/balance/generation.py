@@ -287,6 +287,7 @@ def _u10_from_bulk_rate_point(
         )
     except:
         u10 = nan
+
     return u10
 
 

@@ -5,7 +5,7 @@ from roguewave.wavephysics.fluidproperties import (
 )
 
 from roguewave.wavephysics.balance import WindGeneration
-from numpy import cos, pi, log, exp, empty, inf
+from numpy import cos, pi, log, exp, empty, inf, sin
 from numba import njit
 from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
 from typing import TypedDict
@@ -87,6 +87,7 @@ def _st4_wind_generation_point(
     gravitational_acceleration = st4_parameters["gravitational_acceleration"]
     radian_frequency = st4_spectral_grid["radian_frequency"]
     radian_direction = st4_spectral_grid["radian_direction"]
+    direction_step = st4_spectral_grid["direction_step"]
     elevation = st4_parameters["elevation"]
 
     wind_forcing, wind_direction_degrees, wind_forcing_type = wind
@@ -116,17 +117,21 @@ def _st4_wind_generation_point(
         wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
 
     cosine = cos(radian_direction - wind_direction_radian)
+    sine2 = sin(radian_direction - wind_direction_radian)**2
 
     # Loop over all frequencies/directions
     for frequency_index in range(number_of_frequencies):
 
         # Since wavenumber and wavespeed only depend on frequency we calculate those outside of the direction loop.
-        constant_frequency_factor = constant_factor * radian_frequency[frequency_index]
+
         relative_speed = (
             friction_velocity
             * wavenumber[frequency_index]
             / radian_frequency[frequency_index]
         )
+
+        N1 = 0.0
+        N2 = 0.0
 
         for direction_index in range(number_of_directions):
             # If the wave direction has an along wind component we continue.
@@ -143,16 +148,26 @@ def _st4_wind_generation_point(
                     effective_wave_age = 0
 
                 growth_rate = (
-                    constant_frequency_factor
+                    constant_factor
                     * exp(effective_wave_age)
                     * effective_wave_age**4
                     * W**2
                 )
 
+                cg =  radian_frequency[frequency_index]/ wavenumber[frequency_index]/2
+                fac = (wavenumber[frequency_index]**3 / vonkarman_constant / friction_velocity *  water_density/air_density ) * growth_rate
+                N1 += direction_step[direction_index] * fac *  variance_density[frequency_index, direction_index] * sine2[direction_index]* cg
+                N2 += direction_step[direction_index] * fac *  variance_density[frequency_index, direction_index]* cg
+
                 wind_source[frequency_index, direction_index] = (
-                    growth_rate * variance_density[frequency_index, direction_index]
+                    growth_rate * variance_density[frequency_index, direction_index] * radian_frequency[frequency_index]
                 )
+
+
             else:
                 wind_source[frequency_index, direction_index] = 0.0
 
+        #print((1+N1)/(1+N2))
+        for direction_index in range(number_of_directions):
+            wind_source[frequency_index, direction_index] = wind_source[frequency_index, direction_index] * (1+N1)/(1+N2)
     return wind_source

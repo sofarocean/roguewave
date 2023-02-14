@@ -34,6 +34,8 @@ from xarray import Dataset, open_dataset, DataArray
 import boto3
 from botocore.errorfactory import ClientError
 import tempfile
+import pickle
+import os
 
 
 _UNION = Union[
@@ -180,7 +182,7 @@ def object_hook(dictionary: dict):
         return dictionary
 
 
-def load(filename: str, force_redownload_if_remote=False) -> _UNION:
+def load(filename: str, force_redownload_if_remote=False, use_pickle=False):
     """
     Load spectral data as saved by "save_spectrum" from the given file and
     return a (nested) object. The precise format of the output depends on what
@@ -188,6 +190,10 @@ def load(filename: str, force_redownload_if_remote=False) -> _UNION:
 
     :param filename: path to file to load. If an s3 uri is given (of the form s3://bucket/key) the remote file is
         downloaded and cached locally. Future requests of the same uri are retrieved from the cache.
+
+    :param force_redownload_if_remote: If s3 file is cached force a refresh with the remote resource.
+
+    :param use_pickle: if True use pickle to load the contents of the file.
 
     :return:
         - Data in the same form it was saved.
@@ -199,12 +205,16 @@ def load(filename: str, force_redownload_if_remote=False) -> _UNION:
             filecache.delete_files(filename, error_if_not_in_cache=False)
         filename = filecache.filepaths([filename])[0]
 
-    with gzip.open(filename, "rb") as file:
-        data = file.read().decode("utf-8")
-    return json.loads(data, object_hook=object_hook)
+    if use_pickle:
+        with open(filename,'rb') as file:
+            return pickle.load(file)
+    else:
+        with gzip.open(filename, "rb") as file:
+            data = file.read().decode("utf-8")
+        return json.loads(data, object_hook=object_hook)
 
 
-def save(_input: _UNION, filename: str, overwrite=True, s3_overwrite=False):
+def save(_input: _UNION, filename: str, overwrite=True, s3_overwrite=False, use_pickle=False):
     """
     Save roguewave data in JSON form compressed with gzip.
 
@@ -223,12 +233,18 @@ def save(_input: _UNION, filename: str, overwrite=True, s3_overwrite=False):
     :param s3_overwrite: Default False. If False an error is raised if an object with the same uri already exists on s3.
         By default we raise an error as we may clash with keys from others.
 
+    :param use_pickle: Default False. Use the pickle protocol to save the object
+
     :return: None
     """
 
     def write(filename, _input):
-        with gzip.open(filename, "wt") as file:
-            json.dump(_input, file, cls=NumpyEncoder)
+        if use_pickle:
+            with open(filename, "wb") as file:
+                pickle.dump(_input,file)
+        else:
+            with gzip.open(filename, "wt") as file:
+                json.dump(_input, file, cls=NumpyEncoder)
 
     if filename.startswith("s3://"):
         with tempfile.TemporaryFile() as temp_file:
@@ -252,4 +268,9 @@ def save(_input: _UNION, filename: str, overwrite=True, s3_overwrite=False):
             s3.upload_fileobj(temp_file, bucket, key)
 
     else:
+        if os.path.exists(filename) and not overwrite:
+            raise FileExistsError(
+                f"Key {filename} already exists. To overwrite the file (if"
+                f"desired) set overwrite=True"
+            )
         write(filename, _input)

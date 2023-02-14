@@ -215,7 +215,7 @@ def numba_newton_raphson(
                 absolute_difference,
                 "(atol:",
                 atol,
-                "max rel. error:",
+                ") max rel. error:",
                 relative_difference,
                 "(rtol: ",
                 rtol,

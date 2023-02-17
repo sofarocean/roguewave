@@ -221,7 +221,7 @@ def calibrate_wind_estimate_from_balance(
     res = minimize(
         training_function,
         x0,
-        method="L-BFGS-B",
+        method="SLSQP",
         bounds=bounds,
         options=options,
         jac=True,

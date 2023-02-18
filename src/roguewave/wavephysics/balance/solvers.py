@@ -148,7 +148,6 @@ def numba_newton_raphson(
                 func_at_bounds[1] = func_evals[2]
                 root_bounds[1] = iterates[2]
             elif func_at_bounds[1] * func_evals[2] < 0:
-                root_bounded = True
                 func_at_bounds[0] = func_evals[2]
                 root_bounds[0] = iterates[2]
 
@@ -219,7 +218,9 @@ def numba_newton_raphson(
                 relative_difference,
                 "(rtol: ",
                 rtol,
-                ")",
+                ") ",
+                "current value",
+                iterates[2],
             )
 
         if (absolute_difference < atol) & (relative_difference < rtol):

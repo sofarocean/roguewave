@@ -141,7 +141,7 @@ def calibrate_wind_estimate_from_spectrum(
     options = {"maxiter": 100, "disp": True}
 
     res = minimize(
-        training_function, x0, method="L-BFGS-B", bounds=_bounds, options=options
+        training_function, x0, method="SLSQP", bounds=_bounds, options=options
     )
 
     return {key: x * scale[key] for key, x in zip(parameter_names, res.x)}

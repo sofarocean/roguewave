@@ -182,7 +182,7 @@ def object_hook(dictionary: dict):
         return dictionary
 
 
-def load(filename: str, force_redownload_if_remote=False, use_pickle=False):
+def load(filename: str, force_redownload_if_remote=False, filetype="roguewave"):
     """
     Load spectral data as saved by "save_spectrum" from the given file and
     return a (nested) object. The precise format of the output depends on what
@@ -205,16 +205,21 @@ def load(filename: str, force_redownload_if_remote=False, use_pickle=False):
             filecache.delete_files(filename, error_if_not_in_cache=False)
         filename = filecache.filepaths([filename])[0]
 
-    if use_pickle:
-        with open(filename,'rb') as file:
-            return pickle.load(file)
-    else:
+    if filetype == "roguewave":
         with gzip.open(filename, "rb") as file:
             data = file.read().decode("utf-8")
         return json.loads(data, object_hook=object_hook)
+    elif filetype == "pickle":
+        with open(filename, "rb") as file:
+            data = pickle.load(file)
+        return data
+    elif filetype == "netcdf":
+        return open_dataset(filename)
 
 
-def save(_input: _UNION, filename: str, overwrite=True, s3_overwrite=False, use_pickle=False):
+def save(
+    _input: _UNION, filename: str, overwrite=True, s3_overwrite=False, use_pickle=False
+):
     """
     Save roguewave data in JSON form compressed with gzip.
 
@@ -241,7 +246,7 @@ def save(_input: _UNION, filename: str, overwrite=True, s3_overwrite=False, use_
     def write(filename, _input):
         if use_pickle:
             with open(filename, "wb") as file:
-                pickle.dump(_input,file)
+                pickle.dump(_input, file)
         else:
             with gzip.open(filename, "wt") as file:
                 json.dump(_input, file, cls=NumpyEncoder)

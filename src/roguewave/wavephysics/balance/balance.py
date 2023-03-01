@@ -135,7 +135,7 @@ class SourceTermBalance:
         )
 
         direction = DataArray(
-            data=speed,
+            data=direction,
             dims=spectrum.dims_space_time,
             coords=spectrum.coords_space_time,
         )

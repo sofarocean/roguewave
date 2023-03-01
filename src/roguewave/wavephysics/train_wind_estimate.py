@@ -5,6 +5,7 @@ from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectru
 from xarray import DataArray
 from roguewave.wavephysics.balance import SourceTermBalance
 from roguewave.wavephysics.windestimate import estimate_u10_from_spectrum
+from roguewave.wavephysics.balance.wind_inversion import windspeed_and_direction_from_spectra
 from scipy.optimize import minimize
 
 
@@ -141,7 +142,7 @@ def calibrate_wind_estimate_from_spectrum(
     options = {"maxiter": 100, "disp": True}
 
     res = minimize(
-        training_function, x0, method="L-BFGS-B", bounds=_bounds, options=options
+        training_function, x0, method="SLSQP", bounds=_bounds, options=options
     )
 
     return {key: x * scale[key] for key, x in zip(parameter_names, res.x)}
@@ -192,7 +193,8 @@ def calibrate_wind_estimate_from_balance(
         balance.update_parameters(params)
 
         # Estimate the wind speed, direction and gradient.
-        estimate = balance.windspeed_and_direction_from_spectra(
+        estimate = windspeed_and_direction_from_spectra(
+            balance,
             target_u10,
             spectrum,
             jacobian=True,
@@ -221,7 +223,7 @@ def calibrate_wind_estimate_from_balance(
     res = minimize(
         training_function,
         x0,
-        method="L-BFGS-B",
+        method="SLSQP",
         bounds=bounds,
         options=options,
         jac=True,

@@ -5,6 +5,7 @@ from roguewave.wavephysics.balance.st4_wave_breaking import ST4WaveBreaking
 from roguewave.wavephysics.balance.romero_wave_breaking import RomeroWaveBreaking
 
 from roguewave.wavephysics.balance.st4_wind_input import ST4WindInput
+from roguewave.wavephysics.balance.jb23_wind_input import JB23WindInput
 from roguewave.wavephysics.balance.st6_wind_input import ST6WindInput
 
 from roguewave.wavephysics.balance.balance import SourceTermBalance
@@ -24,23 +25,25 @@ def create_breaking_dissipation(
         raise ValueError(f"Unknown parametrization {breaking_parametrization}")
 
 
-wind_parametrizations = Literal["st6", "st4", "st4_swell"]
+wind_parametrizations = Literal["st6", "st4","jb23"]
 
 
 def create_wind_source_term(
-    wind_parametrization: wind_parametrizations = "st6", **kwargs
+    wind_parametrization: wind_parametrizations = "st4", **kwargs
 ):
     if wind_parametrization == "st6":
         return ST6WindInput(**kwargs)
     elif wind_parametrization == "st4":
         return ST4WindInput(**kwargs)
+    elif wind_parametrization == "jb23":
+        return JB23WindInput(**kwargs)
     else:
         raise ValueError(f"Unknown parametrization: {wind_parametrization}")
 
 
 def create_balance(
-    generation_par: wind_parametrizations = "st6",
-    dissipation_par: breaking_parametrization = "st6",
+    generation_par: wind_parametrizations = "st4",
+    dissipation_par: breaking_parametrization = "st4",
     generation_args=None,
     dissipation_args=None,
 ) -> SourceTermBalance:

@@ -15,9 +15,9 @@ def numba_fixed_point_iteration(
     bounds=(-inf, inf),
 ) -> _T:
     """
-    Fixed point iteration on a vector function. We want to solve the parallal problem x=F(x) where x is a vector. Instead
-    of looping over each problem and solving them individualy using e.g. scipy solvers, we gain some efficiency by
-    evaluating F in parallel, and doing the iteration ourselves. Only worthwhile if F is the expensive part and/or x
+    Fixed point iteration on a vector function. We want to solve the parallal problem x=F(x) where x is a vector.
+    Instead of looping over each problem and solving them individualy using e.g. scipy solvers, we gain some efficiency
+    by evaluating F in parallel, and doing the iteration ourselves. Only worthwhile if F is the expensive part and/or x
     is large.
 
     :param function:
@@ -88,6 +88,10 @@ def numba_newton_raphson(
     rtol=1e-4,
     numerical_stepsize=1e-4,
     verbose=False,
+    error_on_max_iter = True,
+    relative_stepsize = False,
+    name='',
+    under_relaxation=0.9,
 ):
 
     # The last three iterates. Newest iterate last. We initially fill all with the guess.
@@ -148,7 +152,6 @@ def numba_newton_raphson(
                 func_at_bounds[1] = func_evals[2]
                 root_bounds[1] = iterates[2]
             elif func_at_bounds[1] * func_evals[2] < 0:
-                root_bounded = True
                 func_at_bounds[0] = func_evals[2]
                 root_bounds[0] = iterates[2]
 
@@ -162,13 +165,17 @@ def numba_newton_raphson(
                 derivative = (func_evals[2] - func_evals[1]) / (
                     iterates[2] - iterates[1]
                 )
-
             else:
+                if relative_stepsize:
+                    stepsize = iterates[2] * numerical_stepsize
+                else:
+                    stepsize = numerical_stepsize
+
                 # Finite difference estimate
                 derivative = (
-                    function(iterates[2] + numerical_stepsize, *function_arguments)
+                    function(iterates[2] + stepsize, *function_arguments)
                     - func_evals[2]
-                ) / numerical_stepsize
+                ) / stepsize
 
             # We encountered a stationary point.
             if derivative == 0.0:
@@ -182,7 +189,7 @@ def numba_newton_raphson(
             else:
                 update = -func_evals[2] / derivative
 
-            next_iterate = iterates[2] + update
+            next_iterate = iterates[2] + update * under_relaxation
 
         # Bounds check
         if not root_bounded:
@@ -192,6 +199,7 @@ def numba_newton_raphson(
 
         if next_iterate < bounds_to_check[0]:
             next_iterate = (bounds_to_check[0] - iterates[2]) * 0.5 + iterates[2]
+
 
         if next_iterate > bounds_to_check[1]:
             next_iterate = (bounds_to_check[1] - iterates[2]) * 0.5 + iterates[2]
@@ -209,6 +217,8 @@ def numba_newton_raphson(
             # In case anybody wonders - this monstrosity is needed because Numba does not currently support converting
             # floats to strings.
             print(
+                "name:",
+                name,
                 "Iteration",
                 current_iteration,
                 "max abs. errors:",
@@ -219,13 +229,19 @@ def numba_newton_raphson(
                 relative_difference,
                 "(rtol: ",
                 rtol,
-                ")",
+                ") ",
+                "current value",
+                iterates[2],
             )
 
         if (absolute_difference < atol) & (relative_difference < rtol):
             break
 
     else:
-        raise ValueError("no convergence")
+        if error_on_max_iter:
+            print( 'no convergence', name, root_bounded)
+            raise ValueError("no convergence")
+        else:
+            return iterates[2]
 
     return iterates[2]

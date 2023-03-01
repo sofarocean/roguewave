@@ -193,7 +193,7 @@ def load(filename: str, force_redownload_if_remote=False, filetype="roguewave"):
 
     :param force_redownload_if_remote: If s3 file is cached force a refresh with the remote resource.
 
-    :param use_pickle: if True use pickle to load the contents of the file.
+    :param filetype: ['roguewave', 'pickle', 'netcdf']. Type of file to be loaded.
 
     :return:
         - Data in the same form it was saved.

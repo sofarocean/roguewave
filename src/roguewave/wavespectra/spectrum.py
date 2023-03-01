@@ -268,7 +268,11 @@ class WaveSpectrum(DatasetWrapper):
         dims = self.dims_space_time
         coords = self.coords_space_time
         shape = self.space_time_shape()
-        length = numpy.product(shape)
+        if len(shape) == 0:
+            length = 1
+            shape = (1,)
+        else:
+            length = numpy.product(shape)
 
         # Calculate the flattened shape
         new_shape = (length,)

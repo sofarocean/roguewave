@@ -17,6 +17,7 @@ def log_dimensionless_critical_height(
     x, charnock_constant, vonkarman_constant, wave_age_tuning_parameter
 ):
     """
+
     Dimensionless Critical Height according to Janssen (see IFS Documentation).
     :param x:
     :param charnock_constant:

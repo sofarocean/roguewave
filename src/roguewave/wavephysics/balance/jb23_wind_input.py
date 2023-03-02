@@ -1,18 +1,16 @@
-from roguewave.wavephysics.fluidproperties import (
-    AIR,
-    WATER,
-    GRAVITATIONAL_ACCELERATION,
-)
 
-from roguewave.wavephysics.balance import WindGeneration
+from roguewave.wavephysics.balance.jb23_tail_stress import tail_stress_parametrization_jb23
+from roguewave.wavephysics.balance.st4_wind_input import ST4WindInput, _st4_wind_generation_point
+from roguewave.wavephysics.fluidproperties import GRAVITATIONAL_ACCELERATION, AIR, WATER
+
 from numpy import cos, pi, log, exp, empty, inf, sin
 from numba import njit
 from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
 from typing import TypedDict
-from roguewave.wavephysics.balance.wam_tail_stress import tail_stress_parametrization_wam
 
 
-class ST4WaveGenerationParameters(TypedDict):
+
+class JB23WaveGenerationParameters(TypedDict):
     gravitational_acceleration: float
     charnock_maximum_roughness: float
     charnock_constant: float
@@ -22,38 +20,42 @@ class ST4WaveGenerationParameters(TypedDict):
     wave_age_tuning_parameter: float
     growth_parameter_betamax: float
     elevation: float
-    air_viscosity: float # JB2022 only
+    air_viscosity: float
+    surface_tension: float
+    width_factor: float
 
 
-class ST4WindInput(WindGeneration):
-    name = "st4 generation"
+class JB23WindInput(ST4WindInput):
+    name = "JB23 generation"
 
-    def __init__(self, parameters: ST4WaveGenerationParameters = None):
-        super(ST4WindInput, self).__init__(parameters)
-        self._wind_source_term_function = _st4_wind_generation_point
-        self._tail_stress_parametrization_function = tail_stress_parametrization_wam
+    def __init__(self, parameters: JB23WaveGenerationParameters = None):
+        super(JB23WindInput, self).__init__(parameters)
+        # The obly difference with ST4 as implemented is the calculation of the tail contributions.
+        self._wind_source_term_function = _jb23_wind_generation_point
+        self._tail_stress_parametrization_function = tail_stress_parametrization_jb23
 
     @staticmethod
-    def default_parameters() -> ST4WaveGenerationParameters:
-        return ST4WaveGenerationParameters(
+    def default_parameters() -> JB23WaveGenerationParameters:
+        return JB23WaveGenerationParameters(
             wave_age_tuning_parameter=0.006,
             growth_parameter_betamax=1.52,
             gravitational_acceleration=GRAVITATIONAL_ACCELERATION,
             charnock_maximum_roughness=inf,
-            charnock_constant=0.006,
+            charnock_constant=0.01,
             air_density=AIR.density,
             water_density=WATER.density,
             vonkarman_constant=AIR.vonkarman_constant,
             elevation=10,
             air_viscosity=AIR.kinematic_viscosity,
+            surface_tension=WATER.kinematic_surface_tension,
+            width_factor=0.6
         )
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # ST4 Point wise implementation functions (apply to a single spatial point)
 # ----------------------------------------------------------------------------------------------------------------------
 @njit(cache=True, fastmath=True)
-def _st4_wind_generation_point(
+def _jb23_wind_generation_point(
     variance_density,
     wind,
     depth,
@@ -121,21 +123,25 @@ def _st4_wind_generation_point(
         wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
 
     mutual_angle = ( radian_direction - wind_direction_radian + pi ) % (2*pi) - pi
-
     cosine = cos(mutual_angle)
+    sine2 = sin(mutual_angle)**2
 
 
     # Loop over all frequencies/directions
+    epsilon =  air_density /water_density
     for frequency_index in range(number_of_frequencies):
 
         # Since wavenumber and wavespeed only depend on frequency we calculate those outside of the direction loop.
         wavespeed = radian_frequency[frequency_index] / wavenumber[frequency_index]
+        group_speed = wavespeed / 2
 
         relative_speed = (
             friction_velocity
             / wavespeed
         )
 
+        N1 = 0.0
+        N2 = 0.0
 
         for direction_index in range(number_of_directions):
             # If the wave direction has an along wind component we continue.
@@ -159,10 +165,33 @@ def _st4_wind_generation_point(
                     * radian_frequency[frequency_index]
                 )
 
+                # Note that Peter does not include the k factor into the defenition of his F(k,\theta). So we need
+                # an additional division by k (in addition to the jacobian cg) to make this work-
+                # hence the wavenumber **2 !!
+                common_factor = (
+                        variance_density[frequency_index, direction_index]
+                        * group_speed
+                        * direction_step[direction_index]
+                        * wavenumber[frequency_index] ** 2
+                        * growth_rate
+                        / vonkarman_constant
+                        / friction_velocity
+                        / epsilon
+                        / 2
+                        / pi
+                )
+
+                N1 += common_factor * sine2[direction_index]
+                N2 += common_factor
+
                 wind_source[frequency_index, direction_index] = (
                     growth_rate * variance_density[frequency_index, direction_index]
                 )
             else:
                 wind_source[frequency_index, direction_index] = 0.0
+
+        #
+        for direction_index in range(number_of_directions):
+            wind_source[frequency_index, direction_index] = wind_source[frequency_index, direction_index] * (1+N1)/(1+N2)
 
     return wind_source

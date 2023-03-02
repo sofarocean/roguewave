@@ -13,6 +13,7 @@ from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectru
 from roguewave.wavephysics.balance import SourceTermBalance
 from xarray import Dataset
 from roguewave.wavephysics.roughness import charnock_roughness_length
+from roguewave.wavephysics.balance.wind_inversion import windspeed_and_direction_from_spectra
 
 
 _methods = Literal["peak", "mean"]
@@ -253,11 +254,8 @@ def estimate_u10_from_source_terms(
         spectrum, "peak", direction_convention="going_to_counter_clockwise_east"
     )["u10"]
 
-    u10_estimate = balance.windspeed_and_direction_from_spectra(
-        guess, spectrum, time_derivative_spectrum=time_derivative_spectrum
-    )
-    #
-    # u10_estimate = balance.generation.u10_from_bulk_rate(
-    #         -dissipation_bulk, guess, wind_direction, spectrum)
+    u10_estimate = windspeed_and_direction_from_spectra(balance=balance,
+        guess_u10=guess, spectrum=spectrum, time_derivative_spectrum=time_derivative_spectrum)
+
 
     return u10_estimate

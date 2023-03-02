@@ -56,8 +56,8 @@ def _st6_wind_generation_point(
     wind,
     depth,
     roughness_length,
-    st6_spectral_grid,
-    st6_parameters,
+    spectral_grid,
+    parameters,
     wind_source=None,
 ):
     """
@@ -67,8 +67,8 @@ def _st6_wind_generation_point(
     :param wind:
     :param depth:
     :param roughness_length:
-    :param st6_spectral_grid:
-    :param st6_parameters:
+    :param spectral_grid:
+    :param parameters:
     :return:
     """
 
@@ -81,13 +81,13 @@ def _st6_wind_generation_point(
 
     # Unpack variables passed in dictionaries/tuples for ease of reference and some slight speed benifits (avoid dictionary
     # lookup in loops).
-    vonkarman_constant = st6_parameters["vonkarman_constant"]
-    friction_velocity_scaling = st6_parameters["friction_velocity_scaling"]
-    air_density = st6_parameters["air_density"]
-    water_density = st6_parameters["water_density"]
-    elevation = st6_parameters["elevation"]
-    radian_frequency = st6_spectral_grid["radian_frequency"]
-    radian_direction = st6_spectral_grid["radian_direction"]
+    vonkarman_constant = parameters["vonkarman_constant"]
+    friction_velocity_scaling = parameters["friction_velocity_scaling"]
+    air_density = parameters["air_density"]
+    water_density = parameters["water_density"]
+    elevation = parameters["elevation"]
+    radian_frequency = spectral_grid["radian_frequency"]
+    radian_direction = spectral_grid["radian_direction"]
     wind_forcing, wind_direction_degrees, wind_forcing_type = wind
 
     # Preprocess winds to the correct conventions (U10->friction velocity if need be, wind direction degrees->radians)
@@ -104,7 +104,7 @@ def _st6_wind_generation_point(
     wind_direction_radian = wind_direction_degrees * pi / 180
     us = friction_velocity * friction_velocity_scaling
     frequency_spectrum = numba_directionally_integrate_spectral_data(
-        variance_density, st6_spectral_grid
+        variance_density, spectral_grid
     )
     wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
     wavespeed = radian_frequency / wavenumber

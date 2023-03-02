@@ -1,33 +1,18 @@
 from roguewave import (
     FrequencyDirectionSpectrum,
 )
+from roguewave.wavephysics.balance.stress import _roughness_estimate, _wave_supported_stress
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavephysics.balance.source_term import SourceTerm
-from roguewave.wavephysics.balance.solvers import (
-    numba_newton_raphson,
-    numba_fixed_point_iteration,
-)
-from xarray import DataArray, zeros_like
-from typing import Literal, Tuple
+from xarray import DataArray, zeros_like, Dataset
+from typing import Literal
 from numpy import (
-    inf,
-    empty,
-    isnan,
-    nan,
-    arctan2,
-    sqrt,
-    pi,
-    cos,
-    sin,
-    exp,
-    any,
-    log,
-    array,
+    empty, sqrt,log
 )
-from numba import njit, types, prange
+from numba import njit, types
 from numba.typed import Dict as NumbaDict
 from numpy.typing import NDArray
-from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
+from typing import Mapping
 
 TWindInputType = Literal["u10", "friction_velocity", "ustar"]
 
@@ -38,6 +23,12 @@ class WindGeneration(SourceTerm):
     def __init__(self, parmaters):
         super(WindGeneration, self).__init__(parmaters)
         self._wind_source_term_function = None
+        self._tail_stress_parametrization_function = _tail_stress_parametrization_none
+
+    def update_parameters(self, parameters: Mapping):
+        for key in parameters:
+            if key in self._parameters:
+                self._parameters[key] = parameters[key]
 
     def rate(
         self,
@@ -47,6 +38,9 @@ class WindGeneration(SourceTerm):
         roughness_length: DataArray = None,
         wind_speed_input_type: TWindInputType = "u10",
     ) -> DataArray:
+
+        if roughness_length is None:
+            roughness_length = self.roughness(speed,direction, spectrum,wind_speed_input_type=wind_speed_input_type)
 
         wind = (speed.values, direction.values, wind_speed_input_type)
         wind_input = _wind_generation(
@@ -69,6 +63,10 @@ class WindGeneration(SourceTerm):
         wind_speed_input_type: TWindInputType = "u10",
     ) -> DataArray:
         wind = (speed.values, direction.values, wind_speed_input_type)
+
+        if roughness_length is None:
+            roughness_length = self.roughness(speed,direction, spectrum,wind_speed_input_type=wind_speed_input_type)
+
         wind_input = _bulk_wind_generation(
             spectrum.variance_density.values,
             wind,
@@ -103,6 +101,7 @@ class WindGeneration(SourceTerm):
             wind=wind,
             depth=spectrum.depth.values,
             wind_source_term_function=self._wind_source_term_function,
+            tail_stress_parametrization_function= self._tail_stress_parametrization_function,
             spectral_grid=self.spectral_grid(spectrum),
             parameters=self.parameters,
         )
@@ -112,196 +111,70 @@ class WindGeneration(SourceTerm):
             coords=spectrum.coords_space_time,
         )
 
+    def stress(
+        self,
+        spectrum: FrequencyDirectionSpectrum,
+        speed: DataArray,
+        direction: DataArray,
+        roughness_length: DataArray = None,
+        wind_speed_input_type: TWindInputType = "u10",
+    ) -> Dataset:
 
-@njit(cache=True, fastmath=True)
-def _wave_supported_stress_point(
-    wind_input: NDArray, depth, spectral_grid, parameters
-) -> Tuple[NDArray, NDArray]:
-    """
-    :param wind_input:
-    :param depth:
-    :param spectral_grid:
-    :param parameters:
-    :return:
-    """
+        if roughness_length is None:
+            roughness_length = self.roughness(speed,direction, spectrum,wind_speed_input_type=wind_speed_input_type)
 
-    number_of_frequencies, number_of_directions = wind_input.shape
+        wind = (speed.values, direction.values, wind_speed_input_type)
 
-    radian_frequency = spectral_grid["radian_frequency"]
-    radian_direction = spectral_grid["radian_direction"]
-    frequency_step = spectral_grid["frequency_step"]
-    direction_step = spectral_grid["direction_step"]
-    gravitational_acceleration = parameters["gravitational_acceleration"]
+        stress = _wave_supported_stress(
+            variance_density=spectrum.variance_density.values,
+            wind=wind,
+            depth=spectrum.depth.values,
+            roughness_length=roughness_length.values,
+            wind_source_term_function=self._wind_source_term_function,
+            tail_stress_parametrization_function=self._tail_stress_parametrization_function,
+            spectral_grid=self.spectral_grid(spectrum),
+            parameters=self.parameters,
+        )
 
-    common_factor = (
-        parameters["gravitational_acceleration"] * parameters["water_density"]
-    )
-    if depth == inf:
-        wavenumber = radian_frequency**2 / gravitational_acceleration
-    else:
-        wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
+        return Dataset(
+            data_vars={
+                "stress_magnitude": ( spectrum.dims_space_time , stress[0] ),
+                "stress_direction":( spectrum.dims_space_time , stress[1] ),
+            },
+            coords=spectrum.coords_space_time
+        )
 
-    cosine_step = cos(radian_direction) * direction_step
-    sine_step = sin(radian_direction) * direction_step
+    def friction_velocity(self,
+        spectrum: FrequencyDirectionSpectrum,
+        u10: DataArray,
+        direction: DataArray,
+        roughness_length: DataArray = None,
+    ) -> Dataset:
+        stress = self.stress(
+            spectrum,u10,direction,roughness_length,'u10'
+        )
+        return sqrt(stress['stress_magnitude'] / self.parameters['air_density'])
 
-    stress_east = 0.0
-    stress_north = 0.0
-    for frequency_index in range(number_of_frequencies):
-        inverse_wave_speed = (
-            wavenumber[frequency_index] / radian_frequency[frequency_index]
-        ) * frequency_step[frequency_index]
-        for direction_index in range(number_of_directions):
-            stress_east += (
-                cosine_step[direction_index]
-                * wind_input[frequency_index, direction_index]
-                * inverse_wave_speed
-            )
-
-            stress_north += (
-                sine_step[direction_index]
-                * wind_input[frequency_index, direction_index]
-                * inverse_wave_speed
-            )
-
-    wave_stress_magnitude = sqrt(stress_north**2 + stress_east**2) * common_factor
-    wave_stress_direction = (arctan2(stress_north, stress_east) * 180 / pi) % 360
-
-    return wave_stress_magnitude, wave_stress_direction
-
-
-@njit(cache=True)
-def _charnock_relation_point(friction_velocity, parameters):
-    """
-    Charnock relation
-    :param friction_velocity:
-    :param parameters:
-    :return:
-    """
-    roughness_length = (
-        friction_velocity**2
-        / parameters["gravitational_acceleration"]
-        * parameters["charnock_constant"]
-    )
-
-    if roughness_length > parameters["charnock_maximum_roughness"]:
-        roughness_length = parameters["charnock_maximum_roughness"]
-    return roughness_length
-
-
-@njit()
-def _roughness_estimate_point(
-    guess,
-    variance_density,
-    wind,
-    depth,
-    wind_source_term_function,
-    spectral_grid,
-    parameters,
-):
-    """
-
-    :param guess:
-    :param variance_density:
-    :param wind:
-    :param depth:
-    :param spectral_grid:
-    :param parameters:
-    :return:
-    """
-
-    vonkarman_constant = parameters["vonkarman_constant"]
-    if guess < 0:
-        if wind[2] == "u10":
-            drag_coeficient_wu = (0.8 + 0.065 * wind[0]) / 1000
-            guess = 10 / exp(vonkarman_constant / sqrt(drag_coeficient_wu))
-
-        elif wind[2] in ["ustar", "friction_velocity"]:
-            guess = _charnock_relation_point(wind[0], parameters)
+    def drag(self,
+             spectrum: FrequencyDirectionSpectrum,
+             speed: DataArray,
+             direction: DataArray,
+             roughness_length: DataArray = None,
+             wind_speed_input_type: TWindInputType = "u10",
+             ):
+        if wind_speed_input_type == 'u10':
+            u10 = speed
+            u_star = self.friction_velocity(spectrum,speed,direction,roughness_length)
         else:
-            raise ValueError("unknown wind forcing")
+            u_star = speed
+            roughness = self.roughness(speed,direction,spectrum,wind_speed_input_type=wind_speed_input_type)
+            u10 = u_star * self.parameters['vonkarman_constant'] * log( 10 / roughness )
 
-    if any(isnan(variance_density)):
-        return nan
-
-    if wind[0] == 0.0:
-        return nan
-
-    generation = empty((variance_density.shape))
-
-    function_arguments = (
-        variance_density,
-        wind,
-        depth,
-        wind_source_term_function,
-        spectral_grid,
-        parameters,
-        generation,
-    )
-    return numba_fixed_point_iteration(
-        _roughness_iteration_function, guess, function_arguments, bounds=(0, inf)
-    )
-
+        return u_star**2 / u10 **2
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Apply to all spatial points
 # ----------------------------------------------------------------------------------------------------------------------
-@njit()
-def _u10_from_bulk_rate_point(
-    bulk_rate,
-    variance_density,
-    guess_u10,
-    guess_direction,
-    depth,
-    spectral_grid,
-    parameters,
-    wind_source_term_function,
-    time_derivative_spectrum,
-):
-    """
-
-    :param bulk_rate:
-    :param variance_density: The wave spectrum in m**2/Hz/deg
-    :param guess_u10:
-    :param guess_direction:
-    :param depth:
-    :param spectral_grid:
-    :param parameters:
-    :return:
-    """
-    wind_guess = (guess_u10, guess_direction, "u10")
-    roughness_memory = [-1.0]
-    args = (
-        roughness_memory,
-        variance_density,
-        wind_guess,
-        depth,
-        wind_source_term_function,
-        spectral_grid,
-        parameters,
-        bulk_rate,
-        time_derivative_spectrum,
-    )
-    if bulk_rate == 0.0:
-        return 0.0
-
-    # We are tryomg to solve for U10; ~ accuracy of 0.01m/s is sufficient. We do not really care about relative accuracy
-    # - for low winds (<1m/s) answers are really inaccurate anyway
-    atol = 1.0e-2
-    rtol = 1.0
-    numerical_stepsize = 1e-3
-    try:
-        u10 = numba_newton_raphson(
-            _u10_iteration_function,
-            guess_u10,
-            args,
-            (0, inf),
-            atol=atol,
-            rtol=rtol,
-            numerical_stepsize=numerical_stepsize,
-        )
-    except:
-        u10 = nan
-    return u10
 
 
 @njit()
@@ -364,307 +237,14 @@ def _bulk_wind_generation(
     return generation
 
 
-@njit()
-def _roughness_estimate(
-    guess,
-    variance_density,
-    wind,
-    depth,
-    wind_source_term_function,
-    spectral_grid,
-    parameters,
-) -> NDArray:
-    """
-    :param guess:
-    :param variance_density: The wave spectrum in m**2/Hz/deg
-    :param wind: wind input tuple (magnitude, direction_degrees, type_string)
-    :param depth:
-    :param spectral_grid:
-    :param parameters:
-    :return:
-    """
-    number_of_points = variance_density.shape[0]
-    roughness = empty((number_of_points))
-
-    for point_index in range(number_of_points):
-        wind_at_point = (wind[0][point_index], wind[1][point_index], wind[2])
-
-        if isnan(wind[0][point_index]):
-            roughness[point_index] = nan
-        else:
-            roughness[point_index] = _roughness_estimate_point(
-                guess=guess[point_index],
-                variance_density=variance_density[point_index, :, :],
-                wind=wind_at_point,
-                depth=depth[point_index],
-                wind_source_term_function=wind_source_term_function,
-                spectral_grid=spectral_grid,
-                parameters=parameters,
-            )
-
-    return roughness
-
-
-@njit(cache=True)
-def _wave_supported_stress(
-    variance_density,
-    wind,
-    depth,
-    roughness_length,
-    wind_source_term_function,
-    spectral_grid,
-    parameters,
-) -> Tuple[NDArray, NDArray]:
-    """
-    Calculate the wave supported wind stress.
-
-    :param variance_density: The wave spectrum in m**2/Hz/deg
-    :param wind: wind input tuple (magnitude, direction_degrees, type_string)
-    :param depth:
-    :param roughness_length: Surface roughness length in meter.
-    :param spectral_grid:
-    :param parameters:
-    :return:
-    """
-    number_of_points = variance_density.shape[0]
-    magnitude = empty((number_of_points))
-    direction = empty((number_of_points))
-    for point_index in range(number_of_points):
-        wind_at_point = (wind[0][point_index], wind[1][point_index], wind[2])
-        wind_generation = wind_source_term_function(
-            variance_density=variance_density[point_index, :, :],
-            wind=wind_at_point,
-            depth=depth[point_index],
-            roughness_length=roughness_length[point_index],
-            spectral_grid=spectral_grid,
-            parameters=parameters,
-        )
-
-        (
-            magnitude[point_index],
-            direction[point_index],
-        ) = _wave_supported_stress_point(
-            wind_generation, depth[point_index], spectral_grid, parameters
-        )
-    return magnitude, direction
-
-
-@njit(parallel=False)
-def _u10_from_bulk_rate(
-    bulk_rate,
-    variance_density,
-    guess_u10,
-    guess_direction,
-    depth,
-    wind_source_term_function,
-    parameters,
-    spectral_grid,
-    time_derivative_spectrum,
-    progress_bar=None,
-) -> NDArray:
-    """
-
-    :param bulk_rate:
-    :param variance_density: The wave spectrum in m**2/Hz/deg
-    :param guess_u10:
-    :param guess_direction:
-    :param depth:
-    :param parameters:
-    :param spectral_grid:
-    :param progress_bar:
-    :return:
-    """
-    number_of_points = variance_density.shape[0]
-    u10 = empty((number_of_points))
-    for point_index in prange(number_of_points):
-        if progress_bar is not None:
-            progress_bar.update(1)
-
-        u10[point_index] = _u10_from_bulk_rate_point(
-            bulk_rate[point_index],
-            variance_density[point_index, :, :],
-            guess_u10[point_index],
-            guess_direction[point_index],
-            depth[point_index],
-            spectral_grid=spectral_grid,
-            parameters=parameters,
-            wind_source_term_function=wind_source_term_function,
-            time_derivative_spectrum=time_derivative_spectrum,
-        )
-    return u10
+# ----------------------------------------------------------------------------------------------------------------------
+# Helper functions
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Helper functions
 # ----------------------------------------------------------------------------------------------------------------------
-@njit()
-def _roughness_iteration_function(
-    roughness_length,
-    variance_density,
-    wind,
-    depth,
-    wind_source_term_function,
-    spectral_grid,
-    parameters,
-    work_array,
-):
-    """
-    The surface roughness is defined implicitly. We use a fixed-point iteration step to solve for the roughness. This
-    is the iteration function used in the fixed point iteration.
-
-    :param roughness_length: Surface roughness length in meter.
-    :param variance_density: The wave spectrum in m**2/Hz/deg
-    :param wind: wind input tuple (magnitude, direction_degrees, type_string)
-    :param depth:
-    :param spectral_grid:
-    :param parameters:
-    :return:
-    """
-    vonkarman_constant = parameters["vonkarman_constant"]
-    elevation = parameters["elevation"]
-    if wind[2] == "u10":
-        friction_velocity = (
-            wind[0] * vonkarman_constant / log(elevation / roughness_length)
-        )
-    else:
-        friction_velocity = wind[0]
-
-    # Get the wind input source term values
-    work_array = wind_source_term_function(
-        variance_density,
-        wind,
-        depth,
-        roughness_length,
-        spectral_grid,
-        parameters,
-        work_array,
-    )
-
-    # Calculate the stress
-    wave_supported_stress, _ = _wave_supported_stress_point(
-        work_array, depth, spectral_grid, parameters
-    )
-
-    wave_stress_tail = tail_stress_parametrization(
-        variance_density, wind, depth, roughness_length, spectral_grid, parameters
-    )
-
-    wave_supported_stress = wave_supported_stress + wave_stress_tail
-
-    # Given the stress ratio, correct the Charnock roughness for the presence of waves.
-    total_stress = parameters["air_density"] * friction_velocity**2
-    stress_ratio = wave_supported_stress / total_stress
-
-    if stress_ratio > 0.9:
-        stress_ratio = 0.9
-
-    charnock_roughness = _charnock_relation_point(friction_velocity, parameters)
-    return charnock_roughness / sqrt(1 - stress_ratio)
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# Helper functions
-# ----------------------------------------------------------------------------------------------------------------------
-@njit(fastmath=True)
-def _u10_iteration_function(
-    u10,
-    memory_list,
-    variance_density,
-    wind_guess,
-    depth,
-    wind_source_term_function,
-    spectral_grid,
-    parameters,
-    bulk_rate,
-    time_derivative_spectrum,
-):
-    """
-    To find the 10 meter wind that generates a certain bulk input we need to solve the inverse function for the
-    wind input term. We define a function
-
-            F(U10) = wind_bulk_rate(u10) - specified_bulk_rate
-
-    and use a zero finder to solve for
-
-            F(U10) = 0.
-
-    This function defines the function F. The zero finder is responsible for calling it with the correct trailing
-    arguments.
-
-    :param wind_forcing: Wind input U10 we want to solve for.
-    :param variance_density: The wave spectrum in m**2/Hz/deg
-    :param wind_guess:
-    :param depth:
-    :param spectral_grid:
-    :param parameters:
-    :param bulk_rate:
-    :return:
-    """
-    if u10 == 0.0:
-        return -bulk_rate
-
-    wind = (u10, wind_guess[1], wind_guess[2])
-
-    # Estimate the rougness length
-    roughness_length = _roughness_estimate_point(
-        memory_list[0],
-        variance_density,
-        wind,
-        depth,
-        wind_source_term_function,
-        spectral_grid,
-        parameters,
-    )
-    memory_list[0] = roughness_length
-
-    # Calculate the wind input source term values
-    generation = wind_source_term_function(
-        variance_density,
-        wind,
-        depth,
-        roughness_length,
-        spectral_grid,
-        parameters,
-    )
-
-    # Calculate the contribution of dEdt integrated over the spectrum. We only include spectral values in region where
-    # there is a positive wind input
-    bulk_time_derivative_spectrum = spectral_time_derivative_in_active_region(
-        time_derivative_spectrum,
-        generation,
-        spectral_grid,
-    )
-
-    # Integrate the input and return the difference of the current guess with the desired bulk rate
-    return (
-        numba_integrate_spectral_data(generation, spectral_grid)
-        - bulk_rate
-        - bulk_time_derivative_spectrum
-    )
-
-
-@njit(cache=True)
-def spectral_time_derivative_in_active_region(
-    time_derivative_spectrum: NDArray,
-    generation: NDArray,
-    spectral_grid,
-):
-    frequency_step = spectral_grid["frequency_step"]
-    direction_step = spectral_grid["direction_step"]
-    number_of_directions = time_derivative_spectrum.shape[1]
-    number_of_frequencies = time_derivative_spectrum.shape[0]
-
-    bulk_time_derivative_spectrum = 0.0
-
-    for frequency_index in range(number_of_frequencies):
-        for direction_index in range(number_of_directions):
-            if generation[frequency_index, direction_index] > 0.0:
-                bulk_time_derivative_spectrum += (
-                    time_derivative_spectrum[frequency_index, direction_index]
-                    * direction_step[direction_index]
-                    * frequency_step[frequency_index]
-                )
-    return bulk_time_derivative_spectrum
 
 
 @njit(fastmath=True)
@@ -684,148 +264,13 @@ def _numba_parameters(**kwargs):
 
     return _dict
 
-
-@njit()
-def log_mu_log_x(x, charnock_constant, vonkarman_constant, wave_age_tuning_parameter):
-    return (
-        log(charnock_constant)
-        + 2 * x
-        + vonkarman_constant / (exp(x) + wave_age_tuning_parameter)
-    )
-
-
-@njit()
-def integrate_tail_frequency_distribution(
-    lower_bound, effective_charnock, vonkarman_constant, wave_age_tuning_parameter
+@njit(cache=True)
+def _tail_stress_parametrization_none(
+        variance_density,
+        wind,
+        depth,
+        roughness_length,
+        spectral_grid,
+        parameters,
 ):
-    """
-    Integrate the tail of the distributions. We are integrating
-
-    log(Z(Y))Z(Y)**4 / Y      for   Y0 <= Y <= 1
-
-    where
-
-    Y = u_* / wavespeed
-    Z = charnock * Y**2 * exp( vonkarman_constant / ( Y + wave_age_tuning_parameter)
-
-    The boundaries of the integral are defined as the point where the critical height is at the surface
-    (Y=1) and the point where Z >= 1 ( Y = Y0).
-
-    We follow section 5 in the WAM documentation (see below). And introduce x = log(Y)
-
-    so that we integrate in effect over
-
-    log(Z(x))Z(x)**4     x0 <= x <= 0
-
-    We find x0 as the point where Z(x0) = 0.
-
-    REFERENCE:
-
-    IFS DOCUMENTATION – Cy47r1 Operational implementation 30 June 2020 - PART VII
-
-    :param effective_charnock:
-    :param vonkarman_constant:
-    :param wave_age_tuning_parameter:
-    :return:
-    """
-
-    args = (effective_charnock, vonkarman_constant, wave_age_tuning_parameter)
-
-    # find the location of the lower boundary of the integration domain. THis is where
-    # loglog_mu = 0
-    x0 = numba_newton_raphson(log_mu_log_x, log(0.01), args, (-5, 0), verbose=False)
-
-    log_lower_bound = log(lower_bound)
-    if log_lower_bound > x0:
-        x0 = log_lower_bound
-
-    # Define the stepsize of the integration. Since the upper boundary is 0, this is merely the start
-    stepsize = -x0 / 4
-
-    # We use Boole's rule for integration.
-    evaluation_points = array([x0, 3 * x0 / 4, 2 * x0 / 4, x0 / 4, 0])
-    log_waveage = log_mu_log_x(evaluation_points, *args)
-    values = log_waveage**4 * exp(log_waveage)
-    integrant = (
-        2
-        / 45
-        * stepsize
-        * (
-            7 * values[0]
-            + 32 * values[1]
-            + 12 * values[2]
-            + 32 * values[3]
-            + 7 * values[4]
-        )
-    )
-    return integrant
-
-
-@njit()
-def tail_stress_parametrization(
-    variance_density,
-    wind,
-    depth,
-    roughness_length,
-    st4_spectral_grid,
-    st4_parameters,
-):
-
-    vonkarman_constant = st4_parameters["vonkarman_constant"]
-    growth_parameter_betamax = st4_parameters["growth_parameter_betamax"]
-    wave_age_tuning_parameter = st4_parameters["wave_age_tuning_parameter"]
-    gravitational_acceleration = st4_parameters["gravitational_acceleration"]
-    radian_frequency = st4_spectral_grid["radian_frequency"]
-    radian_direction = st4_spectral_grid["radian_direction"]
-    elevation = st4_parameters["elevation"]
-
-    number_of_frequencies, number_of_directions = variance_density.shape
-    direction_step = st4_spectral_grid["direction_step"]
-
-    wind_forcing, wind_direction_degrees, wind_forcing_type = wind
-    wind_direction_radian = wind_direction_degrees * pi / 180
-    cosine = cos(radian_direction - wind_direction_radian)
-
-    if wind_forcing_type == "u10":
-        friction_velocity = (
-            wind_forcing * vonkarman_constant / log(elevation / roughness_length)
-        )
-
-    elif wind_forcing_type in ["ustar", "friction_velocity"]:
-        friction_velocity = wind_forcing
-
-    else:
-        raise ValueError("Unknown wind input type")
-
-    directional_integral_last_bin = 0
-    for direction_index in range(0, number_of_directions):
-        if cosine[direction_index] <= 0.0:
-            continue
-
-        directional_integral_last_bin += (
-            cosine[direction_index] ** 3
-            * variance_density[number_of_frequencies - 1, direction_index]
-            * direction_step[direction_index]
-        )
-
-    effective_charnock = (
-        roughness_length * gravitational_acceleration / friction_velocity**2
-    )
-
-    lower_bound = (
-        friction_velocity
-        * radian_frequency[number_of_frequencies - 1]
-        / gravitational_acceleration
-    )
-    frequency_integral = integrate_tail_frequency_distribution(
-        lower_bound, effective_charnock, vonkarman_constant, wave_age_tuning_parameter
-    )
-
-    constant = (
-        radian_frequency[number_of_frequencies - 1] ** 5
-        / (2 * pi * gravitational_acceleration**2)
-        * friction_velocity**2
-        * growth_parameter_betamax
-        / vonkarman_constant**2
-    )
-    return directional_integral_last_bin * frequency_integral * constant
+    return 0.0

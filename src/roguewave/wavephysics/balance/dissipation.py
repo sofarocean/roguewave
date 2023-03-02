@@ -2,7 +2,7 @@ from roguewave import FrequencyDirectionSpectrum
 from xarray import DataArray
 from numpy import pi, cos, sin, arctan2, empty
 from numpy.typing import NDArray
-from typing import Literal, Tuple
+from typing import Tuple, Mapping
 from roguewave.wavephysics.balance.source_term import SourceTerm
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
@@ -15,6 +15,11 @@ class Dissipation(SourceTerm):
     def __init__(self, parameters):
         super(Dissipation, self).__init__(parameters)
         self._dissipation_function = None
+
+    def update_parameters(self, parameters: Mapping):
+        for key in parameters:
+            if key in self._parameters:
+                self._parameters[key] = parameters[key]
 
     def rate(self, spectrum: FrequencyDirectionSpectrum) -> DataArray:
         data = _dissipation(

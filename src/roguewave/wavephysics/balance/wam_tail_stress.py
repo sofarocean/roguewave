@@ -10,18 +10,30 @@ from roguewave.wavephysics.balance.solvers import numba_newton_raphson
 #
 # IFS DOCUMENTATION – Cy47r1 Operational implementation 30 June 2020 - PART VII
 #
+
+
 @njit()
-def log_mu_log_x(x, charnock_constant, vonkarman_constant, wave_age_tuning_parameter):
+def log_dimensionless_critical_height(
+    x, charnock_constant, vonkarman_constant, wave_age_tuning_parameter
+):
+    """
+    Dimensionless Critical Height according to Janssen (see IFS Documentation).
+    :param x:
+    :param charnock_constant:
+    :param vonkarman_constant:
+    :param wave_age_tuning_parameter:
+    :return:
+    """
     return (
-            log(charnock_constant)
-            + 2 * x
-            + vonkarman_constant / (exp(x) + wave_age_tuning_parameter)
+        log(charnock_constant)
+        + 2 * x
+        + vonkarman_constant / (exp(x) + wave_age_tuning_parameter)
     )
 
 
 @njit()
 def integrate_tail_frequency_distribution(
-        lower_bound, effective_charnock, vonkarman_constant, wave_age_tuning_parameter
+    lower_bound, effective_charnock, vonkarman_constant, wave_age_tuning_parameter
 ):
     """
     Integrate the tail of the distributions. We are integrating
@@ -58,15 +70,16 @@ def integrate_tail_frequency_distribution(
 
     # find the location of the lower boundary of the integration domain. THis is where
     # loglog_mu = 0
-    x0 = numba_newton_raphson(log_mu_log_x, log(0.01), args, (-10, 0), verbose=False)
+    x0 = numba_newton_raphson(
+        log_dimensionless_critical_height, log(0.01), args, (-10, 0), verbose=False
+    )
 
     log_lower_bound = log(lower_bound)
-
 
     if log_lower_bound > x0:
         x0 = log_lower_bound
 
-    if x0 > 0.:
+    if x0 > 0.0:
         return 0.0
 
     # Define the stepsize of the integration. Since the upper boundary is 0, this is merely the start
@@ -74,31 +87,31 @@ def integrate_tail_frequency_distribution(
 
     # We use Boole's rule for integration.
     evaluation_points = array([x0, 3 * x0 / 4, 2 * x0 / 4, x0 / 4, 0])
-    log_waveage = log_mu_log_x(evaluation_points, *args)
-    values = log_waveage ** 4 * exp(log_waveage)
+    log_waveage = log_dimensionless_critical_height(evaluation_points, *args)
+    values = log_waveage**4 * exp(log_waveage)
     integrant = (
-            2
-            / 45
-            * stepsize
-            * (
-                    7 * values[0]
-                    + 32 * values[1]
-                    + 12 * values[2]
-                    + 32 * values[3]
-                    + 7 * values[4]
-            )
+        2
+        / 45
+        * stepsize
+        * (
+            7 * values[0]
+            + 32 * values[1]
+            + 12 * values[2]
+            + 32 * values[3]
+            + 7 * values[4]
+        )
     )
     return integrant
 
 
 @njit()
 def tail_stress_parametrization_wam(
-        variance_density,
-        wind,
-        depth,
-        roughness_length,
-        spectral_grid,
-        parameters,
+    variance_density,
+    wind,
+    depth,
+    roughness_length,
+    spectral_grid,
+    parameters,
 ):
     vonkarman_constant = parameters["vonkarman_constant"]
     growth_parameter_betamax = parameters["growth_parameter_betamax"]
@@ -118,7 +131,7 @@ def tail_stress_parametrization_wam(
 
     if wind_forcing_type == "u10":
         friction_velocity = (
-                wind_forcing * vonkarman_constant / log(elevation / roughness_length)
+            wind_forcing * vonkarman_constant / log(elevation / roughness_length)
         )
 
     elif wind_forcing_type in ["ustar", "friction_velocity"]:
@@ -133,38 +146,41 @@ def tail_stress_parametrization_wam(
             continue
 
         directional_integral_last_bin += (
-                cosine[direction_index] ** 3
-                * variance_density[number_of_frequencies - 1, direction_index]
-                * direction_step[direction_index]
+            cosine[direction_index] ** 3
+            * variance_density[number_of_frequencies - 1, direction_index]
+            * direction_step[direction_index]
         )
 
     effective_charnock = (
-            roughness_length * gravitational_acceleration / friction_velocity ** 2
+        roughness_length * gravitational_acceleration / friction_velocity**2
     )
 
     lower_bound = (
-            friction_velocity
-            * radian_frequency[number_of_frequencies - 1]
-            / gravitational_acceleration
+        friction_velocity
+        * radian_frequency[number_of_frequencies - 1]
+        / gravitational_acceleration
     )
     frequency_integral = integrate_tail_frequency_distribution(
         lower_bound, effective_charnock, vonkarman_constant, wave_age_tuning_parameter
     )
 
     constant = (
-            radian_frequency[number_of_frequencies - 1] ** 5
-            / (2 * pi * gravitational_acceleration ** 2)
-            * friction_velocity ** 2
-            * growth_parameter_betamax
-            / vonkarman_constant ** 2
+        radian_frequency[number_of_frequencies - 1] ** 5
+        / (2 * pi * gravitational_acceleration**2)
+        * friction_velocity**2
+        * growth_parameter_betamax
+        / vonkarman_constant**2
     )
 
     # Add contribution of cappiliary waves
-    total_stress = parameters["air_density"] * friction_velocity ** 2
+    total_stress = parameters["air_density"] * friction_velocity**2
     charnock_roughness = _charnock_relation_point(friction_velocity, parameters)
-    background_stress = charnock_roughness ** 2 / roughness_length ** 2 * total_stress
+    background_stress = charnock_roughness**2 / roughness_length**2 * total_stress
 
-    return (directional_integral_last_bin * frequency_integral * constant * air_density + background_stress)
+    return (
+        directional_integral_last_bin * frequency_integral * constant * air_density
+        + background_stress
+    )
 
 
 @njit(cache=True)

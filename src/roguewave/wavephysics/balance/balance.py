@@ -1,5 +1,5 @@
 from roguewave.wavephysics.balance import WindGeneration, Dissipation
-from typing import Mapping
+from typing import Mapping, Dict
 from roguewave import FrequencyDirectionSpectrum
 from xarray import DataArray
 
@@ -54,3 +54,7 @@ class SourceTermBalance:
     def update_parameters(self, parameters: Mapping):
         self.generation.update_parameters(parameters)
         self.dissipation.update_parameters(parameters)
+
+    @property
+    def get_parameters(self) -> Dict:
+        return self.generation._parameters | self.dissipation._parameters

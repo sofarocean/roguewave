@@ -8,6 +8,7 @@ from roguewave.wavephysics.balance.wam_tail_stress import _charnock_relation_poi
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
 from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
 
+
 @njit(fastmath=True)
 def _wave_supported_stress_point(
     wind_input: NDArray,
@@ -17,7 +18,7 @@ def _wave_supported_stress_point(
     wind,
     roughness_length,
     tail_stress_parametrization_function,
-    parameters
+    parameters,
 ) -> Tuple[NDArray, NDArray]:
     """
     :param wind_input:
@@ -65,16 +66,18 @@ def _wave_supported_stress_point(
             )
 
     # calculate the magnitude
-    resolved_wave_stress_magnitude = sqrt(stress_north**2 + stress_east**2) * \
-                                     parameters["gravitational_acceleration"] * parameters["water_density"]
-
+    resolved_wave_stress_magnitude = (
+        sqrt(stress_north**2 + stress_east**2)
+        * parameters["gravitational_acceleration"]
+        * parameters["water_density"]
+    )
 
     wave_stress_direction = (arctan2(stress_north, stress_east) * 180 / pi) % 360
 
     # Add stress contribution due to unresolved waves in the spectral tail (above the last resolved frequency)
     tail_wave_stress_magnitude = tail_stress_parametrization_function(
-            variance_density, wind, depth, roughness_length, spectral_grid, parameters
-        )
+        variance_density, wind, depth, roughness_length, spectral_grid, parameters
+    )
 
     # Total stress is the sum or resolved and unresolved part.
     wave_stress_magnitude = resolved_wave_stress_magnitude + tail_wave_stress_magnitude
@@ -133,12 +136,22 @@ def _roughness_estimate_point(
         generation,
     )
 
-
     guess = log(guess)
 
-    log_root = numba_newton_raphson( _stress_iteration_function,guess,function_arguments,hard_bounds=(-20, 0),
-                             relative_stepsize=False, atol=1e-6,rtol=1e-6, error_on_max_iter=True, max_iterations=100,verbose=False,
-                             name='stress iteration',aitken_acceleration=False)
+    log_root = numba_newton_raphson(
+        _stress_iteration_function,
+        guess,
+        function_arguments,
+        hard_bounds=(-20, 0),
+        relative_stepsize=False,
+        atol=1e-6,
+        rtol=1e-6,
+        error_on_max_iter=True,
+        max_iterations=100,
+        verbose=False,
+        name="stress iteration",
+        aitken_acceleration=False,
+    )
     return exp(log_root)
 
 
@@ -212,19 +225,7 @@ def _wave_supported_stress(
     direction = empty((number_of_points))
     for point_index in range(number_of_points):
         wind_at_point = (wind[0][point_index], wind[1][point_index], wind[2])
-        wind_generation = wind_source_term_function(
-            variance_density=variance_density[point_index, :, :],
-            wind=wind_at_point,
-            depth=depth[point_index],
-            roughness_length=roughness_length[point_index],
-            spectral_grid=spectral_grid,
-            parameters=parameters,
-        )
-
-        (
-            magnitude[point_index],
-            direction[point_index],
-        ) = _total_stress_point(
+        (magnitude[point_index], direction[point_index],) = _total_stress_point(
             roughness_length[point_index],
             variance_density[point_index, :, :],
             wind=wind_at_point,
@@ -232,7 +233,7 @@ def _wave_supported_stress(
             wind_source_term_function=wind_source_term_function,
             tail_stress_parametrization_function=tail_stress_parametrization_function,
             spectral_grid=spectral_grid,
-            parameters=parameters
+            parameters=parameters,
         )
     return magnitude, direction
 
@@ -283,26 +284,27 @@ def _stress_iteration_function(
         work_array,
     )
 
-    total_stress = parameters["air_density"] * friction_velocity ** 2
+    total_stress = parameters["air_density"] * friction_velocity**2
 
     # Calculate the stress
     wave_supported_stress, _ = _wave_supported_stress_point(
-        work_array, depth,
+        work_array,
+        depth,
         spectral_grid,
         variance_density,
         wind,
         roughness_length,
         tail_stress_parametrization_function,
-        parameters
+        parameters,
     )
 
     viscous_stress = (
-            parameters["air_density"]
-            * friction_velocity
-            * parameters['air_viscosity']
-            / 25.
-            / vonkarman_constant
-            / roughness_length
+        parameters["air_density"]
+        * friction_velocity
+        * parameters["air_viscosity"]
+        / 25.0
+        / vonkarman_constant
+        / roughness_length
     )
 
     return total_stress - wave_supported_stress - viscous_stress
@@ -341,34 +343,28 @@ def _total_stress_point(
 
     # Get the wind input source term values
     wind_input = wind_source_term_function(
-        variance_density,
-        wind,
-        depth,
-        roughness_length,
-        spectral_grid,
-        parameters
+        variance_density, wind, depth, roughness_length, spectral_grid, parameters
     )
 
     # Calculate the stress
     wave_supported_stress, stress_direction = _wave_supported_stress_point(
-        wind_input, depth,
+        wind_input,
+        depth,
         spectral_grid,
         variance_density,
         wind,
         roughness_length,
         tail_stress_parametrization_function,
-        parameters
+        parameters,
     )
 
     viscous_stress = (
-            parameters["air_density"]
-            * friction_velocity
-            * parameters['air_viscosity']
-            / 25.
-            / vonkarman_constant
-            / roughness_length
+        parameters["air_density"]
+        * friction_velocity
+        * parameters["air_viscosity"]
+        / 25.0
+        / vonkarman_constant
+        / roughness_length
     )
 
     return wave_supported_stress + viscous_stress, stress_direction
-
-

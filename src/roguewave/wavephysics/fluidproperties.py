@@ -7,7 +7,7 @@ WATER_TEMPERATURE_DEGREES_C = 15.0
 AIR_TEMPERATURE_DEGREES_C = 15.0
 AIR_DENSITY = 1.225
 KINEMATIC_VISCOSITY_WATER = 1.19e-6
-KINEMATIC_VISCOSITY_AIR = 1.48 * 10**-5
+KINEMATIC_VISCOSITY_AIR = 1.48e-5
 VONKARMAN_CONSTANT = 0.4
 SURFACE_TENSION_WATER = 0.073
 SURFACE_TENSION_AIR = 0.0
@@ -32,7 +32,7 @@ class FluidProperties:
 
     @property
     def kinematic_surface_tension(self):
-        return self.surface_tension/self.density
+        return self.surface_tension / self.density
 
 
 AIR = FluidProperties(
@@ -40,7 +40,7 @@ AIR = FluidProperties(
     temperature=AIR_TEMPERATURE_DEGREES_C,
     kinematic_viscosity=KINEMATIC_VISCOSITY_AIR,
     vonkarman_constant=VONKARMAN_CONSTANT,
-    surface_tension=SURFACE_TENSION_AIR
+    surface_tension=SURFACE_TENSION_AIR,
 )
 
 WATER = FluidProperties(
@@ -48,5 +48,5 @@ WATER = FluidProperties(
     temperature=WATER_TEMPERATURE_DEGREES_C,
     kinematic_viscosity=KINEMATIC_VISCOSITY_WATER,
     vonkarman_constant=VONKARMAN_CONSTANT,
-    surface_tension=SURFACE_TENSION_WATER
+    surface_tension=SURFACE_TENSION_WATER,
 )

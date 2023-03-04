@@ -5,11 +5,13 @@ from roguewave.wavephysics.fluidproperties import (
 )
 
 from roguewave.wavephysics.balance import WindGeneration
-from numpy import cos, pi, log, exp, empty, inf, sin
+from numpy import cos, pi, log, exp, empty, inf
 from numba import njit
 from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
 from typing import TypedDict
-from roguewave.wavephysics.balance.wam_tail_stress import tail_stress_parametrization_wam
+from roguewave.wavephysics.balance.wam_tail_stress import (
+    tail_stress_parametrization_wam,
+)
 
 
 class ST4WaveGenerationParameters(TypedDict):
@@ -22,7 +24,7 @@ class ST4WaveGenerationParameters(TypedDict):
     wave_age_tuning_parameter: float
     growth_parameter_betamax: float
     elevation: float
-    air_viscosity: float # JB2022 only
+    air_viscosity: float  # JB2022 only
 
 
 class ST4WindInput(WindGeneration):
@@ -40,7 +42,7 @@ class ST4WindInput(WindGeneration):
             growth_parameter_betamax=1.52,
             gravitational_acceleration=GRAVITATIONAL_ACCELERATION,
             charnock_maximum_roughness=inf,
-            charnock_constant=0.006,
+            charnock_constant=0.01,
             air_density=AIR.density,
             water_density=WATER.density,
             vonkarman_constant=AIR.vonkarman_constant,
@@ -56,105 +58,111 @@ class ST4WindInput(WindGeneration):
 def _st4_wind_generation_point(
     variance_density,
     wind,
-    depth,
-    roughness_length,
+    depth: float,
+    roughness_length: float,
     spectral_grid,
     parameters,
     wind_source=None,
 ):
     """
-    Implememtation of the st4 wind growth rate term
+    Implementation of the st4 wind growth rate term as proposed by Janssen 1991- and as described in the ST4 paper.
 
-    :param variance_density:
-    :param wind:
-    :param depth:
-    :param roughness_length:
-    :param spectral_grid:
-    :param parameters:
-    :return:
+    :param variance_density: input numpy array of shape (nf,nd), with nf number of frequencies, nd number of directions,
+        that contains variance densities (unit m**2/Hz/Degree).
+    :param wind: Wind input tuple (speed, direction, type) that descripes the wind speed, direction and kind of wind
+        input. The latter can be: "u10" or "friction_velocity".
+    :param depth: Local water depth in meter.
+    :param roughness_length: Roughness length in meter.
+    :param spectral_grid: numba dictionary containing the spectral grid (frequencies/directions)
+    :param parameters: numba dictionary containing the parameters of the st4 algorithm. See the st4 class for details.
+    :param wind_source: optional numpy array that contains the return values. This helps to avoid reallocating memory
+        if the routine is called often in successive fashion (e.g. during iterative solutions).
+
+    :return: numpy array of shape (nf,nd) containing for each frequency/direction pair the wind input in
+        (m**2/Hz/Degree/s)
     """
 
     # Get the spectral size
     number_of_frequencies, number_of_directions = variance_density.shape
 
+    vonkarman_constant = parameters["vonkarman_constant"]
+    radian_frequency = spectral_grid["radian_frequency"]
+
+    wind_forcing, wind_direction_degrees, wind_forcing_type = wind
+
+    cosine_mutual_angle_wind_waves = cos(
+        (spectral_grid["radian_direction"] - wind_direction_degrees * pi / 180 + pi)
+        % (2 * pi)
+        - pi
+    )
+
     # Allocate the output variable
     if wind_source is None:
         wind_source = empty((number_of_frequencies, number_of_directions))
 
-    # Unpack variables passed in dictionaries/tuples for ease of reference and some slight speed benifits
-    # (avoid dictionary lookup in loops).
-    vonkarman_constant = parameters["vonkarman_constant"]
-    growth_parameter_betamax = parameters["growth_parameter_betamax"]
-    air_density = parameters["air_density"]
-    water_density = parameters["water_density"]
-    wave_age_tuning_parameter = parameters["wave_age_tuning_parameter"]
-    gravitational_acceleration = parameters["gravitational_acceleration"]
-    radian_frequency = spectral_grid["radian_frequency"]
-    radian_direction = spectral_grid["radian_direction"]
-    direction_step = spectral_grid["direction_step"]
-    elevation = parameters["elevation"]
-
-    wind_forcing, wind_direction_degrees, wind_forcing_type = wind
-
     # Preprocess winds to the correct conventions (U10->friction velocity if need be, wind direction degrees->radians)
     if wind_forcing_type == "u10":
         friction_velocity = (
-            wind_forcing * vonkarman_constant / log(elevation / roughness_length)
+            wind_forcing
+            * vonkarman_constant
+            / log(parameters["elevation"] / roughness_length)
         )
-
     elif wind_forcing_type in ["ustar", "friction_velocity"]:
         friction_velocity = wind_forcing
 
     else:
         raise ValueError("Unknown wind input type")
 
-    wind_direction_radian = wind_direction_degrees * pi / 180
-
     # precalculate the constant multiplication.
     constant_factor = (
-        growth_parameter_betamax / vonkarman_constant**2 * air_density / water_density
+        parameters["growth_parameter_betamax"]
+        / vonkarman_constant**2
+        * parameters["air_density"]
+        / parameters["water_density"]
     )
 
     if depth == inf:
-        wavenumber = radian_frequency**2 / gravitational_acceleration
+        wavenumber = radian_frequency**2 / parameters["gravitational_acceleration"]
     else:
         wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
 
-    mutual_angle = ( radian_direction - wind_direction_radian + pi ) % (2*pi) - pi
-
-    cosine = cos(mutual_angle)
-
+    # wave age tuning times the directional cosine.
+    cosine_wave_age_tuning = (
+        parameters["wave_age_tuning_parameter"] * cosine_mutual_angle_wind_waves
+    )
 
     # Loop over all frequencies/directions
     for frequency_index in range(number_of_frequencies):
 
         # Since wavenumber and wavespeed only depend on frequency we calculate those outside of the direction loop.
-        wavespeed = radian_frequency[frequency_index] / wavenumber[frequency_index]
-
         relative_speed = (
-            friction_velocity
-            / wavespeed
+            wavenumber[frequency_index]
+            * friction_velocity
+            / radian_frequency[frequency_index]
         )
-
 
         for direction_index in range(number_of_directions):
             # If the wave direction has an along wind component we continue.
-            if cosine[direction_index] > 0:
+            if cosine_mutual_angle_wind_waves[direction_index] > 0:
 
                 # Calculate the directional factor in the wind input formulation
-                W = relative_speed * cosine[direction_index]
+                W = relative_speed * cosine_mutual_angle_wind_waves[direction_index]
 
-                effective_wave_age = log(
+                # The logarithm of the approximate expression for the dimensionless critical height
+                # (Ardhuin 2010, eq 20).
+                log_dimensionless_critical_height = log(
                     wavenumber[frequency_index] * roughness_length
-                ) + vonkarman_constant / (W + wave_age_tuning_parameter)
+                ) + vonkarman_constant / (W + cosine_wave_age_tuning[direction_index])
 
-                if effective_wave_age > 0:
-                    effective_wave_age = 0
+                # if the dimensionless critical height > 1 we assume there is no more energy transfer (Janssen 1991),
+                # his equation 18.
+                if log_dimensionless_critical_height > 0:
+                    log_dimensionless_critical_height = 0
 
                 growth_rate = (
                     constant_factor
-                    * exp(effective_wave_age)
-                    * effective_wave_age**4
+                    * exp(log_dimensionless_critical_height)
+                    * log_dimensionless_critical_height**4
                     * W**2
                     * radian_frequency[frequency_index]
                 )
@@ -162,6 +170,7 @@ def _st4_wind_generation_point(
                 wind_source[frequency_index, direction_index] = (
                     growth_rate * variance_density[frequency_index, direction_index]
                 )
+
             else:
                 wind_source[frequency_index, direction_index] = 0.0
 

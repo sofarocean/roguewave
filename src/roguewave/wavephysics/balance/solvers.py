@@ -88,9 +88,9 @@ def numba_newton_raphson(
     rtol=1e-4,
     numerical_stepsize=1e-4,
     verbose=False,
-    error_on_max_iter = True,
-    relative_stepsize = False,
-    name='',
+    error_on_max_iter=True,
+    relative_stepsize=False,
+    name="",
     under_relaxation=0.9,
 ):
 
@@ -200,7 +200,6 @@ def numba_newton_raphson(
         if next_iterate < bounds_to_check[0]:
             next_iterate = (bounds_to_check[0] - iterates[2]) * 0.5 + iterates[2]
 
-
         if next_iterate > bounds_to_check[1]:
             next_iterate = (bounds_to_check[1] - iterates[2]) * 0.5 + iterates[2]
 
@@ -239,7 +238,8 @@ def numba_newton_raphson(
 
     else:
         if error_on_max_iter:
-            print( 'no convergence', name, root_bounded)
+            if verbose:
+                print("no convergence", name, root_bounded)
             raise ValueError("no convergence")
         else:
             return iterates[2]

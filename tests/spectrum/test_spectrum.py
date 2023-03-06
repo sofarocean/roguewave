@@ -104,7 +104,7 @@ def helper_create_spectra(
 ) -> Tuple[FrequencyDirectionSpectrum, FrequencySpectrum]:
     spectra = helper_create_spectra_list(N=N, depth=depth)
     spectra = concatenate_spectra(spectra, dim="time")
-    return spectra, spectra.spectrum_1d()
+    return spectra, spectra.as_frequency_spectrum()
 
 
 def test_concatenate():
@@ -679,6 +679,9 @@ def test_interpolate_frequency():
         intp_spec = spec.interpolate_frequency(freq)
         assert intp_spec.dims == spec.dims
         assert_allclose(intp_spec.hm0(), spec.hm0(), rtol=1e-3, atol=1e-3)
+        assert_allclose(
+            intp_spec.mean_direction(), spec.mean_direction(), rtol=1e-3, atol=1e-3
+        )
 
 
 if __name__ == "__main__":

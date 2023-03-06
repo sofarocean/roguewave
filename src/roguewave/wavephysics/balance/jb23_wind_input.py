@@ -1,13 +1,15 @@
-
-from roguewave.wavephysics.balance.jb23_tail_stress import tail_stress_parametrization_jb23
-from roguewave.wavephysics.balance.st4_wind_input import ST4WindInput, _st4_wind_generation_point
+from roguewave.wavephysics.balance.jb23_tail_stress import (
+    tail_stress_parametrization_jb23,
+)
+from roguewave.wavephysics.balance.st4_wind_input import (
+    ST4WindInput,
+)
 from roguewave.wavephysics.fluidproperties import GRAVITATIONAL_ACCELERATION, AIR, WATER
 
 from numpy import cos, pi, log, exp, empty, inf, sin
 from numba import njit
 from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
 from typing import TypedDict
-
 
 
 class JB23WaveGenerationParameters(TypedDict):
@@ -21,6 +23,7 @@ class JB23WaveGenerationParameters(TypedDict):
     growth_parameter_betamax: float
     elevation: float
     air_viscosity: float
+    viscous_stress_parameter: float
     surface_tension: float
     width_factor: float
 
@@ -47,9 +50,11 @@ class JB23WindInput(ST4WindInput):
             vonkarman_constant=AIR.vonkarman_constant,
             elevation=10,
             air_viscosity=AIR.kinematic_viscosity,
+            viscous_stress_parameter=1.0 / 25.0,
             surface_tension=WATER.kinematic_surface_tension,
-            width_factor=0.6
+            width_factor=0.6,
         )
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # ST4 Point wise implementation functions (apply to a single spatial point)
@@ -89,7 +94,6 @@ def _jb23_wind_generation_point(
     growth_parameter_betamax = parameters["growth_parameter_betamax"]
     air_density = parameters["air_density"]
     water_density = parameters["water_density"]
-    wave_age_tuning_parameter = parameters["wave_age_tuning_parameter"]
     gravitational_acceleration = parameters["gravitational_acceleration"]
     radian_frequency = spectral_grid["radian_frequency"]
     radian_direction = spectral_grid["radian_direction"]
@@ -122,23 +126,21 @@ def _jb23_wind_generation_point(
     else:
         wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
 
-    mutual_angle = ( radian_direction - wind_direction_radian + pi ) % (2*pi) - pi
+    mutual_angle = (radian_direction - wind_direction_radian + pi) % (2 * pi) - pi
     cosine = cos(mutual_angle)
-    sine2 = sin(mutual_angle)**2
-
+    sine2 = sin(mutual_angle) ** 2
 
     # Loop over all frequencies/directions
-    epsilon =  air_density /water_density
+    epsilon = air_density / water_density
+
+    cosine_wave_age_tuning = parameters["wave_age_tuning_parameter"] * cosine
     for frequency_index in range(number_of_frequencies):
 
         # Since wavenumber and wavespeed only depend on frequency we calculate those outside of the direction loop.
         wavespeed = radian_frequency[frequency_index] / wavenumber[frequency_index]
         group_speed = wavespeed / 2
 
-        relative_speed = (
-            friction_velocity
-            / wavespeed
-        )
+        relative_speed = friction_velocity / wavespeed
 
         N1 = 0.0
         N2 = 0.0
@@ -152,7 +154,7 @@ def _jb23_wind_generation_point(
 
                 effective_wave_age = log(
                     wavenumber[frequency_index] * roughness_length
-                ) + vonkarman_constant / (W + wave_age_tuning_parameter)
+                ) + vonkarman_constant / (W + cosine_wave_age_tuning[direction_index])
 
                 if effective_wave_age > 0:
                     effective_wave_age = 0
@@ -169,16 +171,16 @@ def _jb23_wind_generation_point(
                 # an additional division by k (in addition to the jacobian cg) to make this work-
                 # hence the wavenumber **2 !!
                 common_factor = (
-                        variance_density[frequency_index, direction_index]
-                        * group_speed
-                        * direction_step[direction_index]
-                        * wavenumber[frequency_index] ** 2
-                        * growth_rate
-                        / vonkarman_constant
-                        / friction_velocity
-                        / epsilon
-                        / 2
-                        / pi
+                    variance_density[frequency_index, direction_index]
+                    * group_speed
+                    * direction_step[direction_index]
+                    * wavenumber[frequency_index] ** 2
+                    * growth_rate
+                    / vonkarman_constant
+                    / friction_velocity
+                    / epsilon
+                    / 2
+                    / pi
                 )
 
                 N1 += common_factor * sine2[direction_index]
@@ -192,6 +194,8 @@ def _jb23_wind_generation_point(
 
         #
         for direction_index in range(number_of_directions):
-            wind_source[frequency_index, direction_index] = wind_source[frequency_index, direction_index] * (1+N1)/(1+N2)
+            wind_source[frequency_index, direction_index] = (
+                wind_source[frequency_index, direction_index] * (1 + N1) / (1 + N2)
+            )
 
     return wind_source

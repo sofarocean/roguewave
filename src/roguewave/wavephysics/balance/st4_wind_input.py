@@ -24,7 +24,8 @@ class ST4WaveGenerationParameters(TypedDict):
     wave_age_tuning_parameter: float
     growth_parameter_betamax: float
     elevation: float
-    air_viscosity: float  # JB2022 only
+    air_viscosity: float
+    viscous_stress_parameter: float
 
 
 class ST4WindInput(WindGeneration):
@@ -48,6 +49,7 @@ class ST4WindInput(WindGeneration):
             vonkarman_constant=AIR.vonkarman_constant,
             elevation=10,
             air_viscosity=AIR.kinematic_viscosity,
+            viscous_stress_parameter=0.0,
         )
 
 

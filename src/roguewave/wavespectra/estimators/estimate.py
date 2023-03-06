@@ -45,7 +45,10 @@ def estimate_directional_spectrum_from_moments(
         Journal of Physical Oceanography, 16(12), 2052-2060.
 
     """
-    return estimate_directional_distribution(a1,b1,a2,b2,direction, method,**kwargs) * e[...,None]
+    return (
+        estimate_directional_distribution(a1, b1, a2, b2, direction, method, **kwargs)
+        * e[..., None]
+    )
 
 
 def estimate_directional_distribution(
@@ -109,7 +112,7 @@ def estimate_directional_distribution(
     b2 = b2.reshape(input_shape)
 
     number_of_iterations = a1.shape[0]
-    if number_of_iterations < 100:
+    if number_of_iterations < 10:
         disable = True
     else:
         disable = False

@@ -284,30 +284,19 @@ def _stress_iteration_function(
         work_array,
     )
 
-    total_stress = parameters["air_density"] * friction_velocity**2
-
-    # Calculate the stress
-    wave_supported_stress, _ = _wave_supported_stress_point(
-        work_array,
-        depth,
-        spectral_grid,
+    total_stress_estimate, total_stress_direction_estimate = _total_stress_point(
+        roughness_length,
         variance_density,
         wind,
-        roughness_length,
+        depth,
+        wind_source_term_function,
         tail_stress_parametrization_function,
+        spectral_grid,
         parameters,
+        work_array,
     )
 
-    viscous_stress = (
-        parameters["air_density"]
-        * friction_velocity
-        * parameters["air_viscosity"]
-        / 25.0
-        / vonkarman_constant
-        / roughness_length
-    )
-
-    return total_stress - wave_supported_stress - viscous_stress
+    return parameters["air_density"] * friction_velocity**2 - total_stress_estimate
 
 
 @njit()
@@ -320,6 +309,7 @@ def _total_stress_point(
     tail_stress_parametrization_function,
     spectral_grid,
     parameters,
+    work_array=None,
 ):
     """
 
@@ -342,13 +332,19 @@ def _total_stress_point(
         friction_velocity = wind[0]
 
     # Get the wind input source term values
-    wind_input = wind_source_term_function(
-        variance_density, wind, depth, roughness_length, spectral_grid, parameters
+    work_array = wind_source_term_function(
+        variance_density,
+        wind,
+        depth,
+        roughness_length,
+        spectral_grid,
+        parameters,
+        work_array,
     )
 
     # Calculate the stress
     wave_supported_stress, stress_direction = _wave_supported_stress_point(
-        wind_input,
+        work_array,
         depth,
         spectral_grid,
         variance_density,
@@ -359,10 +355,10 @@ def _total_stress_point(
     )
 
     viscous_stress = (
-        parameters["air_density"]
+        parameters["viscous_stress_parameter"]
+        * parameters["air_density"]
         * friction_velocity
         * parameters["air_viscosity"]
-        / 25.0
         / vonkarman_constant
         / roughness_length
     )

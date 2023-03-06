@@ -12,6 +12,8 @@ from numpy import (
     abs,
     array,
     zeros,
+    linspace,
+    trapz,
 )
 from numpy.typing import NDArray
 
@@ -263,9 +265,9 @@ def integration_stencil(order: int, number_of_implicit_points: int = 1) -> NDArr
         j-m-1  ...  j-2  j-1   j   j+1  ...  j+n-1
           |    |    |    |----|    |    |    |
 
-    The number of points used will be refered to ast the order = n+m+1. The number of points with i>=0 will be referred to as
-    the number of implicit points, so that n = number_of_implicit_points. The number of points i<0 is the number of
-    explicit points m = order - n - 1.
+    The number of points used will be refered to ast the order = n+m+1. The number of points with i>=0 will be referred
+    to as the number of implicit points, so that n = number_of_implicit_points. The number of points i<0 is the number
+    of explicit points m = order - n - 1.
 
     This function calculates the weights such that
 
@@ -288,3 +290,39 @@ def integration_stencil(order: int, number_of_implicit_points: int = 1) -> NDArr
         ) - evaluate_polynomial(base_poly, number_of_explicit_points - 1)
 
     return weights
+
+
+@njit(cache=True)
+def integrated_response_factor_spectral_tail(
+    tail_power,
+    start_frequency,
+    end_frequency,
+    sampling_frequency,
+    frequency_delta=None,
+    order=4,
+    transition_frequency=None,
+):
+    if frequency_delta is None:
+        frequency_delta = (start_frequency - end_frequency) / 100
+
+    if transition_frequency is None:
+        transition_frequency = end_frequency
+
+    N = int((start_frequency - end_frequency) / frequency_delta) + 1
+
+    integration_frequencies = linspace(start_frequency, end_frequency, N)
+    complex_amplification_factor = complex_response(
+        integration_frequencies / sampling_frequency, order
+    )
+
+    spectrum = empty_like(integration_frequencies)
+    for index in range(spectrum.shape[0]):
+        if integration_frequencies[index] >= transition_frequency:
+            spectrum[index] = (
+                integration_frequencies[index] ** -5 * transition_frequency
+            )
+
+        else:
+            spectrum[index] = integration_frequencies[index] ** tail_power
+
+    return trapz(spectrum) / trapz(abs(complex_amplification_factor) ** 2 * spectrum)

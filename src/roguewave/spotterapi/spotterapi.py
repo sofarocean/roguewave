@@ -35,6 +35,7 @@ from roguewave.wavespectra import (
     FrequencySpectrum,
     concatenate_spectra,
 )
+from roguewave.spotter.analysis import spotter_api_spectra_post_processing
 
 from typing import Dict, List, Union, Sequence, Literal, Any
 from pandas import DataFrame, concat
@@ -183,14 +184,6 @@ def get_data(
     return data
 
 
-# Return types for get spotter data. Options that control the return type are:
-# - data-to-get-entries; if frequencyData is requested we return a FrequencySpectrum object,
-#                        otherwise we return a dataframe.
-# - data-to_get type; if a list we return each requested variable as a key value mapping
-# - flatten: if false data for each spotter is returned in a key value mapping with
-#            spotter_id as key.
-
-
 def get_spotter_data(
     spotter_ids: Union[str, Sequence[str]],
     data_type: DATA_TYPES,
@@ -199,6 +192,7 @@ def get_spotter_data(
     session: SofarApi = None,
     parallel_download=True,
     cache=True,
+    post_process_spectra=True,
 ) -> Union[DataFrame, Dict[str, FrequencySpectrum]]:
     """
     Gets the requested data for the spotter(s) in the given interval as either a dataframe containing
@@ -287,6 +281,8 @@ def get_spotter_data(
             #
             # Did we get any data for this spotter
             if spotter_data is not None:
+                if post_process_spectra:
+                    spotter_data = spotter_api_spectra_post_processing(spotter_data)
                 data[spotter_id] = spotter_data
     else:
         values, _id = [], []

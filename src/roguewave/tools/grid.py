@@ -1,13 +1,16 @@
 import numpy
-from numba import njit
 
 
-#@njit(cache=True)
+def midpoint_rule_step(frequency) -> numpy.ndarray:
+    prepend = 2 * frequency[0] - frequency[1]
+    append = 2 * frequency[-1] - frequency[-2]
+    diff = numpy.diff(frequency, append=append, prepend=prepend)
+    return diff[0:-1] * 0.5 + diff[1:] * 0.5
+
+
+# @njit(cache=True)
 def enclosing_points_1d(
-        xp: numpy.ndarray,
-        x: numpy.ndarray,
-        regular_xp=False,
-        period: float = None
+    xp: numpy.ndarray, x: numpy.ndarray, regular_xp=False, period: float = None
 ):
     """
     Find surrounding indices for value x[j] in vector xp such
@@ -46,17 +49,17 @@ def enclosing_points_1d(
     if xp[-1] < xp[0]:
         # make sure we are in a coordinate frame where the vector is
         # in ascending order.
-        x =  xp[0] - x
+        x = xp[0] - x
         xp = xp[0] - xp
 
     if period is not None:
         x = (x - xp[0]) % period + xp[0]
 
-    indices = numpy.empty((2, nx), dtype='int64')
+    indices = numpy.empty((2, nx), dtype="int64")
     if not regular_xp:
         for ix, x_ix in enumerate(x):
             # find ixp such that  xp[ixp-1] <= x[ix] < xp[ixp]
-            ixp = numpy.searchsorted(xp, x_ix, side='right')
+            ixp = numpy.searchsorted(xp, x_ix, side="right")
             indices[:, ix] = [ixp - 1, ixp]
     else:
         ixp = numpy.floor((x - xp[0]) / (xp[1] - xp[0]))

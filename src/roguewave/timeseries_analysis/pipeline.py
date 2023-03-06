@@ -7,7 +7,7 @@ from roguewave.timeseries_analysis.filtering import (
     cumsum,
 )
 from roguewave import FrequencySpectrum
-from roguewave.timeseries_analysis.time_integration import (
+from roguewave.tools.time_integration import (
     integrate,
     complex_response,
     DEFAULT_N,

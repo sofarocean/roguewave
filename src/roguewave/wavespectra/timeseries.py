@@ -40,7 +40,7 @@ def surface_timeseries(
 def create_fourier_amplitudes(
     component, spectrum: WaveSpectrum, frequencies, seed=None
 ):
-    spectrum = spectrum.interpolate_frequency(frequencies, extrapolate_tail=True)
+    spectrum = spectrum.interpolate_frequency(frequencies)
 
     if isinstance(spectrum, FrequencySpectrum):
         radian_directions = 0.0

@@ -3,21 +3,27 @@ from roguewave.timeseries_analysis import (
     DEFAULT_SPOTTER_PIPELINE,
     DEFAULT_DISPLACEMENT_PIPELINE,
 )
-from roguewave.timeseries_analysis.time_integration import (
+from roguewave.tools.time_integration import (
     cumulative_distance,
     complex_response,
 )
+from roguewave.wavespectra.spectrum import fill_zeros_or_nan_in_tail
 from roguewave.timeseries_analysis import estimate_frequency_spectrum
 from roguewave.tools.time import datetime64_to_timestamp
 from pandas import DataFrame
 from roguewave import FrequencySpectrum
 from .read_csv_data import read_displacement, read_gps
 from .parser import apply_to_group
-from numpy import real, conjugate
+from numpy import real, conjugate, linspace
+
+LAST_BIN_WIDTH = 0.3
+LAST_BIN_FREQUENCY_START = 0.5
+LAST_BIN_FREQUENCY_END = 0.8
+SPOTTER_FREQUENCY_RESOLUTION = 2.5 / 256
 
 
 def displacement_from_gps_doppler_velocities(
-    path, pipeline_stages=None, cache_as_netcdf=False
+    path, pipeline_stages=None, cache_as_netcdf=False, **kwargs
 ) -> DataFrame:
     if pipeline_stages is None:
         pipeline_stages = DEFAULT_SPOTTER_PIPELINE
@@ -133,3 +139,54 @@ def spotter_frequency_response_correction(
     )
     R = real(amplification_factor * conjugate(amplification_factor))
     return spectrum.multiply(1 / R, ["frequency"])
+
+
+def spotter_api_spectra_post_processing(
+    spectrum: FrequencySpectrum, maximum_frequency=LAST_BIN_FREQUENCY_END
+):
+    """
+    Post processing to spectra obtained from the API.
+
+    :param spectrum: input spectra.
+    :param maximum_frequency: maximum frequency to extrapolate to.
+    :return:
+    """
+    if len(spectrum.frequency) == 39:
+        last_bin_energy = spectrum.variance_density.values[..., -1] * LAST_BIN_WIDTH
+        last_bin_moments = {
+            "a1": spectrum.a1[:, -1],
+            "b1": spectrum.b1[:, -1],
+            "a2": spectrum.a2[:, -1],
+            "b2": spectrum.b2[:, -1],
+        }
+        spectrum = spectrum.bandpass(fmax=LAST_BIN_FREQUENCY_START)
+
+        # Correct for integration errors in the tail
+        spectrum = spotter_frequency_response_correction(spectrum)
+
+        # Extrapolate tail given the known energy in last bin. Also correct for potential underflow in the tail
+        spectrum = spectrum.extrapolate_tail(
+            maximum_frequency,
+            tail_energy=last_bin_energy,
+            tail_bounds=(LAST_BIN_FREQUENCY_START, LAST_BIN_FREQUENCY_END),
+            tail_moments=last_bin_moments,
+        )
+    else:
+        # Chop to desired max freq
+        spectrum = spectrum.bandpass(fmax=maximum_frequency)
+
+        # Correct for integration errors in the tail
+        spectrum = spotter_frequency_response_correction(spectrum)
+
+        # Correct for potential underflow in the tail
+        spectrum = fill_zeros_or_nan_in_tail(spectrum)
+
+    # Ensure we return exactly the same frequency grid in all cases (given max frequency).
+    maximum_index = int(maximum_frequency / SPOTTER_FREQUENCY_RESOLUTION)
+    new_frequencies = (
+        linspace(3, maximum_index, maximum_index - 2, endpoint=True)
+        * SPOTTER_FREQUENCY_RESOLUTION
+    )
+    spectrum = spectrum.interpolate_frequency(new_frequencies)
+
+    return spectrum

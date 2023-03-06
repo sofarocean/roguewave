@@ -1418,25 +1418,22 @@ def fill_zeros_or_nan_in_tail(
     return FrequencySpectrum(dataset)
 
 
-def cumulative_frequency_interpolation_1d_variable(
-    coordinates, dataset: Dataset, monotonic=False
-):
+def cumulative_frequency_interpolation_1d_variable(coordinates, dataset: Dataset):
+    """
+    To interpolate the spectrum we first calculate a cumulative density function from the spectrum (which is essentialy
+    a pdf). We then interpolate the CDF function with a spline and differentiate the result.
+
+    :param coordinates:
+    :param dataset:
+    :return:
+    """
+
     _dataset = Dataset()
 
     frequency_step = midpoint_rule_step(dataset[NAME_F].values)
-    intp_frequency_step = midpoint_rule_step(coordinates[NAME_F])
-
     integration_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
     integration_frequencies = (
         integration_frequencies - frequency_step[0] / 2 + dataset[NAME_F].values[0]
-    )
-    interpolated_integration_frequencies = numpy.concatenate(
-        ([0], numpy.cumsum(intp_frequency_step))
-    )
-    interpolated_integration_frequencies = (
-        interpolated_integration_frequencies
-        - intp_frequency_step[0]
-        + coordinates[NAME_F][0]
     )
 
     for name in dataset:

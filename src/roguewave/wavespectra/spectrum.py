@@ -1457,7 +1457,7 @@ def cumulative_frequency_interpolation_1d_variable(
         interpolation_frequency,
         dataset[NAME_F].values,
         dataset[NAME_E].values,
-        order=3,
+        interpolating_spline_order=3,
         positive=True,
     )
 
@@ -1476,7 +1476,7 @@ def cumulative_frequency_interpolation_1d_variable(
         interpolation_frequency,
         dataset[NAME_F].values,
         dataset[NAME_E].values,
-        order=1,
+        interpolating_spline_order=1,
         positive=False,
     )
 
@@ -1486,7 +1486,7 @@ def cumulative_frequency_interpolation_1d_variable(
                 interpolation_frequency,
                 dataset[NAME_F].values,
                 dataset[_name].values * dataset[NAME_E].values,
-                order=1,
+                interpolating_spline_order=1,
                 positive=False,
             )
             / interpolated_energy
@@ -1506,20 +1506,34 @@ def cumulative_frequency_interpolation_1d_variable(
 
 
 def _cdf_interpolate(
-    interpolation_frequency, data_frequencies, densities, order=3, positive=False
-):
+    interpolation_frequency: numpy.ndarray,
+    frequency: numpy.ndarray,
+    frequency_spectrum: numpy.ndarray,
+    interpolating_spline_order: int = 3,
+    positive: bool = False,
+) -> numpy.ndarray:
+    """
+    Interpolate the spectrum using the cdf.
+
+    :param interpolation_frequency: frequencies to estimate the spectrum at.
+    :param frequency: Frequencies of the spectrum. Shape = ( nf, )
+    :param frequency_spectrum: Frequency Variance density spectrum. Shape = ( np , nf )
+    :param interpolating_spline_order: Order of the spline to use in the interpolation (max 5 supported by scipy)
+    :param positive: Ensure the output is positive (e.g. for A1 or B1 densities output need not be strictly positive).
+    :return:
+    """
     #
-    frequency_step = midpoint_rule_step(data_frequencies)
+    frequency_step = midpoint_rule_step(frequency)
     integration_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
     integration_frequencies = (
-        integration_frequencies - frequency_step[0] / 2 + data_frequencies[0]
+        integration_frequencies - frequency_step[0] / 2 + frequency[0]
     )
 
-    cumsum = numpy.cumsum(densities * frequency_step, axis=-1)
+    cumsum = numpy.cumsum(frequency_spectrum * frequency_step, axis=-1)
     cumsum = numpy.concatenate((numpy.zeros((cumsum.shape[0], 1)), cumsum), axis=-1)
 
     interpolator = make_interp_spline(
-        integration_frequencies, cumsum, axis=-1, k=order
+        integration_frequencies, cumsum, axis=-1, k=interpolating_spline_order
     ).derivative()
     interpolated_densities = interpolator(interpolation_frequency)
 
@@ -1535,29 +1549,71 @@ def _cdf_interpolate(
     return interpolated_densities
 
 
-def spline_peak_frequency(data_frequencies, densities):
+def spline_peak_frequency(
+    frequency: numpy.ndarray, frequency_spectrum: numpy.ndarray
+) -> numpy.ndarray:
+    """
+    Estimate the peak frequency of the spectrum based on a cubic spline interpolation of the partially integrated
+    variance.
+
+    :param frequency: Frequencies of the spectrum. Shape = ( nf, )
+    :param frequency_spectrum: Frequency Variance density spectrum. Shape = ( np , nf )
+    :return: peak frequencies. Shape = ( np, )
+    """
     #
 
-    frequency_step = midpoint_rule_step(data_frequencies)
+    # Calculate the binsize for each of the frequency bins. We assume that the given frequencies represent the center
+    # of a bin, and that the bin width at frequency i is determined as the sum of half the up and downwind differences:
+    #
+    #  frequency_step[i]   =  (frequency_step[i] - frequency_step[i-1])/2 + (frequency_step[i+1] - frequency_step[i])/2
+    #
+    # At boundaries we simply take twice the up or downwind difference, e.g.:
+    #
+    # frequency_step[0] = (frequency_step[1] - frequency_step[0])
+    #
+    frequency_step = midpoint_rule_step(frequency)
+
+    # Whereas the given frequencies represent the center, we assume that cumulative function is sampled at the bin
+    # edges. First create the cumulative sum frequency relative to the start...
     integration_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
+
+    # and then add the origin (first bin centered frequency minus half the step size.
     integration_frequencies = (
-        integration_frequencies - frequency_step[0] / 2 + data_frequencies[0]
+        integration_frequencies - frequency_step[0] / 2 + frequency[0]
     )
 
-    cumsum = numpy.cumsum(densities * frequency_step, axis=-1)
+    # Since spectra are typicall given as densities, muliply with the step to get the bin integrated values.
+    bin_integrated_values = frequency_spectrum * frequency_step
+
+    # calculate the cumulative function
+    cumsum = numpy.cumsum(bin_integrated_values, axis=-1)
+
+    # Add leading 0s as at the first frequency the integration is 0.
     cumsum = numpy.concatenate((numpy.zeros((cumsum.shape[0], 1)), cumsum), axis=-1)
 
-    interpolator = CubicSpline(
-        integration_frequencies,
-        cumsum,
-        axis=-1,
-    ).derivative()
-    roots = interpolator.derivative().roots()
+    # Construct a cubic spline interpolator, and then differentiate to get the density function.
+    interpolator = CubicSpline(integration_frequencies, cumsum, axis=-1).derivative()
 
-    peak_frequency = numpy.zeros(len(roots))
-    for index, root in enumerate(roots):
+    # Find the maxima of the density function by setting dEdf = 0, and finding the roots of all the splines representing
+    # the density function.
+    list_of_roots_for_all_spectra = interpolator.derivative().roots()
+
+    # initialize output memory
+    peak_frequency = numpy.zeros(len(list_of_roots_for_all_spectra))
+
+    # We now have a list in which each entry contains all the roots for that given spectrum. Loop over each spectrum
+    # and..
+    for index, root in enumerate(list_of_roots_for_all_spectra):
+        # ..evaluate density spectrum at those roots.
         values_at_roots = interpolator(root)
-        index_peak = numpy.argmax(values_at_roots[index, :])
+
+        # Because the interpolator returns values at the current roots evaluated at _all_ spectra, we still have to
+        # select the values at the spectrum of interest. This implementation is silly, adds computational costs, and can
+        # probably be improved. It seems "fast enough" so that I'll punt that to another time.
+        values_at_roots = values_at_roots[index, :]
+
+        # ... get the root that corresponds to the largest peak.
+        index_peak = numpy.argmax(values_at_roots)
         peak_frequency[index] = root[index_peak]
 
     return peak_frequency

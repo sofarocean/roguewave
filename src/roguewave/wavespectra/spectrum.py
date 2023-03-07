@@ -26,10 +26,7 @@ from xarray import (
 from roguewave.tools.grid import midpoint_rule_step
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
-from scipy.interpolate import (
-    CubicSpline,
-    Akima1DInterpolator,
-)
+from scipy.interpolate import CubicSpline, Akima1DInterpolator, make_interp_spline
 from roguewave.wavespectra._tools import numba_fill_zeros_or_nan_in_tail
 
 NAME_F: Literal["frequency"] = "frequency"
@@ -649,7 +646,7 @@ class WaveSpectrum(DatasetWrapper):
         """
         return self.e.where(self._range(fmin, fmax), 0).argmax(dim=NAME_F)
 
-    def peak_frequency(self, fmin=0, fmax=numpy.inf) -> DataArray:
+    def peak_frequency(self, fmin=0, fmax=numpy.inf, use_spline=False) -> DataArray:
         """
         Peak frequency of the spectrum, i.e. frequency at which the spectrum
         obtains its maximum.
@@ -658,7 +655,14 @@ class WaveSpectrum(DatasetWrapper):
         :param fmax: maximum frequency
         :return: peak frequency
         """
-        return self.dataset[NAME_F][self.peak_index(fmin, fmax)]
+        if use_spline:
+            return DataArray(
+                data=spline_peak_frequency(self.frequency.values, self.e.values),
+                coords=self.coords_space_time,
+                dims=self.dims_space_time,
+            )
+        else:
+            return self.dataset[NAME_F][self.peak_index(fmin, fmax)]
 
     def peak_angular_frequency(self, fmin=0, fmax=numpy.inf) -> DataArray:
         """
@@ -671,7 +675,7 @@ class WaveSpectrum(DatasetWrapper):
         """
         return self.peak_frequency(fmin, fmax) * numpy.pi * 2
 
-    def peak_period(self, fmin=0, fmax=numpy.inf) -> DataArray:
+    def peak_period(self, fmin=0, fmax=numpy.inf, use_spline=False) -> DataArray:
         """
         Peak period of the spectrum, i.e. period at which the spectrum
         obtains its maximum.
@@ -680,9 +684,12 @@ class WaveSpectrum(DatasetWrapper):
         :param fmax: maximum frequency
         :return: peak period
         """
-        peak_period = 1 / self.peak_frequency(fmin, fmax)
+        peak_period = 1 / self.peak_frequency(fmin, fmax, use_spline=use_spline)
         peak_period.name = "peak period"
-        peak_period = peak_period.drop("frequency")
+        try:
+            peak_period = peak_period.drop("frequency")
+        except Exception:
+            pass
         return peak_period
 
     def peak_direction(self, fmin=0, fmax=numpy.inf) -> DataArray:
@@ -1163,7 +1170,7 @@ class FrequencySpectrum(WaveSpectrum):
     ) -> "FrequencySpectrum":
         if cumulative:
             interpolated_data = cumulative_frequency_interpolation_1d_variable(
-                {NAME_F: new_frequencies}, self.dataset
+                new_frequencies, self.dataset
             )
             object = FrequencySpectrum(interpolated_data)
             object.fillna(extrapolation_value)
@@ -1418,70 +1425,139 @@ def fill_zeros_or_nan_in_tail(
     return FrequencySpectrum(dataset)
 
 
-def cumulative_frequency_interpolation_1d_variable(coordinates, dataset: Dataset):
+def cumulative_frequency_interpolation_1d_variable(
+    interpolation_frequency, dataset: Dataset
+):
     """
     To interpolate the spectrum we first calculate a cumulative density function from the spectrum (which is essentialy
     a pdf). We then interpolate the CDF function with a spline and differentiate the result.
 
-    :param coordinates:
+    :param interpolation_frequency:
     :param dataset:
     :return:
     """
 
     _dataset = Dataset()
 
-    frequency_step = midpoint_rule_step(dataset[NAME_F].values)
-    integration_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
-    integration_frequencies = (
-        integration_frequencies - frequency_step[0] / 2 + dataset[NAME_F].values[0]
-    )
-
+    # Copy over all non spectral vars
     for name in dataset:
         _name = str(name)
-        if _name in SPECTRAL_VARS:
-            if _name in SPECTRAL_MOMENTS:
-                densities = dataset[_name].values * dataset[NAME_E].values
-            else:
-                densities = dataset[_name].values
+        if _name not in SPECTRAL_VARS:
+            _dataset = _dataset.assign({_name: dataset[_name]})
 
-            cumsum = numpy.cumsum(densities * frequency_step, axis=-1)
-            cumsum = numpy.concatenate(
-                (numpy.zeros((cumsum.shape[0], 1)), cumsum), axis=-1
+    coords = {
+        str(_coor_name): dataset[str(_coor_name)]
+        for _coor_name in dataset[NAME_E].coords
+    }
+    coords[NAME_F] = interpolation_frequency
+    dims = dataset[NAME_E].dims
+
+    # Interpolate energy
+    interpolated_energy = _cdf_interpolate(
+        interpolation_frequency,
+        dataset[NAME_F].values,
+        dataset[NAME_E].values,
+        order=3,
+        positive=True,
+    )
+
+    _dataset = _dataset.assign(
+        {
+            NAME_E: DataArray(
+                data=interpolated_energy,
+                coords=coords,
+                dims=dims,
             )
+        }
+    )
 
-            interpolator = CubicSpline(
-                integration_frequencies, cumsum, axis=-1
-            ).derivative()
+    # Interpolate scaling energy, to be used to renormalize moments.
+    interpolated_energy = _cdf_interpolate(
+        interpolation_frequency,
+        dataset[NAME_F].values,
+        dataset[NAME_E].values,
+        order=1,
+        positive=False,
+    )
+
+    for _name in SPECTRAL_MOMENTS:
+        interpolated_densities = (
+            _cdf_interpolate(
+                interpolation_frequency,
+                dataset[NAME_F].values,
+                dataset[_name].values * dataset[NAME_E].values,
+                order=1,
+                positive=False,
+            )
+            / interpolated_energy
+        )
+
+        _dataset = _dataset.assign(
+            {
+                _name: DataArray(
+                    data=interpolated_densities,
+                    coords=coords,
+                    dims=dims,
+                )
+            }
+        )
+
+    return _dataset
+
+
+def _cdf_interpolate(
+    interpolation_frequency, data_frequencies, densities, order=3, positive=False
+):
+    #
+    frequency_step = midpoint_rule_step(data_frequencies)
+    integration_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
+    integration_frequencies = (
+        integration_frequencies - frequency_step[0] / 2 + data_frequencies[0]
+    )
+
+    cumsum = numpy.cumsum(densities * frequency_step, axis=-1)
+    cumsum = numpy.concatenate((numpy.zeros((cumsum.shape[0], 1)), cumsum), axis=-1)
+
+    interpolator = make_interp_spline(
+        integration_frequencies, cumsum, axis=-1, k=order
+    ).derivative()
+    interpolated_densities = interpolator(interpolation_frequency)
+
+    if positive:
+        mask = interpolated_densities < 0.0
+        if numpy.any(mask):
             monotone_interpolator = Akima1DInterpolator(
                 integration_frequencies, cumsum, axis=-1
             ).derivative()
-
-            interpolated_densities = interpolator(coordinates[NAME_F])
-            positive_densities = monotone_interpolator(coordinates[NAME_F])
-
-            mask = interpolated_densities < 0.0
+            positive_densities = monotone_interpolator(interpolation_frequency)
             interpolated_densities[mask] = positive_densities[mask]
 
-            coords = {
-                str(_coor_name): dataset[str(_coor_name)]
-                for _coor_name in dataset[_name].coords
-            }
-            coords[NAME_F] = coordinates[NAME_F]
+    return interpolated_densities
 
-            _dataset = _dataset.assign(
-                {
-                    _name: DataArray(
-                        data=interpolated_densities,
-                        coords=coords,
-                        dims=dataset[_name].dims,
-                    )
-                }
-            )
-        else:
-            _dataset = _dataset.assign({_name: dataset[_name]})
 
-    for name in _dataset:
-        _name = str(name)
-        if _name in SPECTRAL_MOMENTS:
-            _dataset[_name] = _dataset[_name] / _dataset[NAME_E]
-    return _dataset
+def spline_peak_frequency(data_frequencies, densities):
+    #
+
+    frequency_step = midpoint_rule_step(data_frequencies)
+    integration_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
+    integration_frequencies = (
+        integration_frequencies - frequency_step[0] / 2 + data_frequencies[0]
+    )
+
+    cumsum = numpy.cumsum(densities * frequency_step, axis=-1)
+    cumsum = numpy.concatenate((numpy.zeros((cumsum.shape[0], 1)), cumsum), axis=-1)
+
+    interpolator = CubicSpline(
+        integration_frequencies,
+        cumsum,
+        axis=-1,
+    ).derivative()
+    roots = interpolator.derivative().roots()
+
+    peak_frequency = numpy.zeros(len(roots))
+    for index, root in enumerate(roots):
+        values_at_roots = interpolator(root)
+        index_peak = numpy.argmax(values_at_roots[index, :])
+        peak_frequency[index] = root[index_peak]
+
+    return peak_frequency

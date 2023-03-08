@@ -1,13 +1,9 @@
 import numpy
 from numba import njit
 from scipy.interpolate import make_interp_spline, Akima1DInterpolator, CubicSpline
-from xarray import Dataset, DataArray
 
-from roguewave import NAME_F
 from roguewave.tools.grid import midpoint_rule_step
 from roguewave.tools.time_integration import integrated_response_factor_spectral_tail
-from roguewave.wavespectra import SPECTRAL_VARS, NAME_E
-from roguewave.wavespectra.spectrum import SPECTRAL_MOMENTS
 
 
 @njit(cache=True)
@@ -197,86 +193,6 @@ def find_starting_energy(raw_tail_energy, fitted_power, last_resolved_frequency)
     return starting_energy
 
 
-def cumulative_frequency_interpolation_1d_variable(
-    interpolation_frequency, dataset: Dataset
-):
-    """
-    To interpolate the spectrum we first calculate a cumulative density function from the spectrum (which is essentialy
-    a pdf). We then interpolate the CDF function with a spline and differentiate the result.
-
-    :param interpolation_frequency:
-    :param dataset:
-    :return:
-    """
-
-    _dataset = Dataset()
-
-    # Copy over all non spectral vars
-    for name in dataset:
-        _name = str(name)
-        if _name not in SPECTRAL_VARS:
-            _dataset = _dataset.assign({_name: dataset[_name]})
-
-    coords = {
-        str(_coor_name): dataset[str(_coor_name)]
-        for _coor_name in dataset[NAME_E].coords
-    }
-    coords[NAME_F] = interpolation_frequency
-    dims = dataset[NAME_E].dims
-
-    # Interpolate energy
-    interpolated_energy = _cdf_interpolate(
-        interpolation_frequency,
-        dataset[NAME_F].values,
-        dataset[NAME_E].values,
-        interpolating_spline_order=3,
-        positive=True,
-    )
-
-    _dataset = _dataset.assign(
-        {
-            NAME_E: DataArray(
-                data=interpolated_energy,
-                coords=coords,
-                dims=dims,
-            )
-        }
-    )
-
-    # Interpolate scaling energy, to be used to renormalize moments.
-    interpolated_energy = _cdf_interpolate(
-        interpolation_frequency,
-        dataset[NAME_F].values,
-        dataset[NAME_E].values,
-        interpolating_spline_order=1,
-        positive=False,
-    )
-
-    for _name in SPECTRAL_MOMENTS:
-        interpolated_densities = (
-            _cdf_interpolate(
-                interpolation_frequency,
-                dataset[NAME_F].values,
-                dataset[_name].values * dataset[NAME_E].values,
-                interpolating_spline_order=1,
-                positive=False,
-            )
-            / interpolated_energy
-        )
-
-        _dataset = _dataset.assign(
-            {
-                _name: DataArray(
-                    data=interpolated_densities,
-                    coords=coords,
-                    dims=dims,
-                )
-            }
-        )
-
-    return _dataset
-
-
 def _cdf_interpolate(
     interpolation_frequency: numpy.ndarray,
     frequency: numpy.ndarray,
@@ -383,6 +299,8 @@ def spline_peak_frequency(
         # select the values at the spectrum of interest. This implementation is silly, adds computational costs, and can
         # probably be improved. It seems "fast enough" so that I'll punt that to another time.
         values_at_roots = values_at_roots[index, :]
+
+        values_at_roots = values_at_roots[numpy.isfinite(values_at_roots)]
 
         # ... get the root that corresponds to the largest peak.
         index_peak = numpy.argmax(values_at_roots)

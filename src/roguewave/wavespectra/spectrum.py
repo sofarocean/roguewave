@@ -27,8 +27,8 @@ from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
 from roguewave.wavespectra._tools import (
     numba_fill_zeros_or_nan_in_tail,
-    cumulative_frequency_interpolation_1d_variable,
     spline_peak_frequency,
+    _cdf_interpolate,
 )
 
 NAME_F: Literal["frequency"] = "frequency"
@@ -1425,3 +1425,83 @@ def fill_zeros_or_nan_in_tail(
             dataset = dataset.assign({name: spectrum.dataset[name]})
 
     return FrequencySpectrum(dataset)
+
+
+def cumulative_frequency_interpolation_1d_variable(
+    interpolation_frequency, dataset: Dataset
+):
+    """
+    To interpolate the spectrum we first calculate a cumulative density function from the spectrum (which is essentialy
+    a pdf). We then interpolate the CDF function with a spline and differentiate the result.
+
+    :param interpolation_frequency:
+    :param dataset:
+    :return:
+    """
+
+    _dataset = Dataset()
+
+    # Copy over all non spectral vars
+    for name in dataset:
+        _name = str(name)
+        if _name not in SPECTRAL_VARS:
+            _dataset = _dataset.assign({_name: dataset[_name]})
+
+    coords = {
+        str(_coor_name): dataset[str(_coor_name)]
+        for _coor_name in dataset[NAME_E].coords
+    }
+    coords[NAME_F] = interpolation_frequency
+    dims = dataset[NAME_E].dims
+
+    # Interpolate energy
+    interpolated_energy = _cdf_interpolate(
+        interpolation_frequency,
+        dataset[NAME_F].values,
+        dataset[NAME_E].values,
+        interpolating_spline_order=3,
+        positive=True,
+    )
+
+    _dataset = _dataset.assign(
+        {
+            NAME_E: DataArray(
+                data=interpolated_energy,
+                coords=coords,
+                dims=dims,
+            )
+        }
+    )
+
+    # Interpolate scaling energy, to be used to renormalize moments.
+    interpolated_energy = _cdf_interpolate(
+        interpolation_frequency,
+        dataset[NAME_F].values,
+        dataset[NAME_E].values,
+        interpolating_spline_order=1,
+        positive=False,
+    )
+
+    for _name in SPECTRAL_MOMENTS:
+        interpolated_densities = (
+            _cdf_interpolate(
+                interpolation_frequency,
+                dataset[NAME_F].values,
+                dataset[_name].values * dataset[NAME_E].values,
+                interpolating_spline_order=1,
+                positive=False,
+            )
+            / interpolated_energy
+        )
+
+        _dataset = _dataset.assign(
+            {
+                _name: DataArray(
+                    data=interpolated_densities,
+                    coords=coords,
+                    dims=dims,
+                )
+            }
+        )
+
+    return _dataset

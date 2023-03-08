@@ -6,10 +6,10 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewave",
-    version="0.2.8",
+    version="0.2.10",
     license="Apache 2 License",
     install_requires=[
-        "pysofar>=0.1.14",
+        "pysofar>=0.1.13",
         "numpy",
         "netCDF4",
         "pandas",

@@ -1,13 +1,21 @@
 from typing import Tuple
 
-from numba import njit, prange
+from numba import prange, jit
 from numba_progress import ProgressBar
 from numba.typed import List as NumbaList
 from numpy import inf, nan, empty, isnan, zeros
 from numpy.typing import NDArray
 
 from roguewave.wavephysics.balance.dissipation import _bulk_dissipation_direction_point
-from roguewave.wavephysics.balance.stress import _roughness_estimate_point
+from roguewave.wavephysics.balance._numba_settings import (
+    numba_nocache_parallel,
+    numba_nocache,
+    numba_default,
+)
+from roguewave.wavephysics.balance.stress import (
+    _roughness_estimate_point,
+    _total_stress_point,
+)
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavephysics.balance.balance import SourceTermBalance
@@ -16,12 +24,13 @@ from roguewave import FrequencyDirectionSpectrum
 
 
 def windspeed_and_direction_from_spectra(
-        balance:SourceTermBalance,
-        guess_u10: DataArray,
-        spectrum: FrequencyDirectionSpectrum,
-        jacobian=False,
-        jacobian_parameters=None,
-        time_derivative_spectrum: FrequencyDirectionSpectrum = None,
+    balance: SourceTermBalance,
+    guess_u10: DataArray,
+    spectrum: FrequencyDirectionSpectrum,
+    jacobian=False,
+    jacobian_parameters=None,
+    time_derivative_spectrum: FrequencyDirectionSpectrum = None,
+    direction_iteration=False,
 ) -> Dataset:
     """
 
@@ -38,10 +47,10 @@ def windspeed_and_direction_from_spectra(
         time_derivative_spectrum = time_derivative_spectrum.variance_density.values
 
     with ProgressBar(
-            total=spectrum.number_of_spectra,
-            disable=disable,
-            desc=f"Estimating U10 from {balance.generation.name} and {balance.dissipation.name} "
-                 f"wind and dissipation source terms",
+        total=spectrum.number_of_spectra,
+        disable=disable,
+        desc=f"Estimating U10 from {balance.generation.name} and {balance.dissipation.name} "
+        f"wind and dissipation source terms",
     ) as progress_bar:
         if not jacobian:
             speed, direction = _u10_from_spectra(
@@ -56,6 +65,7 @@ def windspeed_and_direction_from_spectra(
                 spectral_grid=balance.generation.spectral_grid(spectrum),
                 progress_bar=progress_bar,
                 time_derivative_spectrum=time_derivative_spectrum,
+                direction_iteration=direction_iteration,
             )
         else:
             if jacobian_parameters is None:
@@ -76,6 +86,7 @@ def windspeed_and_direction_from_spectra(
                 spectral_grid=balance.generation.spectral_grid(spectrum),
                 time_derivative_spectrum=time_derivative_spectrum,
                 progress_bar=progress_bar,
+                direction_iteration=direction_iteration,
             )
             grad = DataArray(data=grad)
 
@@ -92,15 +103,12 @@ def windspeed_and_direction_from_spectra(
     )
 
     if jacobian:
-        return Dataset(
-            data_vars={"u10": u10, "direction": direction, "jacobian": grad}
-        )
+        return Dataset(data_vars={"u10": u10, "direction": direction, "jacobian": grad})
     else:
         return Dataset(data_vars={"u10": u10, "direction": direction})
 
 
-
-@njit()
+@jit(**numba_nocache)
 def _u10_from_bulk_rate_point(
     bulk_rate,
     variance_density,
@@ -112,6 +120,7 @@ def _u10_from_bulk_rate_point(
     wind_source_term_function,
     tail_stress_parametrization_function,
     time_derivative_spectrum,
+    direction_iteration,
 ):
     """
 
@@ -124,45 +133,82 @@ def _u10_from_bulk_rate_point(
     :param parameters:
     :return:
     """
-    wind_guess = (guess_u10, guess_direction, "u10")
-    roughness_memory = [-1.0]
-    args = (
-        roughness_memory,
-        variance_density,
-        wind_guess,
-        depth,
-        wind_source_term_function,
-        tail_stress_parametrization_function,
-        spectral_grid,
-        parameters,
-        bulk_rate,
-        time_derivative_spectrum,
-    )
+
+    direction = guess_direction
+    u10 = guess_u10
+
     if bulk_rate == 0.0:
-        return 0.0
+        return 0.0, guess_direction
 
     # We are tryomg to solve for U10; ~ accuracy of 0.01m/s is sufficient. We do not really care about relative accuracy
     # - for low winds (<1m/s) answers are really inaccurate anyway
     atol = 1.0e-2
     rtol = 1.0
     numerical_stepsize = 1e-3
-    try:
-        u10 = numba_newton_raphson(
-            _u10_iteration_function,
-            guess_u10,
-            args,
-            (0, inf),
-            atol=atol,
-            rtol=rtol,
-            numerical_stepsize=numerical_stepsize,
+
+    if direction_iteration:
+        niter = 20
+    else:
+        niter = 1
+
+    for ii in range(0, niter):
+        wind_guess = (u10, direction, "u10")
+        roughness_memory = [-1.0]
+        args = (
+            roughness_memory,
+            variance_density,
+            wind_guess,
+            depth,
+            wind_source_term_function,
+            tail_stress_parametrization_function,
+            spectral_grid,
+            parameters,
+            bulk_rate,
+            time_derivative_spectrum,
         )
-    except:
-         u10 = nan
 
-    return u10
+        try:
+            u10 = numba_newton_raphson(
+                _u10_iteration_function,
+                u10,
+                args,
+                (0, inf),
+                atol=atol,
+                rtol=rtol,
+                numerical_stepsize=numerical_stepsize,
+            )
+        except:
+            u10 = nan
+            break
+
+        if direction_iteration:
+            wind_guess = (u10, direction, "u10")
+            _, new_direction = _total_stress_point(
+                roughness_memory[0],
+                variance_density,
+                wind_guess,
+                depth,
+                wind_source_term_function,
+                tail_stress_parametrization_function,
+                spectral_grid,
+                parameters,
+            )
+
+            direction_delta = (new_direction - direction + 180) % 360 - 180
+
+            if abs(direction_delta) < 1.0:
+                direction = new_direction
+                break
+            elif abs(direction_delta) < 10.0:
+                direction = new_direction
+            else:
+                # Some under-relaxation
+                direction = (direction + 0.5 * direction_delta) % 360
+
+    return u10, direction
 
 
-@njit(fastmath=True)
+@jit(**numba_nocache)
 def _u10_iteration_function(
     u10,
     memory_list,
@@ -242,7 +288,7 @@ def _u10_iteration_function(
     )
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def spectral_time_derivative_in_active_region(
     time_derivative_spectrum: NDArray,
     generation: NDArray,
@@ -266,7 +312,7 @@ def spectral_time_derivative_in_active_region(
     return bulk_time_derivative_spectrum
 
 
-@njit(parallel=False)
+@jit(**numba_nocache)
 def _u10_from_spectra_point(
     variance_density,
     guess_u10,
@@ -278,6 +324,7 @@ def _u10_from_spectra_point(
     parameters_dissipation,
     spectral_grid,
     time_derivative_spectrum,
+    direction_iteration,
 ) -> Tuple[float, float]:
     """
 
@@ -300,7 +347,7 @@ def _u10_from_spectra_point(
     )
 
     # Note dissipation is negatve- but our target bulk wind generation is positive
-    u10 = _u10_from_bulk_rate_point(
+    u10, direction = _u10_from_bulk_rate_point(
         -bulk_rate,
         variance_density,
         guess_u10,
@@ -311,6 +358,7 @@ def _u10_from_spectra_point(
         wind_source_term_function,
         tail_stress_parametrization_function,
         time_derivative_spectrum,
+        direction_iteration,
     )
     return u10, direction
 
@@ -320,7 +368,7 @@ def _u10_from_spectra_point(
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-@njit(parallel=False)
+@jit(**numba_nocache)
 def _u10_parameter_gradient(
     variance_density,
     guess_u10,
@@ -333,6 +381,7 @@ def _u10_parameter_gradient(
     parameters_dissipation,
     spectral_grid,
     time_derivative_spectrum,
+    direction_iteration,
 ) -> (float, float, NDArray):
     """
     Function to numerically calculate gradients for the requested coeficients
@@ -356,7 +405,7 @@ def _u10_parameter_gradient(
     )
 
     # Note dissipation is negatve- but our target bulk wind generation is positive
-    u10 = _u10_from_bulk_rate_point(
+    u10, direction = _u10_from_bulk_rate_point(
         -bulk_rate,
         variance_density,
         guess_u10,
@@ -367,6 +416,7 @@ def _u10_parameter_gradient(
         wind_source_term_function,
         tail_stress_parametrization_function,
         time_derivative_spectrum,
+        direction_iteration,
     )
     grad = empty(len(grad_parameters))
     if isnan(u10):
@@ -395,7 +445,7 @@ def _u10_parameter_gradient(
             perturbed_parameters_generation[param] += step
             new_bulk_rate = bulk_rate
 
-        new_u10 = _u10_from_bulk_rate_point(
+        new_u10, direction = _u10_from_bulk_rate_point(
             -new_bulk_rate,
             variance_density,
             u10,
@@ -406,6 +456,7 @@ def _u10_parameter_gradient(
             wind_source_term_function,
             tail_stress_parametrization_function,
             time_derivative_spectrum,
+            direction_iteration,
         )
         if isnan(new_u10):
             grad[index] = 0
@@ -420,7 +471,7 @@ def _u10_parameter_gradient(
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-@njit(parallel=True)
+@jit(**numba_nocache_parallel)
 def _u10_from_spectra_gradient(
     variance_density,
     guess_u10,
@@ -434,6 +485,7 @@ def _u10_from_spectra_gradient(
     spectral_grid,
     time_derivative_spectrum,
     progress_bar: ProgressBar = None,
+    direction_iteration=False,
 ) -> Tuple[NDArray, NDArray, NDArray]:
     """
 
@@ -472,11 +524,12 @@ def _u10_from_spectra_gradient(
             parameters_dissipation,
             spectral_grid,
             time_derivative_spectrum[point_index, :, :],
+            direction_iteration,
         )
     return u10, direction, grad
 
 
-@njit(parallel=True, nogil=True)
+@jit(**numba_nocache_parallel)
 def _u10_from_spectra(
     variance_density: NDArray,
     guess_u10: NDArray,
@@ -489,6 +542,7 @@ def _u10_from_spectra(
     spectral_grid,
     progress_bar: ProgressBar = None,
     time_derivative_spectrum=None,
+    direction_iteration=False,
 ) -> Tuple[NDArray, NDArray]:
     """
 
@@ -522,5 +576,6 @@ def _u10_from_spectra(
             parameters_dissipation,
             spectral_grid,
             time_derivative_spectrum[point_index, :, :],
+            direction_iteration,
         )
     return u10, direction

@@ -1,13 +1,14 @@
 from numpy import inf, abs
 from numpy.typing import ArrayLike
-from numba import njit
+from numba import jit
+from roguewave.wavephysics.balance._numba_settings import numba_nocache
 from xarray import DataArray
 from typing import TypeVar
 
 _T = TypeVar("_T", ArrayLike, DataArray)
 
 
-@njit(fastmath=True)
+@jit(**numba_nocache)
 def numba_fixed_point_iteration(
     function,
     guess,
@@ -76,7 +77,7 @@ def numba_fixed_point_iteration(
     return iterates[2]
 
 
-@njit()
+@jit(**numba_nocache)
 def numba_newton_raphson(
     function,
     guess,

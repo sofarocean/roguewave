@@ -2,7 +2,8 @@ from typing import TypedDict
 from roguewave.wavephysics.balance import Dissipation
 from numpy.typing import NDArray
 from numpy import pi, abs, cos, sin, sqrt, empty, max
-from numba import njit
+from numba import jit
+from roguewave.wavephysics.balance._numba_settings import numba_default
 from roguewave.wavetheory import (
     inverse_intrinsic_dispersion_relation,
     intrinsic_group_velocity,
@@ -39,7 +40,7 @@ class ST4WaveBreaking(Dissipation):
         )
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def st4_band_integrated_saturation(
     variance_density: NDArray,
     group_velocity: NDArray,
@@ -89,7 +90,7 @@ def st4_band_integrated_saturation(
     return band_integrated_saturation
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def st4_cumulative_breaking(
     variance_density: NDArray,
     saturation: NDArray,
@@ -211,7 +212,7 @@ def st4_cumulative_breaking(
     return cumulative_breaking
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def st4_dissipation_breaking(
     variance_density: NDArray, depth: NDArray, spectral_grid, parameters
 ):
@@ -283,7 +284,7 @@ def st4_dissipation_breaking(
     return cumulative_breaking + saturation_breaking
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def st4_saturation_breaking(
     variance_density,
     band_integrated_saturation,
@@ -311,7 +312,7 @@ def st4_saturation_breaking(
             / saturation_threshold
             * saturation_breaking_directional_control
         )
-        if isotropic_saturation_exceedence < 0.0:
+        if isotropic_saturation_exceedence <= 0.0:
             isotropic_saturation_exceedence = 0.0
 
         for direction_index in range(number_of_directions):

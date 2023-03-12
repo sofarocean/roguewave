@@ -103,6 +103,7 @@ def numba_fill_zeros_or_nan_in_tail(
                 tail_energy[ii],
                 tail_bounds,
             )
+
             for jj in range(index + 1, number_of_frequencies):
                 if frequencies[jj] >= trans_freq:
                     variance_density[ii, jj] = (
@@ -110,6 +111,7 @@ def numba_fill_zeros_or_nan_in_tail(
                     )
                 else:
                     variance_density[ii, jj] = starting_energy * (frequencies[jj]) ** -4
+
         else:
             coef, fitted_power = tail_fit(
                 x=frequencies[index - points_in_fit + 1 : index + 1],
@@ -140,10 +142,9 @@ def _compound_tail(
             2.5,
             transition_frequency=transition_frequencies[index],
         )
-
         freq_int = 1.0 / 3.0 * (
             tail_bounds[0] ** -3 - transition_frequencies[index] ** -3
-        ) + 1 / 4 * transition_frequencies[index] * (
+        ) + 1.0 / 4.0 * transition_frequencies[index] * (
             transition_frequencies[index] ** -4 - tail_bounds[1] ** -4
         )
         current_starting_energy = tail_energy / freq_int
@@ -169,28 +170,29 @@ def _compound_tail(
     return transition_frequency, starting_energy
 
 
-@njit(cache=True)
-def _starting_energy(raw_tail_energy, fitted_power, last_resolved_frequency):
-    tail_energy = raw_tail_energy * integrated_response_factor_spectral_tail(
-        fitted_power, last_resolved_frequency, 0.8, 2.5
-    )
-    starting_energy = tail_energy / (
-        (1 / (fitted_power + 1))
-        * (0.8 ** (fitted_power + 1) - last_resolved_frequency ** (fitted_power + 1))
-    )
-    return starting_energy
-
-
-@njit(cache=True)
-def find_starting_energy(raw_tail_energy, fitted_power, last_resolved_frequency):
-    tail_energy = raw_tail_energy * integrated_response_factor_spectral_tail(
-        fitted_power, last_resolved_frequency, 0.8, 2.5
-    )
-    starting_energy = tail_energy / (
-        (1 / (fitted_power + 1))
-        * (0.8 ** (fitted_power + 1) - last_resolved_frequency ** (fitted_power + 1))
-    )
-    return starting_energy
+#
+# @njit(cache=True)
+# def _starting_energy(raw_tail_energy, fitted_power, last_resolved_frequency):
+#     tail_energy = raw_tail_energy * integrated_response_factor_spectral_tail(
+#         fitted_power, last_resolved_frequency, 0.8, 2.5
+#     )
+#     starting_energy = tail_energy / (
+#         (1 / (fitted_power + 1))
+#         * (0.8 ** (fitted_power + 1) - last_resolved_frequency ** (fitted_power + 1))
+#     )
+#     return starting_energy
+#
+#
+# @njit(cache=True)
+# def find_starting_energy(raw_tail_energy, fitted_power, last_resolved_frequency):
+#     tail_energy = raw_tail_energy * integrated_response_factor_spectral_tail(
+#         fitted_power, last_resolved_frequency, 0.8, 2.5
+#     )
+#     starting_energy = tail_energy / (
+#         (1 / (fitted_power + 1))
+#         * (0.8 ** (fitted_power + 1) - last_resolved_frequency ** (fitted_power + 1))
+#     )
+#     return starting_energy
 
 
 def _cdf_interpolate(

@@ -1,15 +1,21 @@
 from roguewave import (
     FrequencyDirectionSpectrum,
 )
-from roguewave.wavephysics.balance.stress import _roughness_estimate, _wave_supported_stress
+from roguewave.wavephysics.balance.stress import (
+    _roughness_estimate,
+    _wave_supported_stress,
+)
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavephysics.balance.source_term import SourceTerm
 from xarray import DataArray, zeros_like, Dataset
 from typing import Literal
-from numpy import (
-    empty, sqrt,log
+from numpy import empty, sqrt, log
+
+from roguewave.wavephysics.balance._numba_settings import (
+    numba_default,
+    numba_nocache_parallel,
 )
-from numba import njit, types
+from numba import jit, types, prange
 from numba.typed import Dict as NumbaDict
 from numpy.typing import NDArray
 from typing import Mapping
@@ -40,7 +46,9 @@ class WindGeneration(SourceTerm):
     ) -> DataArray:
 
         if roughness_length is None:
-            roughness_length = self.roughness(speed,direction, spectrum,wind_speed_input_type=wind_speed_input_type)
+            roughness_length = self.roughness(
+                speed, direction, spectrum, wind_speed_input_type=wind_speed_input_type
+            )
 
         wind = (speed.values, direction.values, wind_speed_input_type)
         wind_input = _wind_generation(
@@ -65,7 +73,9 @@ class WindGeneration(SourceTerm):
         wind = (speed.values, direction.values, wind_speed_input_type)
 
         if roughness_length is None:
-            roughness_length = self.roughness(speed,direction, spectrum,wind_speed_input_type=wind_speed_input_type)
+            roughness_length = self.roughness(
+                speed, direction, spectrum, wind_speed_input_type=wind_speed_input_type
+            )
 
         wind_input = _bulk_wind_generation(
             spectrum.variance_density.values,
@@ -101,7 +111,7 @@ class WindGeneration(SourceTerm):
             wind=wind,
             depth=spectrum.depth.values,
             wind_source_term_function=self._wind_source_term_function,
-            tail_stress_parametrization_function= self._tail_stress_parametrization_function,
+            tail_stress_parametrization_function=self._tail_stress_parametrization_function,
             spectral_grid=self.spectral_grid(spectrum),
             parameters=self.parameters,
         )
@@ -121,7 +131,9 @@ class WindGeneration(SourceTerm):
     ) -> Dataset:
 
         if roughness_length is None:
-            roughness_length = self.roughness(speed,direction, spectrum,wind_speed_input_type=wind_speed_input_type)
+            roughness_length = self.roughness(
+                speed, direction, spectrum, wind_speed_input_type=wind_speed_input_type
+            )
 
         wind = (speed.values, direction.values, wind_speed_input_type)
 
@@ -138,46 +150,51 @@ class WindGeneration(SourceTerm):
 
         return Dataset(
             data_vars={
-                "stress_magnitude": ( spectrum.dims_space_time , stress[0] ),
-                "stress_direction":( spectrum.dims_space_time , stress[1] ),
+                "stress": (spectrum.dims_space_time, stress[0]),
+                "direction": (spectrum.dims_space_time, stress[1]),
             },
-            coords=spectrum.coords_space_time
+            coords=spectrum.coords_space_time,
         )
 
-    def friction_velocity(self,
+    def friction_velocity(
+        self,
         spectrum: FrequencyDirectionSpectrum,
         u10: DataArray,
         direction: DataArray,
         roughness_length: DataArray = None,
     ) -> Dataset:
-        stress = self.stress(
-            spectrum,u10,direction,roughness_length,'u10'
-        )
-        return sqrt(stress['stress_magnitude'] / self.parameters['air_density'])
+        stress = self.stress(spectrum, u10, direction, roughness_length, "u10")
+        return sqrt(stress["stress"] / self.parameters["air_density"])
 
-    def drag(self,
-             spectrum: FrequencyDirectionSpectrum,
-             speed: DataArray,
-             direction: DataArray,
-             roughness_length: DataArray = None,
-             wind_speed_input_type: TWindInputType = "u10",
-             ):
-        if wind_speed_input_type == 'u10':
+    def drag(
+        self,
+        spectrum: FrequencyDirectionSpectrum,
+        speed: DataArray,
+        direction: DataArray,
+        roughness_length: DataArray = None,
+        wind_speed_input_type: TWindInputType = "u10",
+    ):
+        if wind_speed_input_type == "u10":
             u10 = speed
-            u_star = self.friction_velocity(spectrum,speed,direction,roughness_length)
+            u_star = self.friction_velocity(
+                spectrum, speed, direction, roughness_length
+            )
         else:
             u_star = speed
-            roughness = self.roughness(speed,direction,spectrum,wind_speed_input_type=wind_speed_input_type)
-            u10 = u_star * self.parameters['vonkarman_constant'] * log( 10 / roughness )
+            roughness = self.roughness(
+                speed, direction, spectrum, wind_speed_input_type=wind_speed_input_type
+            )
+            u10 = u_star * self.parameters["vonkarman_constant"] * log(10 / roughness)
 
-        return u_star**2 / u10 **2
+        return DataArray(data=u_star.values**2 / u10.values**2)
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Apply to all spatial points
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-@njit()
+@jit(**numba_nocache_parallel)
 def _wind_generation(
     variance_density,
     wind,
@@ -208,7 +225,7 @@ def _wind_generation(
     return generation
 
 
-@njit(cache=True)
+@jit(**numba_nocache_parallel)
 def _bulk_wind_generation(
     variance_density,
     wind,
@@ -221,7 +238,7 @@ def _bulk_wind_generation(
     number_of_points = variance_density.shape[0]
     generation = empty((number_of_points))
 
-    for point_index in range(number_of_points):
+    for point_index in prange(number_of_points):
         wind_at_point = (wind[0][point_index], wind[1][point_index], wind[2])
         wind_generation = wind_source_term_function(
             variance_density=variance_density[point_index, :, :],
@@ -247,7 +264,7 @@ def _bulk_wind_generation(
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-@njit(fastmath=True)
+@jit(**numba_default)
 def _spectral_grid(radian_frequency, radian_direction, frequency_step, direction_step):
     return {
         "radian_frequency": radian_frequency,
@@ -264,13 +281,14 @@ def _numba_parameters(**kwargs):
 
     return _dict
 
-@njit(cache=True)
+
+@jit(**numba_default)
 def _tail_stress_parametrization_none(
-        variance_density,
-        wind,
-        depth,
-        roughness_length,
-        spectral_grid,
-        parameters,
+    variance_density,
+    wind,
+    depth,
+    roughness_length,
+    spectral_grid,
+    parameters,
 ):
     return 0.0

@@ -205,6 +205,10 @@ class WaveSpectrum(DatasetWrapper):
                     # Scalar
                     dataset = dataset.assign({var: self.dataset[var]})
 
+        for coor in dataset.coords:
+            if coor not in dataset.dims:
+                dataset = dataset.reset_coords(coor)
+
         cls = type(self)
         return cls(dataset)
 
@@ -583,7 +587,7 @@ class WaveSpectrum(DatasetWrapper):
         return self.wavenumber_density * self.wavenumber**3
 
     @property
-    def squared_slope_spectrum(self) -> DataArray:
+    def slope_spectrum(self) -> DataArray:
         return self.variance_density * self.wavenumber**2
 
     def mean_squared_slope(self, fmin=0, fmax=numpy.inf) -> DataArray:
@@ -591,9 +595,7 @@ class WaveSpectrum(DatasetWrapper):
 
         # Integrate dataset over frequencies. Make sure to fill any NaN entries with 0 before the integration.
         return (
-            self.squared_slope_spectrum.fillna(0)
-            .isel({NAME_F: _range})
-            .integrate(coord=NAME_F)
+            self.slope_spectrum.fillna(0).isel({NAME_F: _range}).integrate(coord=NAME_F)
         )
 
     def m2(self, fmin=0, fmax=numpy.inf) -> DataArray:
@@ -864,6 +866,7 @@ class WaveSpectrum(DatasetWrapper):
         tail_energy=None,
         tail_bounds=None,
         tail_moments=None,
+        tail_frequency=None,
     ) -> "FrequencySpectrum":
         """
         Extrapolate the tail using the given power
@@ -883,7 +886,10 @@ class WaveSpectrum(DatasetWrapper):
 
         fstart = frequency[-1] + frequency_delta
         fend = frequency[-1] + n * frequency_delta
-        tail_frequency = numpy.linspace(fstart, fend, n, endpoint=True)
+
+        if tail_frequency is None:
+            tail_frequency = numpy.linspace(fstart, fend, n, endpoint=True)
+
         tail_frequency = DataArray(
             data=tail_frequency, coords={"frequency": tail_frequency}, dims="frequency"
         )
@@ -1261,6 +1267,7 @@ def create_1d_spectrum(
     depth: Union[numpy.ndarray, float] = numpy.inf,
     dims=(NAME_T, NAME_F),
 ) -> FrequencySpectrum:
+
     if a1 is None:
         a1 = numpy.nan + numpy.ones_like(variance_density)
     if b1 is None:

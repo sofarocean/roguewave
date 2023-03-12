@@ -6,7 +6,11 @@ from typing import Tuple, Mapping
 from roguewave.wavephysics.balance.source_term import SourceTerm
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
-from numba import njit, prange
+from numba import jit, prange
+from roguewave.wavephysics.balance._numba_settings import (
+    numba_nocache_parallel,
+    numba_default,
+)
 
 
 class Dissipation(SourceTerm):
@@ -57,7 +61,7 @@ class Dissipation(SourceTerm):
         )
 
 
-@njit(cache=False, parallel=False)
+@jit(**numba_nocache_parallel)
 def _dissipation(
     variance_density, depth, dissipation_source_term_function, spectral_grid, parameters
 ) -> NDArray:
@@ -79,7 +83,7 @@ def _dissipation(
     return dissipation
 
 
-@njit(cache=False, parallel=False)
+@jit(**numba_nocache_parallel)
 def _bulk_dissipation(
     variance_density, depth, dissipation_source_term_function, spectral_grid, parameters
 ) -> NDArray:
@@ -97,7 +101,7 @@ def _bulk_dissipation(
     return dissipation
 
 
-@njit(cache=False, parallel=False)
+@jit(**numba_nocache_parallel)
 def _bulk_dissipation_direction(
     variance_density, depth, dissipation_source_term_function, spectral_grid, parameters
 ) -> Tuple[NDArray, NDArray]:
@@ -117,7 +121,7 @@ def _bulk_dissipation_direction(
     return direction, bulk
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def _bulk_dissipation_direction_point(
     variance_density, depth, dissipation_source_term_function, spectral_grid, parameters
 ) -> Tuple[float, float]:

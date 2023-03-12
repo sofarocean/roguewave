@@ -14,9 +14,21 @@ def drag_coefficient_wu(speed):
     return (0.8 + 0.065 * speed) / 1000
 
 
-def roughness_wu(speed, elevation, air: FluidProperties = AIR):
+def roughness_wu(speed, elevation=10, air: FluidProperties = AIR):
     drag = sqrt(drag_coefficient_wu(speed))
     return elevation / exp(air.vonkarman_constant / drag)
+
+
+def drag_coefficient_charnock(
+    speed, elevation=10, charnock_constant=0.012, air: FluidProperties = AIR
+):
+    if not isinstance(speed, DataArray):
+        speed = DataArray(data=speed)
+
+    roughness = charnock_roughness_length_from_u10(
+        speed, charnock_constant=charnock_constant
+    )
+    return (air.vonkarman_constant / log(elevation / roughness)) ** 2
 
 
 def charnock_roughness_length(friction_velocity: DataArray, **kwargs) -> DataArray:
@@ -41,11 +53,13 @@ def charnock_roughness_length(friction_velocity: DataArray, **kwargs) -> DataArr
 def charnock_roughness_length_from_u10(speed, **kwargs) -> DataArray:
     air = kwargs.get("air", AIR)
     elevation = kwargs.get("elevation", 10)
-    guess = kwargs.get("guess", roughness_wu(speed, elevation, air.vonkarman_constant))
+    guess = kwargs.get("guess", roughness_wu(speed, elevation, air))
+
+    const = kwargs.pop("charnock_constant", 0.012)
 
     def _func(roughness):
         friction_velocity = air.vonkarman_constant * speed / log(elevation / roughness)
-        return roughness(friction_velocity, **kwargs)
+        return charnock_roughness_length(friction_velocity, charnock_constant=const)
 
     return fixed_point_iteration(
         _func, guess, bounds=(0, inf), caller="roughness_from_speed", **kwargs

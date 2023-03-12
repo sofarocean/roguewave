@@ -5,8 +5,9 @@ from roguewave.wavephysics.fluidproperties import (
 )
 
 from roguewave.wavephysics.balance import WindGeneration
+from roguewave.wavephysics.balance._numba_settings import numba_default
 from numpy import cos, pi, log, exp, empty, inf
-from numba import njit
+from numba import jit
 from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
 from typing import TypedDict
 from roguewave.wavephysics.balance.wam_tail_stress import (
@@ -56,7 +57,9 @@ class ST4WindInput(WindGeneration):
 # ----------------------------------------------------------------------------------------------------------------------
 # ST4 Point wise implementation functions (apply to a single spatial point)
 # ----------------------------------------------------------------------------------------------------------------------
-@njit(cache=True, fastmath=True)
+
+
+@jit(**numba_default)
 def _st4_wind_generation_point(
     variance_density,
     wind,

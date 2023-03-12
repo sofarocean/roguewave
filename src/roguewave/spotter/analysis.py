@@ -151,14 +151,24 @@ def spotter_api_spectra_post_processing(
     :param maximum_frequency: maximum frequency to extrapolate to.
     :return:
     """
+    maximum_index = int(maximum_frequency / SPOTTER_FREQUENCY_RESOLUTION)
+    new_frequencies = (
+        linspace(3, maximum_index, maximum_index - 2, endpoint=True)
+        * SPOTTER_FREQUENCY_RESOLUTION
+    )
+
     if len(spectrum.frequency) == 39:
+        new_frequencies[0] = spectrum.frequency[0]
+
         last_bin_energy = spectrum.variance_density.values[..., -1] * LAST_BIN_WIDTH
         last_bin_moments = {
-            "a1": spectrum.a1[:, -1],
-            "b1": spectrum.b1[:, -1],
-            "a2": spectrum.a2[:, -1],
-            "b2": spectrum.b2[:, -1],
+            "a1": spectrum.a1[..., -1],
+            "b1": spectrum.b1[..., -1],
+            "a2": spectrum.a2[..., -1],
+            "b2": spectrum.b2[..., -1],
         }
+
+        spectrum = spectrum.interpolate_frequency(new_frequencies)
         spectrum = spectrum.bandpass(fmax=LAST_BIN_FREQUENCY_START)
 
         # Correct for integration errors in the tail
@@ -170,6 +180,7 @@ def spotter_api_spectra_post_processing(
             tail_energy=last_bin_energy,
             tail_bounds=(LAST_BIN_FREQUENCY_START, LAST_BIN_FREQUENCY_END),
             tail_moments=last_bin_moments,
+            tail_frequency=new_frequencies[new_frequencies > LAST_BIN_FREQUENCY_START],
         )
     else:
         # Chop to desired max freq
@@ -181,12 +192,6 @@ def spotter_api_spectra_post_processing(
         # Correct for potential underflow in the tail
         spectrum = fill_zeros_or_nan_in_tail(spectrum)
 
-    # Ensure we return exactly the same frequency grid in all cases (given max frequency).
-    maximum_index = int(maximum_frequency / SPOTTER_FREQUENCY_RESOLUTION)
-    new_frequencies = (
-        linspace(3, maximum_index, maximum_index - 2, endpoint=True)
-        * SPOTTER_FREQUENCY_RESOLUTION
-    )
-    spectrum = spectrum.interpolate_frequency(new_frequencies)
+        spectrum = spectrum.interpolate_frequency(new_frequencies)
 
     return spectrum

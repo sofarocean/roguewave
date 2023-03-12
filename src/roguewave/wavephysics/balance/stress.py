@@ -1,15 +1,16 @@
 from typing import Tuple
 
-from numba import njit
+from numba import jit
 from numpy import inf, cos, sin, sqrt, arctan2, pi, exp, isnan, nan, empty, log, any
 from numpy.typing import NDArray
 
 from roguewave.wavephysics.balance.wam_tail_stress import _charnock_relation_point
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
 from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
+from roguewave.wavephysics.balance._numba_settings import numba_nocache
 
 
-@njit(fastmath=True)
+@jit(**numba_nocache)
 def _wave_supported_stress_point(
     wind_input: NDArray,
     depth,
@@ -84,7 +85,7 @@ def _wave_supported_stress_point(
     return wave_stress_magnitude, wave_stress_direction
 
 
-@njit()
+@jit(**numba_nocache)
 def _roughness_estimate_point(
     guess,
     variance_density,
@@ -155,7 +156,7 @@ def _roughness_estimate_point(
     return exp(log_root)
 
 
-@njit()
+@jit(**numba_nocache)
 def _roughness_estimate(
     guess,
     variance_density,
@@ -184,21 +185,24 @@ def _roughness_estimate(
         if isnan(wind[0][point_index]):
             roughness[point_index] = nan
         else:
-            roughness[point_index] = _roughness_estimate_point(
-                guess=guess[point_index],
-                variance_density=variance_density[point_index, :, :],
-                wind=wind_at_point,
-                depth=depth[point_index],
-                wind_source_term_function=wind_source_term_function,
-                tail_stress_parametrization_function=tail_stress_parametrization_function,
-                spectral_grid=spectral_grid,
-                parameters=parameters,
-            )
+            try:
+                roughness[point_index] = _roughness_estimate_point(
+                    guess=guess[point_index],
+                    variance_density=variance_density[point_index, :, :],
+                    wind=wind_at_point,
+                    depth=depth[point_index],
+                    wind_source_term_function=wind_source_term_function,
+                    tail_stress_parametrization_function=tail_stress_parametrization_function,
+                    spectral_grid=spectral_grid,
+                    parameters=parameters,
+                )
+            except:
+                roughness[point_index] = nan
 
     return roughness
 
 
-@njit()
+@jit(**numba_nocache)
 def _wave_supported_stress(
     variance_density,
     wind,
@@ -238,7 +242,7 @@ def _wave_supported_stress(
     return magnitude, direction
 
 
-@njit()
+@jit(**numba_nocache)
 def _stress_iteration_function(
     log_roughness_length,
     variance_density,
@@ -299,7 +303,7 @@ def _stress_iteration_function(
     return parameters["air_density"] * friction_velocity**2 - total_stress_estimate
 
 
-@njit()
+@jit(**numba_nocache)
 def _total_stress_point(
     roughness_length,
     variance_density,
@@ -330,6 +334,12 @@ def _total_stress_point(
         )
     else:
         friction_velocity = wind[0]
+
+    if friction_velocity == 0.0:
+        return 0.0, nan
+
+    if isnan(friction_velocity):
+        return nan, nan
 
     # Get the wind input source term values
     work_array = wind_source_term_function(

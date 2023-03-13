@@ -575,6 +575,12 @@ class WaveSpectrum(DatasetWrapper):
         # by number of frequencies data structure.
         return (1 / self.wavenumber) * self.radian_frequency
 
+    def wave_age(self, windspeed, fmin=0, fmax=numpy.inf):
+
+        index = self.slope_spectrum.where(self._range(fmin, fmax), 0).argmax(dim=NAME_F)
+        frequency = self.dataset[NAME_F][index]
+        return 9.81 * frequency / 2 / numpy.pi / windspeed
+
     def peak_wave_speed(self) -> DataArray:
         return 2 * numpy.pi * self.peak_frequency() / self.peak_wavenumber
 

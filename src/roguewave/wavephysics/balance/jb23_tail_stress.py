@@ -1,5 +1,5 @@
 from numba import njit
-from numpy import log, inf, array, exp, empty, pi, cos, tanh, sqrt, linspace
+from numpy import log, inf, array, exp, empty, pi, cos, tanh, sqrt, linspace, sin
 
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
 from roguewave.wavephysics.balance.wam_tail_stress import (
@@ -105,7 +105,14 @@ def tail_stress_parametrization_jb23(
             + angular_frequency[wavenumber_index] * windinput[wavenumber_index] / 2
         ) * wavenumber_step
 
-    return stress * parameters["water_density"]
+    eastward_stress = (
+        stress * parameters["water_density"] * cos(wind_direction_radian),
+    )
+    northward_stress = (
+        stress * parameters["water_density"] * sin(wind_direction_radian),
+    )
+
+    return eastward_stress, northward_stress
 
 
 def wind_stress_tail(

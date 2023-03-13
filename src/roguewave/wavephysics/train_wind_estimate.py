@@ -159,6 +159,7 @@ def calibrate_wind_estimate_from_balance(
     velocity_scale=None,
     params=None,
     time_derivative_spectrum: FrequencyDirectionSpectrum = None,
+    direction_iteration=False,
 ):
     dissipation = balance.dissipation
     generation = balance.generation
@@ -202,6 +203,7 @@ def calibrate_wind_estimate_from_balance(
             jacobian=True,
             jacobian_parameters=parameter_names,
             time_derivative_spectrum=time_derivative_spectrum,
+            direction_iteration=direction_iteration,
         )
         actual = estimate["u10"].values / velocity_scale
         actual[isnan(actual)] = 0.0

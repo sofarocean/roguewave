@@ -20,7 +20,7 @@ def _wave_supported_stress_point(
     roughness_length,
     tail_stress_parametrization_function,
     parameters,
-) -> Tuple[NDArray, NDArray]:
+) -> Tuple[float, float]:
     """
     :param wind_input:
     :param depth:
@@ -67,22 +67,25 @@ def _wave_supported_stress_point(
             )
 
     # calculate the magnitude
-    resolved_wave_stress_magnitude = (
-        sqrt(stress_north**2 + stress_east**2)
-        * parameters["gravitational_acceleration"]
-        * parameters["water_density"]
+    stress_north *= (
+        parameters["gravitational_acceleration"] * parameters["water_density"]
     )
-
-    wave_stress_direction = (arctan2(stress_north, stress_east) * 180 / pi) % 360
+    stress_east *= (
+        parameters["gravitational_acceleration"] * parameters["water_density"]
+    )
 
     # Add stress contribution due to unresolved waves in the spectral tail (above the last resolved frequency)
-    tail_wave_stress_magnitude = tail_stress_parametrization_function(
+    (
+        eastward_tail_wave_stress,
+        northward_tail_wave_stress,
+    ) = tail_stress_parametrization_function(
         variance_density, wind, depth, roughness_length, spectral_grid, parameters
     )
+    stress_east += eastward_tail_wave_stress
+    stress_north += northward_tail_wave_stress
 
     # Total stress is the sum or resolved and unresolved part.
-    wave_stress_magnitude = resolved_wave_stress_magnitude + tail_wave_stress_magnitude
-    return wave_stress_magnitude, wave_stress_direction
+    return stress_east, stress_north  # wave_stress_magnitude, wave_stress_direction
 
 
 @jit(**numba_nocache)
@@ -353,7 +356,7 @@ def _total_stress_point(
     )
 
     # Calculate the stress
-    wave_supported_stress, stress_direction = _wave_supported_stress_point(
+    stress_east, stress_north = _wave_supported_stress_point(
         work_array,
         depth,
         spectral_grid,
@@ -373,4 +376,12 @@ def _total_stress_point(
         / roughness_length
     )
 
-    return wave_supported_stress + viscous_stress, stress_direction
+    wind_direction_radian = wind[1] * pi / 180
+
+    stress_north += viscous_stress * sin(wind_direction_radian)
+    stress_east += viscous_stress * cos(wind_direction_radian)
+
+    stress_direction = (arctan2(stress_north, stress_east) * 180 / pi) % 360
+    stress_magnitude = sqrt(stress_north**2 + stress_east**2)
+
+    return stress_magnitude, stress_direction

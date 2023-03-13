@@ -1,5 +1,5 @@
 from numba import njit
-from numpy import log, exp, array, pi, cos
+from numpy import log, exp, array, pi, cos, sin
 
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
 
@@ -128,7 +128,9 @@ def tail_stress_parametrization_wam(
 
     wind_forcing, wind_direction_degrees, wind_forcing_type = wind
     wind_direction_radian = wind_direction_degrees * pi / 180
-    cosine = cos(radian_direction - wind_direction_radian)
+    cosine_mutual_angle = cos(radian_direction - wind_direction_radian)
+    cosine = cos(radian_direction)
+    sine = sin(radian_direction)
 
     if wind_forcing_type == "u10":
         friction_velocity = (
@@ -141,13 +143,22 @@ def tail_stress_parametrization_wam(
     else:
         raise ValueError("Unknown wind input type")
 
-    directional_integral_last_bin = 0
+    directional_integral_last_bin_east = 0.0
+    directional_integral_last_bin_north = 0.0
     for direction_index in range(0, number_of_directions):
-        if cosine[direction_index] <= 0.0:
+        if cosine_mutual_angle[direction_index] <= 0.0:
             continue
 
-        directional_integral_last_bin += (
-            cosine[direction_index] ** 3
+        directional_integral_last_bin_east += (
+            cosine_mutual_angle[direction_index] ** 2
+            * cosine[direction_index]
+            * variance_density[number_of_frequencies - 1, direction_index]
+            * direction_step[direction_index]
+        )
+
+        directional_integral_last_bin_north += (
+            cosine_mutual_angle[direction_index] ** 2
+            * sine[direction_index]
             * variance_density[number_of_frequencies - 1, direction_index]
             * direction_step[direction_index]
         )
@@ -178,10 +189,20 @@ def tail_stress_parametrization_wam(
     charnock_roughness = _charnock_relation_point(friction_velocity, parameters)
     background_stress = charnock_roughness**2 / roughness_length**2 * total_stress
 
-    return (
-        directional_integral_last_bin * frequency_integral * constant * air_density
-        + background_stress
+    eastward_stress = (
+        directional_integral_last_bin_east * frequency_integral * constant * air_density
+        + cos(wind_direction_radian) * background_stress
     )
+
+    northward_stress = (
+        directional_integral_last_bin_north
+        * frequency_integral
+        * constant
+        * air_density
+        + sin(wind_direction_radian) * background_stress
+    )
+
+    return eastward_stress, northward_stress
 
 
 @njit(cache=True)

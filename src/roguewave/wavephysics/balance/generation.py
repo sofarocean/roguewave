@@ -4,6 +4,7 @@ from roguewave import (
 from roguewave.wavephysics.balance.stress import (
     _roughness_estimate,
     _wave_supported_stress,
+    _tail_supported_stress
 )
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavephysics.balance.source_term import SourceTerm
@@ -187,6 +188,39 @@ class WindGeneration(SourceTerm):
             u10 = u_star * self.parameters["vonkarman_constant"] * log(10 / roughness)
 
         return DataArray(data=u_star.values**2 / u10.values**2)
+
+    def tail_stress(
+        self,
+        spectrum: FrequencyDirectionSpectrum,
+        speed: DataArray,
+        direction: DataArray,
+        roughness_length: DataArray = None,
+        wind_speed_input_type: TWindInputType = "u10",
+    ) -> Dataset:
+
+        if roughness_length is None:
+            roughness_length = self.roughness(
+                speed, direction, spectrum, wind_speed_input_type=wind_speed_input_type
+            )
+
+        wind = (speed.values, direction.values, wind_speed_input_type)
+        stress = _tail_supported_stress(
+            variance_density=spectrum.variance_density.values,
+            wind=wind,
+            depth=spectrum.depth.values,
+            roughness_length=roughness_length.values,
+            tail_stress_parametrization_function=self._tail_stress_parametrization_function,
+            spectral_grid=self.spectral_grid(spectrum),
+            parameters=self.parameters,
+        )
+
+        return Dataset(
+            data_vars={
+                "stress": (spectrum.dims_space_time, stress[0]),
+                "direction": (spectrum.dims_space_time, stress[1]),
+            },
+            coords=spectrum.coords_space_time,
+        )
 
 
 # ----------------------------------------------------------------------------------------------------------------------

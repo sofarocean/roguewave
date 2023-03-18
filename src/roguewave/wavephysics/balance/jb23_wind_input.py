@@ -26,6 +26,7 @@ class JB23WaveGenerationParameters(TypedDict):
     viscous_stress_parameter: float
     surface_tension: float
     width_factor: float
+    non_linear_effect_strength: float
 
 
 class JB23WindInput(ST4WindInput):
@@ -53,6 +54,7 @@ class JB23WindInput(ST4WindInput):
             viscous_stress_parameter=1.0 / 25.0,
             surface_tension=WATER.kinematic_surface_tension,
             width_factor=0.6,
+            non_linear_effect_strength=1.0,
         )
 
 
@@ -99,6 +101,7 @@ def _jb23_wind_generation_point(
     radian_direction = spectral_grid["radian_direction"]
     direction_step = spectral_grid["direction_step"]
     elevation = parameters["elevation"]
+    non_linear_effect_strength = parameters["non_linear_effect_strength"]
 
     wind_forcing, wind_direction_degrees, wind_forcing_type = wind
 
@@ -171,7 +174,8 @@ def _jb23_wind_generation_point(
                 # an additional division by k (in addition to the jacobian cg) to make this work-
                 # hence the wavenumber **2 !!
                 common_factor = (
-                    variance_density[frequency_index, direction_index]
+                    non_linear_effect_strength
+                    * variance_density[frequency_index, direction_index]
                     * group_speed
                     * direction_step[direction_index]
                     * wavenumber[frequency_index] ** 2

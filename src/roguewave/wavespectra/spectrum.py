@@ -579,7 +579,9 @@ class WaveSpectrum(DatasetWrapper):
 
         index = self.slope_spectrum.where(self._range(fmin, fmax), 0).argmax(dim=NAME_F)
         frequency = self.dataset[NAME_F][index]
-        return 9.81 * frequency / 2 / numpy.pi / windspeed
+        c = 9.81 * frequency / 2 / numpy.pi
+        c = self.peak_wave_speed()
+        return  c / windspeed
 
     def peak_wave_speed(self) -> DataArray:
         return 2 * numpy.pi * self.peak_frequency() / self.peak_wavenumber

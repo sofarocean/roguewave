@@ -1,28 +1,38 @@
-from numba import njit
-from numpy import log, inf, array, exp, empty, pi, cos, tanh, sqrt, linspace, sin
+from numba import jit
+from numpy import log, inf, array, exp, empty, pi, cos, tanh, sqrt, linspace, sin, zeros, concatenate, min, trapz
 
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
 from roguewave.wavephysics.balance.wam_tail_stress import (
     log_dimensionless_critical_height,
 )
+from ._numba_settings import numba_default
 
 
-# --------------------------------
-# Janssen and Bidlot 2022
-# --------------------------------
-@njit()
+@jit(**numba_default)
 def tail_stress_parametrization_jb23(
-    variance_density, wind, depth, roughness_length, spectral_grid, parameters
+        variance_density,
+        wind,
+        depth,
+        roughness_length,
+        spectral_grid,
+        parameters,
 ):
+    vonkarman_constant = parameters["vonkarman_constant"]
+    radian_direction = spectral_grid["radian_direction"]
+    elevation = parameters["elevation"]
+
+    number_of_frequencies, number_of_directions = variance_density.shape
+    direction_step = spectral_grid["direction_step"]
+
     wind_forcing, wind_direction_degrees, wind_forcing_type = wind
     wind_direction_radian = wind_direction_degrees * pi / 180
-    cosine = cos(spectral_grid["radian_direction"] - wind_direction_radian)
+    cosine_mutual_angle = cos(radian_direction - wind_direction_radian)
+    cosine = cos(radian_direction)
+    sine = sin(radian_direction)
 
     if wind_forcing_type == "u10":
         friction_velocity = (
-            wind_forcing
-            * parameters["vonkarman_constant"]
-            / log(parameters["elevation"] / roughness_length)
+                wind_forcing * vonkarman_constant / log(elevation / roughness_length)
         )
 
     elif wind_forcing_type in ["ustar", "friction_velocity"]:
@@ -31,108 +41,98 @@ def tail_stress_parametrization_jb23(
     else:
         raise ValueError("Unknown wind input type")
 
-    directional_integral_last_bin = 0
-    direction_step = spectral_grid["direction_step"]
-    number_of_frequencies, number_of_directions = variance_density.shape
+    directional_integral_last_bin = 0.0
+    directional_integral_last_bin_east = 0.0
+    directional_integral_last_bin_north = 0.0
     for direction_index in range(0, number_of_directions):
-        if cosine[direction_index] <= 0.0:
+        if cosine_mutual_angle[direction_index] <= 0.0:
             continue
-
         directional_integral_last_bin += (
-            variance_density[number_of_frequencies - 1, direction_index]
-            * direction_step[direction_index]
+                cosine_mutual_angle[direction_index] ** 2
+                * variance_density[number_of_frequencies - 1, direction_index]
+                * direction_step[direction_index]
         )
 
+        directional_integral_last_bin_east += (
+                cosine_mutual_angle[direction_index] ** 2
+                * cosine[direction_index]
+                * variance_density[number_of_frequencies - 1, direction_index]
+                * direction_step[direction_index]
+        )
+
+        directional_integral_last_bin_north += (
+                cosine_mutual_angle[direction_index] ** 2
+                * sine[direction_index]
+                * variance_density[number_of_frequencies - 1, direction_index]
+                * direction_step[direction_index]
+        )
+
+    if directional_integral_last_bin > 0.0:
+        stress_east_fac = directional_integral_last_bin_east / directional_integral_last_bin
+        stress_north_fac = directional_integral_last_bin_north / directional_integral_last_bin
+    else:
+        stress_east_fac=1.0
+        stress_north_fac = 0.0
+
+
     last_resolved_wavenumber = (
-        spectral_grid["radian_frequency"][number_of_frequencies - 1] ** 2
-        / parameters["gravitational_acceleration"]
+            spectral_grid["radian_frequency"][number_of_frequencies - 1] ** 2
+            / parameters["gravitational_acceleration"]
     )
 
     jacobian_to_wavenumber_density = (
-        spectral_grid["radian_frequency"][number_of_frequencies - 1]
-        / last_resolved_wavenumber
-        / 4
-        / pi
+            spectral_grid["radian_frequency"][number_of_frequencies - 1]
+            / last_resolved_wavenumber
+            / 4
+            / pi
     )
 
-    starting_energy = directional_integral_last_bin * jacobian_to_wavenumber_density
-
-    bounds = log_bounds_wavenumber(roughness_length, friction_velocity, parameters)
-
-    if bounds[1] < log(last_resolved_wavenumber):
-        return 0.0
-
-    if bounds[0] < log(last_resolved_wavenumber):
-        bounds[0] = log(last_resolved_wavenumber)
-
-    if bounds[1] <= bounds[0]:
-        print("warning")
-        print(bounds)
-        return 0.0
-
-    log_wavenumbers = linspace(bounds[0], bounds[1], 100)
-    wavenumbers = exp(log_wavenumbers)
+    starting_energy_wavenumber_density = directional_integral_last_bin * jacobian_to_wavenumber_density
+    wavenumbers = wavenumber_grid( last_resolved_wavenumber,roughness_length,friction_velocity,parameters )
 
     saturation_spectrum = saturation_spectrum_parametrization(
         wavenumbers,
-        starting_energy,
+        starting_energy_wavenumber_density,
         last_resolved_wavenumber,
         friction_velocity,
-        parameters,
-    )
-    tail_spectrum = saturation_spectrum * wavenumbers**-3
-
-    windinput = wind_input_tail(
-        log_wavenumbers, roughness_length, friction_velocity, tail_spectrum, parameters
+        parameters
     )
 
-    angular_frequency = dispersion(
-        wavenumbers,
-        parameters["gravitational_acceleration"],
-        parameters["surface_tension"],
+    background_stress = (
+            parameters['charnock_constant']**2 * friction_velocity **6
+            / parameters['gravitational_acceleration']**2
+            / roughness_length**2
     )
 
-    stress = 0.0
-    for wavenumber_index in range(1, wavenumbers.shape[0]):
-        wavenumber_step = (
-            wavenumbers[wavenumber_index] - wavenumbers[wavenumber_index - 1]
-        )
-
-        stress += (
-            angular_frequency[wavenumber_index - 1]
-            * windinput[wavenumber_index - 1]
-            / 2
-            + angular_frequency[wavenumber_index] * windinput[wavenumber_index] / 2
-        ) * wavenumber_step
+    tail_spectrum = saturation_spectrum * wavenumbers ** (-3)
+    stress = wind_stress_tail(wavenumbers,roughness_length,friction_velocity,tail_spectrum,parameters )
+    integral = trapz( stress, wavenumbers ) + background_stress * parameters['air_density']
 
     eastward_stress = (
-        stress * parameters["water_density"] * cos(wind_direction_radian),
+            integral * stress_east_fac
     )
+
     northward_stress = (
-        stress * parameters["water_density"] * sin(wind_direction_radian),
+            integral * stress_north_fac
     )
 
     return eastward_stress, northward_stress
 
 
+# --------------------------------
+# Janssen and Bidlot 2022
+# --------------------------------
+@jit(**numba_default)
 def wind_stress_tail(
-    starting_energy,
-    starting_wavenumber,
-    roughness_length,
-    friction_velocity,
-    log_wavenumbers,
-    parameters,
+        wavenumbers,
+        roughness_length,
+        friction_velocity,
+        tail_spectrum,
+        parameters,
 ):
-    wavenumbers = exp(log_wavenumbers)
-
-    saturation_spectrum = saturation_spectrum_parametrization(
-        wavenumbers, starting_energy, starting_wavenumber, friction_velocity, parameters
-    )
-
-    tail_spectrum = saturation_spectrum * wavenumbers**-3
 
     windinput = wind_input_tail(
-        log_wavenumbers, roughness_length, friction_velocity, tail_spectrum, parameters
+        wavenumbers, roughness_length, friction_velocity, tail_spectrum, parameters
     )
 
     angular_frequency = dispersion(
@@ -144,7 +144,7 @@ def wind_stress_tail(
     stress = empty(wavenumbers.shape[0])
     for wavenumber_index in range(0, wavenumbers.shape[0]):
         stress[wavenumber_index] = (
-            angular_frequency[wavenumber_index] * windinput[wavenumber_index]
+                angular_frequency[wavenumber_index] * windinput[wavenumber_index]
         )
 
     return stress * parameters["water_density"]
@@ -153,7 +153,7 @@ def wind_stress_tail(
 # ----
 # Helper functions Integration domains
 # ----
-@njit()
+@jit(**numba_default)
 def log_bounds_wavenumber(roughness_length, friction_velocity, parameters):
     """
     Find the lower bound of the integration domain for JB2022. Since in this region we have gravity waves we may use
@@ -166,7 +166,11 @@ def log_bounds_wavenumber(roughness_length, friction_velocity, parameters):
     :param gravitational_acceleration:
     :return:
     """
+
     args = (roughness_length, friction_velocity, parameters)
+
+    if friction_velocity <= 0.0:
+        return array( (-inf,-inf ) )
 
     # find the right root
     log_upper_bound = numba_newton_raphson(
@@ -181,7 +185,7 @@ def log_bounds_wavenumber(roughness_length, friction_velocity, parameters):
     args_old = (
         roughness_length
         * parameters["gravitational_acceleration"]
-        / friction_velocity**2,
+        / friction_velocity ** 2,
         parameters["vonkarman_constant"],
         parameters["wave_age_tuning_parameter"],
     )
@@ -201,7 +205,7 @@ def log_bounds_wavenumber(roughness_length, friction_velocity, parameters):
     while True:
         # print(guess, log_upper_bound)
         log_lower_bound = numba_newton_raphson(
-            miles_mu,
+            miles_mu_cutoff,
             guess,
             args,
             (-10, log_upper_bound),
@@ -219,7 +223,7 @@ def log_bounds_wavenumber(roughness_length, friction_velocity, parameters):
 # ----
 # Helper functions growth parameter
 # ----
-@njit(cache=True)
+@jit(**numba_default)
 def miles_mu(log_wavenumber, roughness_length, friction_velocity, parameters):
     vonkarman_constant = parameters["vonkarman_constant"]
     wave_age_tuning_parameter = parameters["wave_age_tuning_parameter"]
@@ -230,85 +234,78 @@ def miles_mu(log_wavenumber, roughness_length, friction_velocity, parameters):
     wavespeed = celerity(wavenumber, gravitational_acceleration, surface_tension)
 
     return (
-        log_wavenumber
-        + log(roughness_length)
-        + vonkarman_constant
-        / (friction_velocity / wavespeed + wave_age_tuning_parameter)
+            log_wavenumber
+            + log(roughness_length)
+            + vonkarman_constant
+            / (friction_velocity / wavespeed + wave_age_tuning_parameter)
     )
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def miles_mu_cutoff(log_wavenumber, roughness_length, friction_velocity, parameters):
-    mu = exp(miles_mu(log_wavenumber, roughness_length, friction_velocity, parameters))
-    return log(mu - 0.25 * tanh(4 * friction_velocity**4))
+    return  (
+        miles_mu(log_wavenumber, roughness_length, friction_velocity, parameters)
+        - log(1 + 0.25 * tanh(4 * friction_velocity ** 4))
+    )
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def wind_input_tail(
-    log_wavenumbers, roughness_length, friction_velocity, tail_spectrum, parameters
+        wavenumbers, roughness_length, friction_velocity, tail_spectrum, parameters
 ):
     vonkarman_constant = parameters["vonkarman_constant"]
     growth_parameter_betamax = parameters["growth_parameter_betamax"]
-    width_factor = parameters["width_factor"]
 
-    number_of_wavenumbers = log_wavenumbers.shape[0]
+    non_linear_effect_strength = parameters["non_linear_effect_strength"]
+
+    number_of_wavenumbers = wavenumbers.shape[0]
     windinput = empty(number_of_wavenumbers)
 
-    mu = miles_mu(log_wavenumbers, roughness_length, friction_velocity, parameters)
+    mu = miles_mu( log(wavenumbers), roughness_length, friction_velocity, parameters)
 
     epsilon = parameters["air_density"] / parameters["water_density"]
-    wavenumber = exp(log_wavenumbers)
+
     wave_speed = celerity(
-        wavenumber, parameters["gravitational_acceleration"], 0.0
+        wavenumbers, parameters["gravitational_acceleration"], 0*parameters["surface_tension"]
     )  # parameters["surface_tension"])
     angular_frequency = dispersion(
-        wavenumber,
+        wavenumbers,
         parameters["gravitational_acceleration"],
         parameters["surface_tension"],
-    )
-    k3w = three_wave_starting_wavenumber(
-        parameters["gravitational_acceleration"],
-        parameters["surface_tension"],
-        friction_velocity,
     )
 
-    miles_cutoff = log(1 + 0.25 * tanh(4 * friction_velocity**4))
+    miles_cutoff = log(1 + 0.25 * tanh(4 * friction_velocity ** 4))
     for wavenumber_index in range(0, number_of_wavenumbers):
         if mu[wavenumber_index] > miles_cutoff:
             windinput[wavenumber_index] = 0.0
             continue
 
-        if wavenumber[wavenumber_index] > k3w:
-            integration_width = 0.35 + width_factor * tanh(3 * friction_velocity**2)
-        else:
-            integration_width = 0.65
-
         linear_growth_parameter = (
-            angular_frequency[wavenumber_index]
-            * mu[wavenumber_index] ** 4
-            * exp(mu[wavenumber_index])
-            * growth_parameter_betamax
-            / vonkarman_constant**2
-            * epsilon
-            * friction_velocity**2
-            / wave_speed[wavenumber_index] ** 2
+                angular_frequency[wavenumber_index]
+                * mu[wavenumber_index] ** 4
+                * exp(mu[wavenumber_index])
+                * growth_parameter_betamax
+                / vonkarman_constant ** 2
+                * epsilon
+                * friction_velocity ** 2
+                / wave_speed[wavenumber_index] ** 2
         )
 
         N2 = (
-            integration_width
-            * tail_spectrum[wavenumber_index]
-            * linear_growth_parameter
-            * wavenumber[wavenumber_index] ** 2
-            / vonkarman_constant
-            / epsilon
-            / friction_velocity
+                non_linear_effect_strength
+                * tail_spectrum[wavenumber_index]
+                * linear_growth_parameter
+                * wavenumbers[wavenumber_index] ** 2
+                / vonkarman_constant
+                / epsilon
+                / friction_velocity
         )
         N1 = N2 / 6.0
         nonlinear_correction = (1.0 + N1) / (1.0 + N2)
         growth_parameter = linear_growth_parameter * nonlinear_correction
 
         windinput[wavenumber_index] = (
-            integration_width * growth_parameter * tail_spectrum[wavenumber_index]
+                growth_parameter * tail_spectrum[wavenumber_index]
         )
 
     return windinput
@@ -317,13 +314,66 @@ def wind_input_tail(
 # ----
 # Helper functions spectral parametrization tail
 # ----
-@njit(cache=True)
+
+@jit(**numba_default)
+def wavenumber_grid(starting_wavenumber, roughness_length, friction_velocity, parameters):
+    log_starting_wavenumber = log(starting_wavenumber)
+    log_bounds = log_bounds_wavenumber(roughness_length, friction_velocity, parameters)
+
+    if log_bounds[0] < log_starting_wavenumber:
+        log_bounds[0] = log_starting_wavenumber
+
+    if log_bounds[1] < log_starting_wavenumber:
+        # Numba does not handle multiple returns well. Here I return a len 1 array with
+        # a negative wavenumber to signal that there is no valid wavenumber grid
+        return array([-1.0])
+
+    # After Lenain and Melville, 2017
+    log_upper_bound_eq_range = log(
+        upper_limit_wavenumber_equilibrium_range(friction_velocity, parameters)
+    )
+
+    # Starting wave number where we switch on 3-wave interactions.
+    log_three_wave_start = log(three_wave_starting_wavenumber(
+        friction_velocity, parameters
+    ))
+
+    has_eq_range = log_bounds[0] < log_upper_bound_eq_range
+    has_constant_range = log_bounds[0] < log_three_wave_start and log_bounds[1] > log_upper_bound_eq_range
+    has_cap_range = log_bounds[1] > log_three_wave_start
+
+    if has_eq_range:
+        high = min(array( (log_upper_bound_eq_range, log_bounds[1])))
+        low = log_bounds[0]
+        wavenumber = linspace(low, high, 50)
+    else:
+        wavenumber = zeros((1,))
+        wavenumber[0] = log_bounds[0]
+
+    if has_constant_range:
+        high = min(array((log_three_wave_start, log_bounds[1])))
+        low = wavenumber[-1]
+        wavenumber = concatenate(
+            (wavenumber[:-1], linspace(low, high, 50))
+        )
+
+    if has_cap_range:
+        high = log_bounds[1]
+        low = wavenumber[-1]
+        wavenumber = concatenate(
+            (wavenumber[:-1], linspace(low, high, 50))
+        )
+
+    return exp(wavenumber)
+
+
+@jit(**numba_default)
 def saturation_spectrum_parametrization(
-    wavenumbers,
-    energy_at_starting_wavenumber,
-    starting_wavenumber,
-    friction_velocity,
-    parameters,
+        wavenumbers,
+        energy_at_starting_wavenumber,
+        starting_wavenumber,
+        friction_velocity,
+        parameters,
 ):
     """
     Saturation spectrum accordin to the VIERS model (adapted from JB2023)
@@ -342,59 +392,100 @@ def saturation_spectrum_parametrization(
     gravitational_acceleration = parameters["gravitational_acceleration"]
     surface_tension = parameters["surface_tension"]
 
+    # After Lenain and Melville, 2017
+    upper_bound_eq_range = 0.01 * gravitational_acceleration / friction_velocity ** 2
+
     # Starting wave number where we switch on 3-wave interactions.
     three_wave_start = three_wave_starting_wavenumber(
-        gravitational_acceleration, surface_tension, friction_velocity
+        friction_velocity, parameters
     )
 
     number_of_wavenumbers = wavenumbers.shape[0]
-    spectrum = empty(number_of_wavenumbers)
+    saturation_spectrum = empty(number_of_wavenumbers)
 
     # Saturation in the "saturation range", we assume a k**-3 spectrum here (f**-5)
-    saturation_at_boundary = energy_at_starting_wavenumber * starting_wavenumber**3
+    saturation_at_start_of_eq_range = energy_at_starting_wavenumber * starting_wavenumber ** 3
+
+    #
+    if starting_wavenumber < upper_bound_eq_range:
+        saturation_at_end_of_eq_range = saturation_at_start_of_eq_range * sqrt(
+            upper_bound_eq_range / starting_wavenumber)
+
+    else:
+        saturation_at_end_of_eq_range = saturation_at_start_of_eq_range
 
     # Strength of the 3-wave interactin parameter. This is directly taken from the VIERS work - as it was not
     # specified what was used in JB23.
     strength_three_wave_interactions = (
-        3 * pi / 16 * (tanh(2 * (sqrt(wavenumbers / three_wave_start) - 1)) + 1)
+            3 * pi / 16 * (tanh(2 * (sqrt(wavenumbers / three_wave_start) - 1)) + 1)
     )
 
     # Strength at the point where we turn on the interactions
     strength_three_wave_interactions_start = 3 * pi / 16
 
     energy_flux_at_boundary = (
-        strength_three_wave_interactions_start
-        * saturation_at_boundary**2
-        * celerity(three_wave_start, gravitational_acceleration, surface_tension) ** 4
-        / group_velocity(three_wave_start, gravitational_acceleration, surface_tension)
+            strength_three_wave_interactions
+            * saturation_at_end_of_eq_range ** 2
+            * celerity(three_wave_start, gravitational_acceleration, surface_tension) ** 4
+            / group_velocity(three_wave_start, gravitational_acceleration, surface_tension)
     )
 
-    k0 = sqrt(gravitational_acceleration / surface_tension)
+    if surface_tension > 0.0:
+        k0 = sqrt(gravitational_acceleration / surface_tension)
+    else:
+        k0 = inf
+
     c0 = (gravitational_acceleration * surface_tension) ** (1 / 4)
     for wavenumber_index in range(number_of_wavenumbers):
-        if wavenumbers[wavenumber_index] > three_wave_start:
-            scaling_constant = sqrt(
-                energy_flux_at_boundary
-                / 2
-                / strength_three_wave_interactions[wavenumber_index]
-            ) * c0 ** (-3 / 2)
-            y = wavenumbers[wavenumber_index] / k0
-            spectrum[wavenumber_index] = (
-                scaling_constant
-                * y
-                * sqrt(1 + 3 * y**2)
-                / ((1 + y**2) * (y + y**3) ** (1 / 4))
+        if wavenumbers[wavenumber_index] < upper_bound_eq_range:
+            # In the eq. range the saturation spectrum goes as sqrt(k)
+            saturation_spectrum[wavenumber_index] = (
+                    saturation_at_start_of_eq_range
+                    * sqrt(wavenumbers[wavenumber_index]
+                           / starting_wavenumber)
             )
 
-        else:
-            spectrum[wavenumber_index] = saturation_at_boundary
+        elif wavenumbers[wavenumber_index] >= upper_bound_eq_range and wavenumbers[wavenumber_index] < three_wave_start:
+            # Constant saturation region
+            saturation_spectrum[wavenumber_index] = saturation_at_end_of_eq_range
 
-    return spectrum
+        elif wavenumbers[wavenumber_index] >= three_wave_start:
+            # Region where three-wave interactions play a role
+            scaling_constant = sqrt(
+                energy_flux_at_boundary[wavenumber_index]
+                / 2
+                / strength_three_wave_interactions_start #strength_three_wave_interactions[wavenumber_index]
+            ) * c0 ** (-3 / 2)
+
+            y = wavenumbers[wavenumber_index] / k0
+            saturation_spectrum[wavenumber_index] = (
+                    scaling_constant
+                    * y
+                    * sqrt(1 + 3 * y ** 2)
+                    / ((1 + y ** 2) * (y + y ** 3) ** (1 / 4))
+            )
+
+    return saturation_spectrum
 
 
-@njit(cache=True)
+@jit(**numba_default)
+def upper_limit_wavenumber_equilibrium_range(
+        friction_velocity, parameters
+):
+    """
+    Upper limit eq. range
+    :param gravitational_acceleration:
+    :param surface_tension:
+    :param friction_velocity:
+    :return:
+    """
+
+    return 0.01 * parameters['gravitational_acceleration'] / friction_velocity ** 2
+
+
+@jit(**numba_default)
 def three_wave_starting_wavenumber(
-    gravitational_acceleration, surface_tension, friction_velocity
+        friction_velocity, parameters
 ):
     """
     Starting wavenumber for the capilary-gravity part. See JB2023, eq 41 and 42.
@@ -403,35 +494,37 @@ def three_wave_starting_wavenumber(
     :param friction_velocity:
     :return:
     """
+    if parameters['surface_tension'] == 0.0:
+        return inf
     return (
-        sqrt(gravitational_acceleration / surface_tension)
-        * 1
-        / (1.48 + 2.05 * friction_velocity)
+            sqrt(parameters['gravitational_acceleration'] / parameters['surface_tension'])
+            * 1
+            / (1.48 + 2.05 * friction_velocity)
     )
 
 
 # ----
 # Helper functions grav. cap. waves
 # ----
-@njit(cache=True)
+@jit(**numba_default)
 def dispersion(wavenumber, gravitational_acceleration, surface_tension):
     return sqrt(
-        gravitational_acceleration * wavenumber + surface_tension * wavenumber**3
+        gravitational_acceleration * wavenumber + surface_tension * wavenumber ** 3
     )
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def celerity(wavenumber, gravitational_acceleration, surface_tension):
     return sqrt(gravitational_acceleration / wavenumber + surface_tension * wavenumber)
 
 
-@njit(cache=True)
+@jit(**numba_default)
 def group_velocity(wavenumber, gravitational_acceleration, surface_tension):
     return (
-        1
-        / 2
-        * (gravitational_acceleration + 3 * surface_tension * wavenumber**2)
-        / sqrt(
-            gravitational_acceleration * wavenumber + surface_tension * wavenumber**3
-        )
+            1.0
+            / 2.0
+            * (gravitational_acceleration + 3 * surface_tension * wavenumber ** 2)
+            / sqrt(
+        gravitational_acceleration * wavenumber + surface_tension * wavenumber ** 3
+    )
     )

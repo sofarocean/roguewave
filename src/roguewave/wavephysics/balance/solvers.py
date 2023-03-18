@@ -92,7 +92,7 @@ def numba_newton_raphson(
     error_on_max_iter=True,
     relative_stepsize=False,
     name="",
-    under_relaxation=0.9,
+    under_relaxation=0.2,
 ):
 
     # The last three iterates. Newest iterate last. We initially fill all with the guess.

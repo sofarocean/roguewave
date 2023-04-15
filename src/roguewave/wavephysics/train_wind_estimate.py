@@ -1,6 +1,6 @@
 import numpy
 from typing import List
-from numpy import isnan, ones, abs, sign, median, squeeze, where
+from numpy import isnan, ones, abs, sign, median, squeeze, where, isfinite
 from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectrum
 from xarray import DataArray
 from roguewave.wavephysics.balance import SourceTermBalance
@@ -205,6 +205,8 @@ def calibrate_wind_estimate_from_balance(
             time_derivative_spectrum=time_derivative_spectrum,
             direction_iteration=direction_iteration,
         )
+        actual = estimate["u10"].values
+        actual[~isfinite(actual)] = 0.0
         actual = estimate["u10"].values / velocity_scale
         actual[isnan(actual)] = 0.0
 

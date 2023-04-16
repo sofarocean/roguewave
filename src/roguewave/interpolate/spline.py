@@ -21,7 +21,7 @@ def cubic_spline(
     x: np.ndarray,
     y: np.ndarray,
     monotone_interpolation: bool = False,
-    monotone_function=True,
+    frequency_axis=-1,
 ) -> CubicSpline:
     """
     Construct a cubic spline, optionally monotone.
@@ -39,37 +39,54 @@ def cubic_spline(
     """
 
     if not monotone_interpolation:
-        spline = CubicSpline(x, y)
+        spline = CubicSpline(x, y, axis=frequency_axis)
 
     else:
         # Reshape Y, which can have arbitrary leading dimensions (including none) - into a (m,n) shape.
-        input_shape = x.shape
+        input_shape = y.shape
+        input_axis = list(range(len(input_shape)))
+        frequency_axis = input_axis[frequency_axis]
+
         if len(input_shape) == 1:
             shape = (1, len(x))
+            Y = y
         else:
-            shape = (np.prod(input_shape[0:-1]), input_shape[-1])
-        Y = np.reshape(y, shape)
+            shape = (
+                np.prod(input_shape) // input_shape[frequency_axis],
+                input_shape[frequency_axis],
+            )
+            axis = [axis for axis in input_axis if axis != frequency_axis]
+            axis.append(frequency_axis)
+            Y = np.transpose(y, axis)
+            permuted_input_shape = Y.shape
+        Y = np.reshape(Y, shape)
 
         # Create the spline coeficients
-        output = monotone_cubic_spline_coeficients(x, Y, monotone_function)
+        output = monotone_cubic_spline_coeficients(x, Y)
 
-        # Reshape output so that the aribrary leadingg dimensions of y become _trailing_ dimensions of the output
+        # Reshape output so that the aribrary leading dimensions of y become _trailing_ dimensions of the output
         # (this is how spline coeficients are stored in the scipy CubicSpline object)
         if len(input_shape) == 1:
             output_shape = (4, input_shape[-1] - 1)
+            output = output.reshape(output_shape)
         else:
-            output_shape = (4, input_shape[-1] - 1, *input_shape[0:-1])
-        output = output.reshape(output_shape)
+            output_shape = (
+                *permuted_input_shape[0:-1],
+                4,
+                permuted_input_shape[-1] - 1,
+            )
+            output = output.reshape(output_shape)
+            output_axis = list(range(len(output_shape)))
+            output_axis = output_axis[-2:] + output_axis[:-2]
+            output = np.transpose(output, output_axis)
 
         # Return a CubicSpline object.
-        spline = CubicSpline.construct_fast(output, x, axis=len(input_shape) - 1)
+        spline = CubicSpline.construct_fast(output, x, extrapolate=False, axis=1)
 
     return spline
 
 
-def monotone_cubic_spline_coeficients(
-    x: np.ndarray, Y: np.ndarray, monotone_function=True
-) -> np.ndarray:
+def monotone_cubic_spline_coeficients(x: np.ndarray, Y: np.ndarray) -> np.ndarray:
     """
     Construct the spline coeficients.
     :param x: array_like, shape (n,)
@@ -87,13 +104,13 @@ def monotone_cubic_spline_coeficients(
 
     # loop over the dimensions
     for jj in range(0, Y.shape[0]):
-        _ = _monotone_cubic_spline(x, Y[jj, :], output[jj, :, :], monotone_function)
+        _ = _monotone_cubic_spline(x, Y[jj, :], output[jj, :, :])
 
     return output
 
 
 def _monotone_cubic_spline(
-    x: np.ndarray, y: np.ndarray, spline_coeficients=None, monotone_function=True
+    x: np.ndarray, y: np.ndarray, spline_coeficients=None
 ) -> np.ndarray:
     """
     Find a monotone cubic spline function that is maximally smooth. The basic idea is that instead of the traditional
@@ -238,7 +255,7 @@ def _monotone_cubic_spline(
         else:
             check = np.abs(secant[ii]) > 0
 
-        sign = np.sign(secant[ii])  # 1.0 if secant[ii] >= 0 else -1.0
+        sign = 1.0 if secant[ii] >= 0 else -1.0
 
         if check:
             # dy/dx start of spline must be smaller than 3 times the secant

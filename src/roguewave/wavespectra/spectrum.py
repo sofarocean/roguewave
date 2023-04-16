@@ -576,7 +576,7 @@ class WaveSpectrum(DatasetWrapper):
         # by number of frequencies data structure.
         return (1 / self.wavenumber) * self.radian_frequency
 
-    def wave_age(self, windspeed, fmin=0, fmax=numpy.inf):
+    def wave_age(self, windspeed):
         c = self.peak_wave_speed()
         return c / windspeed
 
@@ -1218,8 +1218,9 @@ class FrequencySpectrum(WaveSpectrum):
     ) -> "FrequencySpectrum":
         if method == "distribution":
             self.fillna(0.0)
+            frequency_axis = self.dims.index(NAME_F)
             interpolated_data = cumulative_frequency_interpolation_1d_variable(
-                new_frequencies, self.dataset, **kwargs
+                new_frequencies, self.dataset, frequency_axis=frequency_axis, **kwargs
             )
             object = FrequencySpectrum(interpolated_data)
             object.fillna(extrapolation_value)
@@ -1230,7 +1231,7 @@ class FrequencySpectrum(WaveSpectrum):
                 extrapolation_value=extrapolation_value,
                 nearest_neighbour=False,
             )
-        elif method == "nearest_neighbour":
+        elif method == "nearest":
             return self.interpolate(
                 {NAME_F: new_frequencies},
                 extrapolation_value=extrapolation_value,
@@ -1561,7 +1562,8 @@ def cumulative_frequency_interpolation_1d_variable(
         dataset[NAME_F].values,
         dataset[NAME_E].values,
         interpolating_spline_order=kwargs.get("spline_order", 3),
-        positive=kwargs.get("monotone_interpolation", True),
+        monotone_interpolation=kwargs.get("monotone_interpolation", True),
+        frequency_axis=kwargs.get("frequency_axis", -1),
     )
 
     _dataset = _dataset.assign(
@@ -1574,27 +1576,19 @@ def cumulative_frequency_interpolation_1d_variable(
         }
     )
 
-    # Interpolate scaling energy, to be used to renormalize moments.
-    interpolated_energy = _cdf_interpolate(
-        interpolation_frequency,
-        dataset[NAME_F].values,
-        dataset[NAME_E].values,
-        interpolating_spline_order=1,
-        positive=False,
-    )
-    msk = interpolated_energy == 0
-    interpolated_energy[msk] = 1
+    msk = interpolated_energy > 0
 
     for _name in SPECTRAL_MOMENTS:
-        interpolated_densities = (
-            _cdf_interpolate(
-                interpolation_frequency,
-                dataset[NAME_F].values,
-                dataset[_name].values * dataset[NAME_E].values,
-                interpolating_spline_order=1,
-                positive=False,
-            )
-            / interpolated_energy
+        interpolated_densities = _cdf_interpolate(
+            interpolation_frequency,
+            dataset[NAME_F].values,
+            dataset[_name].values * dataset[NAME_E].values,
+            interpolating_spline_order=1,
+            monotone_interpolation=True,
+        )
+        # Avoid division by zero
+        interpolated_densities[msk] = (
+            interpolated_densities[msk] / interpolated_energy[msk]
         )
 
         _dataset = _dataset.assign(

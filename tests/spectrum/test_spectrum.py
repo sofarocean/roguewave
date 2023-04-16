@@ -132,7 +132,7 @@ def test_concatenate():
 
 def test_concatenate_1d():
     N = 4
-    spectra = [x.spectrum_1d() for x in helper_create_spectra_list(N=N)]
+    spectra = [x.as_frequency_spectrum() for x in helper_create_spectra_list(N=N)]
 
     spectrum = concatenate_spectra(spectra, dim="time")
     assert spectrum.variance_density.shape[0] == N
@@ -219,7 +219,7 @@ def test_mean():
 
 def test_spectrum1d():
     spec = helper_create_spectrum()
-    spec1d = spec.spectrum_1d()
+    spec1d = spec.as_frequency_spectrum()
     assert spec1d.dims_spectral == ["frequency"]
     assert spec1d.dims == ["frequency"]
 
@@ -673,7 +673,7 @@ def test_interpolate():
 
 def test_interpolate_frequency():
     specs = helper_create_spectra(4)
-    freq = linspace(0, 2, 1000)
+    freq = linspace(0.0, 2, 1000)
 
     for spec in specs:
         intp_spec = spec.interpolate_frequency(freq)
@@ -683,8 +683,38 @@ def test_interpolate_frequency():
             intp_spec.mean_direction(), spec.mean_direction(), rtol=1e-3, atol=1e-3
         )
 
+    spec = specs[1]
+
+    intp_spec = spec.interpolate_frequency(
+        freq, method="distribution", monotone_interpolation=True
+    )
+    assert intp_spec.dims == spec.dims
+    assert_allclose(intp_spec.hm0(), spec.hm0(), rtol=1e-3, atol=1e-3)
+    assert_allclose(
+        intp_spec.mean_direction(), spec.mean_direction(), rtol=1e-3, atol=1e-3
+    )
+
+    intp_spec = spec.interpolate_frequency(
+        freq, method="distribution", monotone_interpolation=False
+    )
+    assert intp_spec.dims == spec.dims
+    assert_allclose(intp_spec.hm0(), spec.hm0(), rtol=1e-3, atol=1e-3)
+    assert_allclose(
+        intp_spec.mean_direction(), spec.mean_direction(), rtol=1e-3, atol=1e-3
+    )
+
+    intp_spec = spec.interpolate_frequency(
+        freq, method="nearest", monotone_interpolation=True
+    )
+    assert intp_spec.dims == spec.dims
+    assert_allclose(intp_spec.hm0(), spec.hm0(), rtol=1e-3, atol=1e-3)
+    assert_allclose(
+        intp_spec.mean_direction(), spec.mean_direction(), rtol=1e-3, atol=1e-3
+    )
+
 
 if __name__ == "__main__":
+    test_interpolate_frequency()
     test_concatenate()
     test_spectrum1d()
     test_concatenate_1d()
@@ -736,4 +766,3 @@ if __name__ == "__main__":
     test_mean_period()
     test_zero_crossing_period()
     test_interpolate()
-    test_interpolate_frequency()

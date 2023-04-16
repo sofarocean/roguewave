@@ -1,6 +1,5 @@
 import numpy
 from numba import njit
-from scipy.interpolate import make_interp_spline, CubicSpline
 from roguewave.interpolate.spline import cubic_spline
 
 from roguewave.tools.grid import midpoint_rule_step
@@ -176,7 +175,7 @@ def _cdf_interpolate(
     frequency: numpy.ndarray,
     frequency_spectrum: numpy.ndarray,
     interpolating_spline_order: int = 3,
-    positive: bool = False,
+    monotone_interpolation: bool = False,
     frequency_axis=-1,
     **kwargs
 ) -> numpy.ndarray:
@@ -202,21 +201,18 @@ def _cdf_interpolate(
     shape[frequency_axis] = 1
     cumsum = numpy.concatenate((numpy.zeros(shape), cumsum), axis=-1)
 
-    if interpolating_spline_order == 3:
-        #
-        interpolator = cubic_spline(
-            integration_frequencies, cumsum, monotone_interpolation=positive
-        )
-    else:
-        interpolator = make_interp_spline(
-            integration_frequencies, cumsum, k=interpolating_spline_order, axis=-1
-        )
+    interpolator = cubic_spline(
+        integration_frequencies, cumsum, monotone_interpolation=monotone_interpolation
+    )
 
     return interpolator.derivative()(interpolation_frequency)
 
 
 def spline_peak_frequency(
-    frequency: numpy.ndarray, frequency_spectrum: numpy.ndarray, frequency_axis=-1
+    frequency: numpy.ndarray,
+    frequency_spectrum: numpy.ndarray,
+    frequency_axis=-1,
+    monotone_interpolation=True,
 ) -> numpy.ndarray:
     """
     Estimate the peak frequency of the spectrum based on a cubic spline interpolation of the partially integrated
@@ -262,8 +258,11 @@ def spline_peak_frequency(
 
     # Construct a cubic spline interpolator, and then differentiate to get the density function.
     interpolator = cubic_spline(
-        integration_frequencies, cumsum, monotone_interpolation=True
-    ).derivative()  # CubicSpline(integration_frequencies, cumsum, axis=frequency_axis).derivative()
+        integration_frequencies,
+        cumsum,
+        monotone_interpolation=monotone_interpolation,
+        frequency_axis=frequency_axis,
+    ).derivative()
 
     # Find the maxima of the density function by setting dEdf = 0, and finding the roots of all the splines representing
     # the density function.
@@ -295,214 +294,3 @@ def spline_peak_frequency(
         peak_frequency[index] = _root[index_peak]
 
     return peak_frequency
-
-
-def make_monotone(spline: CubicSpline) -> CubicSpline:
-    """
-    Checks a 3rd order spline for monoticity; if the spline not monotone on an interval nodes[ii], nodes[ii+1] we
-    substitute the spline on that interval with a simple linear function. Crude, but effective way to correct a
-    natural spline.
-
-    Note that the underlying assumption is that the anchor points of the spline are monotone.
-
-    The monoticiy check is based on FC1980:
-       Fritsch, F. N., & Carlson, R. E. (1980). Monotone piecewise cubic interpolation.
-       SIAM Journal on Numerical Analysis, 17(2), 238-246.
-
-    :param spline: Instance of scipy.interpolate.CubicSpline interpolator class
-
-    :return: a new instance of a CubicSpine that is almost equivalent to the input spline, but corrected to be monotone.
-    """
-
-    # Get the nodes and coefficients of the spline. We will be modifying these, so a copy is needed to preserve the
-    # original spline.
-    spline_nodes = spline.x.copy()
-    spline_coefficients = spline.c.copy()
-
-    # Get the interval length for the different splines.
-    step = numpy.diff(spline_nodes)
-
-    # Calculate the cumulitive distribution function at the start (left) and end (right) of the spline interval.
-    # ---
-    right_cdf = numpy.zeros(spline_coefficients.shape[1:])
-    left_cdf = spline_coefficients[3, ...]
-    right_cdf[:-1] = spline_coefficients[3, 1:, ...]
-    for kk in range(0, 4):
-        right_cdf[-1] += (step[-1]) ** (3 - kk) * spline_coefficients[kk, -1, ...]
-
-    # Calculate the pdf (derivative) at the start (left) and end (right) of the spline interval.
-    # ---
-    left_pdf = spline_coefficients[2, ...]
-    right_pdf = numpy.zeros(spline_coefficients.shape[1:])
-
-    # indexer to allow for arbitrary trailing dimensions.
-    indexer = (..., *([None] * (len(spline_coefficients.shape) - 2)))
-    for kk in range(0, 3):
-        right_pdf += (3 - kk) * step[indexer] ** (2 - kk) * spline_coefficients[kk, ...]
-
-    #
-    # FC1980 shows that if the derivatives at the end point (left_pdf, right_pdf here) are normalized with the
-    # secant-line on the interval, giving alpha, beta, a sufficient condition that ensure that the spline is monotone
-    # is that aplha*beta > 0 and  alpha**2 + beta**2 <= 9. Note that some splines that violate this condition are
-    # monotone- but in general this restricts the monotone region well.
-    #
-
-    # For regions where the secant is zero, we set alpha/beta to inf. This avoids issues with dividing by zero.
-    secant = (right_cdf - left_cdf) / step[indexer]
-    alpha = numpy.full_like(secant, numpy.inf)
-    beta = numpy.full_like(secant, numpy.inf)
-
-    mask = secant > 1.0e-10
-    alpha[mask] = left_pdf[mask] / secant[mask]
-    beta[mask] = right_pdf[mask] / secant[mask]
-
-    critical_circle = alpha**2 + beta**2
-    not_monotone = (critical_circle > 9) | (left_pdf * right_pdf < 0)
-
-    # For those splines that are not monotone, set coefs associated with x**3 and x**2 to 0, make the slope equivalent
-    # to the secant line. We do not need to update the constant value (4th entry).
-    spline_coefficients[0, not_monotone] = 0.0
-    spline_coefficients[1, not_monotone] = 0.0
-    spline_coefficients[2, not_monotone] = secant[not_monotone]
-
-    # Create a new spline with the given coeficients and return
-    return CubicSpline.construct_fast(spline_coefficients, spline_nodes, axis=1)
-
-
-def make_monotone2(spline: CubicSpline) -> CubicSpline:
-    """
-    Checks a 3rd order spline for monoticity; if the spline not monotone on an interval nodes[ii], nodes[ii+1] we
-    substitute the spline on that interval with a simple linear function. Crude, but effective way to correct a
-    natural spline.
-
-    Note that the underlying assumption is that the anchor points of the spline are monotone.
-
-    The monoticiy check is based on FC1980:
-       Fritsch, F. N., & Carlson, R. E. (1980). Monotone piecewise cubic interpolation.
-       SIAM Journal on Numerical Analysis, 17(2), 238-246.
-
-    :param spline: Instance of scipy.interpolate.CubicSpline interpolator class
-
-    :return: a new instance of a CubicSpine that is almost equivalent to the input spline, but corrected to be monotone.
-    """
-
-    # Get the nodes and coefficients of the spline. We will be modifying these, so a copy is needed to preserve the
-    # original spline.
-    spline_nodes = spline.x.copy()
-    spline_coefficients = spline.c.copy()
-
-    # Get the interval length for the different splines.
-    step = numpy.diff(spline_nodes)
-
-    # Calculate the cumulitive distribution function at the start (left) and end (right) of the spline interval.
-    # ---
-    right_cdf = numpy.zeros(spline_coefficients.shape[1:])
-    left_cdf = spline_coefficients[3, ...]
-    right_cdf[:-1] = spline_coefficients[3, 1:, ...]
-    for kk in range(0, 4):
-        right_cdf[-1] += (step[-1]) ** (3 - kk) * spline_coefficients[kk, -1, ...]
-
-    # Calculate the pdf (derivative) at the start (left) and end (right) of the spline interval.
-    # ---
-    left_pdf = spline_coefficients[2, ...]
-    right_pdf = numpy.zeros(spline_coefficients.shape[1:])
-
-    # indexer to allow for arbitrary trailing dimensions.
-    indexer = (..., *([None] * (len(spline_coefficients.shape) - 2)))
-    for kk in range(0, 3):
-        right_pdf += (3 - kk) * step[indexer] ** (2 - kk) * spline_coefficients[kk, ...]
-
-    #
-    # FC1980 shows that if the derivatives at the end point (left_pdf, right_pdf here) are normalized with the
-    # secant-line on the interval, giving alpha, beta, a sufficient condition that ensure that the spline is monotone
-    # is that aplha*beta > 0 and  alpha**2 + beta**2 <= 9. Note that some splines that violate this condition are
-    # monotone- but in general this restricts the monotone region well.
-    #
-
-    # For regions where the secant is zero, we set alpha/beta to inf. This avoids issues with dividing by zero.
-    secant = (right_cdf - left_cdf) / step[indexer]
-    alpha = numpy.full_like(secant, numpy.inf)
-    beta = numpy.full_like(secant, numpy.inf)
-
-    mask = secant > 1.0e-10
-    alpha[mask] = left_pdf[mask] / secant[mask]
-    beta[mask] = right_pdf[mask] / secant[mask]
-
-    critical_circle = alpha**2 + beta**2
-    not_monotone = (critical_circle > 9) | (left_pdf * right_pdf < 0)
-
-    # For those splines that are not monotone, set coefs associated with x**3 and x**2 to 0, make the slope equivalent
-    # to the secant line. We do not need to update the constant value (4th entry).
-
-    nf = numpy.shape(left_cdf)[0]
-    for jf in range(0, nf):
-
-        delta = step[jf]
-
-        mask = not_monotone[jf, ...]
-        if numpy.any(mask):
-            if jf == 0 or jf == nf - 1:
-                fd1 = secant[jf, mask]
-                fd2 = secant[jf, mask]
-            else:
-                fd1 = (
-                    3
-                    * secant[jf - 1, mask]
-                    * secant[jf, mask]
-                    / (2 * secant[jf - 1, mask] + secant[jf, mask])
-                )
-                fd2 = (
-                    3
-                    * secant[jf + 1, mask]
-                    * secant[jf, mask]
-                    / (secant[jf + 1, mask] + 2 * secant[jf, mask])
-                )
-
-            spline_coefficients = update_spline(
-                spline_coefficients, jf, fd1, fd2, delta, mask, recursive=False
-            )
-
-    # Create a new spline with the given coeficients and return
-    return CubicSpline.construct_fast(spline_coefficients, spline_nodes, axis=1)
-
-
-def update_spline(spline_coefficients, jf, fd1, fd2, delta, mask, recursive=False):
-
-    f1 = spline_coefficients[3, jf, mask]
-    f2 = (
-        spline_coefficients[0, jf, mask] * delta**3
-        + spline_coefficients[1, jf, mask] * delta**2
-        + spline_coefficients[2, jf, mask] * delta
-        + spline_coefficients[3, jf, mask]
-    )
-    if fd1 is None:
-        fd1 = spline_coefficients[2, jf, mask]
-    else:
-        if recursive:
-            if jf > 1:
-                spline_coefficients = update_spline(
-                    spline_coefficients, jf - 1, None, fd1, delta, mask, recursive=False
-                )
-
-    if fd2 is None:
-        fd2 = (
-            3 * spline_coefficients[0, jf, mask] * delta**2
-            + 2 * spline_coefficients[1, jf, mask] * delta
-            + spline_coefficients[2, jf, mask]
-        )
-    else:
-        if recursive:
-            if jf < spline_coefficients.shape[1] - 1:
-                spline_coefficients = update_spline(
-                    spline_coefficients, jf + 1, fd2, None, delta, mask, recursive=False
-                )
-
-    d = f1
-    c = fd1
-    a = fd2 / delta**2 - 2 * f2 / delta**3 + c / delta**2 + 2 * d / delta**3
-    b = 3 * f2 / delta**2 - fd2 / delta - 3 * d / delta**2 - 2 * c / delta
-    spline_coefficients[0, jf, mask] = a
-    spline_coefficients[1, jf, mask] = b
-    spline_coefficients[2, jf, mask] = c
-
-    return spline_coefficients

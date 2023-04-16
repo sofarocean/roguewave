@@ -89,6 +89,7 @@ def _st4_wind_generation_point(
 
     # Get the spectral size
     number_of_frequencies, number_of_directions = variance_density.shape
+
     vonkarman_constant = parameters["vonkarman_constant"]
     radian_frequency = spectral_grid["radian_frequency"]
 

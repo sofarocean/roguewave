@@ -64,7 +64,13 @@ def interpolate_periodic(
 
 
 def interpolation_weights_1d(
-    xp, x, indices, period: float = None, extrapolate_left=True, extrapolate_right=True
+    xp,
+    x,
+    indices,
+    period: float = None,
+    extrapolate_left=True,
+    extrapolate_right=True,
+    nearest_neighbour=False,
 ):
     """
     Find the weights for the linear interpolation problem given a set of
@@ -120,6 +126,9 @@ def interpolation_weights_1d(
         frac[x == xp[-1]] = 0.0
     else:
         frac = delta_x / delta_xp
+
+    if nearest_neighbour:
+        frac = numpy.rint(frac)
 
     weights[0, :] = 1 - frac
     weights[1, :] = frac

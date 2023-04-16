@@ -3,19 +3,20 @@ from abc import ABC, abstractmethod
 from scipy.special import gamma
 from datetime import datetime
 import numpy
-import typing
 from typing import Literal
 
 PHILLIPS_CONSTANT = 0.0081
 GRAVITATIONAL_CONSTANT = 9.81
 
-FrequencyShapeOptions = Literal["pm","jonswap","phillips"]
+FrequencyShapeOptions = Literal["pm", "jonswap", "phillips", "gaussian"]
 DirectionalShapeOptions = Literal["raised_cosine"]
+
 
 class FrequencyShape(ABC):
     @abstractmethod
     def values(self, frequency_hertz: numpy.ndarray) -> numpy.ndarray:
         pass
+
 
 class DirectionalShape(ABC):
     @abstractmethod
@@ -28,10 +29,10 @@ class RaisedCosine(DirectionalShape):
         self._power = self.power(width_degrees)
         self._mean_direction_degrees = mean_direction_degrees
         self._normalization = (
-                numpy.pi
-                / 180
-                * gamma(self._power / 2 + 1)
-                / (gamma(self._power / 2 + 1 / 2) * numpy.sqrt(numpy.pi))
+            numpy.pi
+            / 180
+            * gamma(self._power / 2 + 1)
+            / (gamma(self._power / 2 + 1 / 2) * numpy.sqrt(numpy.pi))
         )
 
     @staticmethod
@@ -47,16 +48,37 @@ class RaisedCosine(DirectionalShape):
                 0,
             )
 
-class PhillipsSpectrum(FrequencyShape):
-    def __init__(
-            self, peak_frequency_hertz, m0: float = 1, g: float = GRAVITATIONAL_CONSTANT
-    ):
+
+class GaussianSpectrum(FrequencyShape):
+    def __init__(self, peak_frequency_hertz, m0: float = 1, **kwargs):
+        self.m0 = m0
         self._peak_frequency_hertz = peak_frequency_hertz
-        self._g = g
+        self.standard_deviation_hertz = kwargs.get(
+            "standard_deviation_hertz", peak_frequency_hertz / 10
+        )
+
+    def values(self, frequency_hertz: numpy.ndarray) -> numpy.ndarray:
+        return (
+            self.m0
+            / self.standard_deviation_hertz
+            / numpy.sqrt(2 * numpy.pi)
+            * numpy.exp(
+                -0.5
+                * (frequency_hertz - self._peak_frequency_hertz) ** 2
+                / self.standard_deviation_hertz**2
+            )
+        )
+
+
+class PhillipsSpectrum(FrequencyShape):
+    def __init__(self, peak_frequency_hertz, m0: float = 1, **kwargs):
+
+        self._peak_frequency_hertz = peak_frequency_hertz
+        self._g = kwargs.get("g", GRAVITATIONAL_CONSTANT)
         self._alpha = self.alpha(m0)
 
     def alpha(self, m0):
-        return m0 * 8 * (numpy.pi)**4 * self._peak_frequency_hertz**4 / self._g**2
+        return m0 * 8 * (numpy.pi) ** 4 * self._peak_frequency_hertz**4 / self._g**2
 
     def values(self, frequency_hertz: numpy.ndarray) -> numpy.ndarray:
         """
@@ -68,24 +90,22 @@ class PhillipsSpectrum(FrequencyShape):
         values = numpy.zeros(len(frequency_hertz))
         msk = frequency_hertz > 0
         values[msk] = (
-                self._alpha
-                * self._g ** 2
-                * (2 * numpy.pi) ** -4
-                * frequency_hertz[msk] ** -5
+            self._alpha
+            * self._g**2
+            * (2 * numpy.pi) ** -4
+            * frequency_hertz[msk] ** -5
         )
         return values
 
 
-class PiersonMoskowitz(FrequencyShape):
-    def __init__(
-            self, peak_frequency_hertz, m0: float = 1, g: float = GRAVITATIONAL_CONSTANT
-    ):
+class PiersonMoskowitzSpectrum(FrequencyShape):
+    def __init__(self, peak_frequency_hertz, m0: float = 1, **kwargs):
         self._peak_frequency_hertz = peak_frequency_hertz
-        self._g = g
+        self._g = kwargs.get("g", GRAVITATIONAL_CONSTANT)
         self._alpha = self.alpha(m0)
 
     def alpha(self, m0):
-        return m0 * 5 * (2 * numpy.pi * self._peak_frequency_hertz) ** 4 / self._g ** 2
+        return m0 * 5 * (2 * numpy.pi * self._peak_frequency_hertz) ** 4 / self._g**2
 
     def values(self, frequency_hertz: numpy.ndarray) -> numpy.ndarray:
         """
@@ -101,30 +121,25 @@ class PiersonMoskowitz(FrequencyShape):
         values = numpy.zeros(len(frequency_hertz))
         msk = frequency_hertz > 0
         values[msk] = (
-                self._alpha
-                * self._g ** 2
-                * (2 * numpy.pi) ** -4
-                * frequency_hertz[msk] ** -5
-                * numpy.exp(
-            -5 / 4 * (self._peak_frequency_hertz / frequency_hertz[msk]) ** 4
-        )
+            self._alpha
+            * self._g**2
+            * (2 * numpy.pi) ** -4
+            * frequency_hertz[msk] ** -5
+            * numpy.exp(
+                -5 / 4 * (self._peak_frequency_hertz / frequency_hertz[msk]) ** 4
+            )
         )
         return values
 
 
-class Jonswap(FrequencyShape):
-    def __init__(
-            self, peak_frequency_hertz,
-            m0: float = 1, g:
-            float = GRAVITATIONAL_CONSTANT
-    ):
+class JonswapSpectrum(FrequencyShape):
+    def __init__(self, peak_frequency_hertz, m0: float = 1, **kwargs):
         self._peak_frequency_hertz = peak_frequency_hertz
-        self._g = g
-        self._sigma_a = 0.07
-        self._sigma_b = 0.09
-        self.gamma = 3.3
+        self._g = kwargs.get("g", GRAVITATIONAL_CONSTANT)
+        self._sigma_a = kwargs.get("sigma_a", 0.07)
+        self._sigma_b = kwargs.get("sigma_b", 0.09)
+        self.gamma = kwargs.get("gamma", 3.3)
         self._alpha = self.alpha(m0)
-
 
     def alpha(self, m0):
         # Approximation by Yamaguchi (1984), "Approximate expressions for integral properties of the JONSWAP
@@ -132,17 +147,11 @@ class Jonswap(FrequencyShape):
         # "waves in oceanic and coastal waters". Not valid if sigma_a or sigma_b are chanegd from defaults. Otherwise
         # accurate to within 0.25%
         #
-        return  (
-                m0
-                * (
-                    2
-                    * numpy.pi
-                    * self._peak_frequency_hertz
-                ) ** 4
-                / self._g ** 2
-                / (
-                0.06533 * self.gamma ** 0.8015 + 0.13467
-                )
+        return (
+            m0
+            * (2 * numpy.pi * self._peak_frequency_hertz) ** 4
+            / self._g**2
+            / (0.06533 * self.gamma**0.8015 + 0.13467)
         )
 
     def values(self, frequency_hertz: numpy.ndarray) -> numpy.ndarray:
@@ -159,41 +168,54 @@ class Jonswap(FrequencyShape):
         values = numpy.zeros(len(frequency_hertz))
         msk = frequency_hertz > 0
 
-        sigma = numpy.where(frequency_hertz <= self._peak_frequency_hertz, self._sigma_a, self._sigma_b)
+        sigma = numpy.where(
+            frequency_hertz <= self._peak_frequency_hertz, self._sigma_a, self._sigma_b
+        )
         peak_enhancement = self.gamma ** numpy.exp(
-            - 1 / 2 * ((frequency_hertz / self._peak_frequency_hertz - 1) / sigma) ** 2)
+            -1 / 2 * ((frequency_hertz / self._peak_frequency_hertz - 1) / sigma) ** 2
+        )
 
         values[msk] = (
-                self._alpha
-                * self._g ** 2
-                * (2 * numpy.pi) ** -4
-                * frequency_hertz[msk] ** -5
-                * numpy.exp(
-                    -5 / 4 * (self._peak_frequency_hertz / frequency_hertz[msk]) ** 4
-                )
-                * peak_enhancement[msk]
+            self._alpha
+            * self._g**2
+            * (2 * numpy.pi) ** -4
+            * frequency_hertz[msk] ** -5
+            * numpy.exp(
+                -5 / 4 * (self._peak_frequency_hertz / frequency_hertz[msk]) ** 4
+            )
+            * peak_enhancement[msk]
         )
         return values
 
 
 def create_frequency_shape(
-        shape: FrequencyShapeOptions, peak_frequency_hertz: float, m0: float = 1
+    shape: FrequencyShapeOptions, peak_frequency_hertz: float, m0: float = 1, **kwargs
 ) -> FrequencyShape:
     if shape == "pm":
-        return PiersonMoskowitz(peak_frequency_hertz=peak_frequency_hertz, m0=m0)
+        return PiersonMoskowitzSpectrum(
+            peak_frequency_hertz=peak_frequency_hertz, m0=m0, **kwargs
+        )
     elif shape == "jonswap":
-        return Jonswap(peak_frequency_hertz=peak_frequency_hertz, m0=m0)
+        return JonswapSpectrum(
+            peak_frequency_hertz=peak_frequency_hertz, m0=m0, **kwargs
+        )
     elif shape == "phillips":
-        return PhillipsSpectrum(peak_frequency_hertz=peak_frequency_hertz, m0=m0)
+        return PhillipsSpectrum(
+            peak_frequency_hertz=peak_frequency_hertz, m0=m0, **kwargs
+        )
+    elif shape == "gaussian":
+        return GaussianSpectrum(
+            peak_frequency_hertz=peak_frequency_hertz, m0=m0, **kwargs
+        )
 
     else:
         raise ValueError(f"Unknown frequency shape: {shape}")
 
 
 def create_directional_shape(
-        shape: DirectionalShapeOptions,
-        mean_direction_degrees: float = 0,
-        width_degrees: float = 30,
+    shape: DirectionalShapeOptions,
+    mean_direction_degrees: float = 0,
+    width_degrees: float = 30,
 ) -> DirectionalShape:
     if shape == "raised_cosine":
         return RaisedCosine(
@@ -204,18 +226,19 @@ def create_directional_shape(
 
 
 def create_parametric_frequency_direction_spectrum(
-        frequency_hertz: numpy.ndarray,
-        peak_frequency_hertz: float,
-        significant_wave_height: float,
-        frequency_shape: FrequencyShapeOptions = "jonswap",
-        direction_degrees: numpy.ndarray=None,
-        direction_shape: DirectionalShapeOptions = 'raised_cosine',
-        mean_direction_degrees: float = 0.0,
-        width_degrees: float = 30,
-        depth=numpy.inf,
-        time: datetime = None,
-        latitude: float = None,
-        longitude: float = None,
+    frequency_hertz: numpy.ndarray,
+    peak_frequency_hertz: float,
+    significant_wave_height: float,
+    frequency_shape: FrequencyShapeOptions = "jonswap",
+    direction_degrees: numpy.ndarray = None,
+    direction_shape: DirectionalShapeOptions = "raised_cosine",
+    mean_direction_degrees: float = 0.0,
+    width_degrees: float = 30,
+    depth=numpy.inf,
+    time: datetime = None,
+    latitude: float = None,
+    longitude: float = None,
+    **kwargs,
 ) -> FrequencyDirectionSpectrum:
     """
     Create a parametrized directional frequency spectrum according to a given frequency (Jonswap, PM) or directional
@@ -243,7 +266,7 @@ def create_parametric_frequency_direction_spectrum(
     """
 
     if direction_degrees is None:
-        direction_degrees = numpy.linspace(0,360,36, endpoint=False)
+        direction_degrees = numpy.linspace(0, 360, 36, endpoint=False)
 
     D = create_directional_shape(
         shape=direction_shape,
@@ -253,7 +276,10 @@ def create_parametric_frequency_direction_spectrum(
 
     m0 = (significant_wave_height / 4) ** 2
     E = create_frequency_shape(
-        shape=frequency_shape, peak_frequency_hertz=peak_frequency_hertz, m0=m0
+        shape=frequency_shape,
+        peak_frequency_hertz=peak_frequency_hertz,
+        m0=m0,
+        **kwargs,
     ).values(frequency_hertz)
 
     return create_2d_spectrum(
@@ -269,14 +295,15 @@ def create_parametric_frequency_direction_spectrum(
 
 
 def create_parametric_frequency_spectrum(
-        frequency_hertz: numpy.ndarray,
-        peak_frequency_hertz: float,
-        significant_wave_height: float,
-        frequency_shape: FrequencyShapeOptions = "jonswap",
-        depth=numpy.inf,
-        time: datetime = None,
-        latitude: float = None,
-        longitude: float = None,
+    frequency_hertz: numpy.ndarray,
+    peak_frequency_hertz: float,
+    significant_wave_height: float,
+    frequency_shape: FrequencyShapeOptions = "jonswap",
+    depth=numpy.inf,
+    time: datetime = None,
+    latitude: float = None,
+    longitude: float = None,
+    **kwargs,
 ) -> FrequencySpectrum:
 
     # We create a 1d spectrum from an integrated 2d spectrum with assumed raised cosine shape. This allows us to
@@ -289,24 +316,25 @@ def create_parametric_frequency_spectrum(
         depth=depth,
         time=time,
         latitude=latitude,
-        longitude=longitude
+        longitude=longitude,
+        **kwargs,
     )
     return spec2d.as_frequency_spectrum()
 
 
 def create_parametric_spectrum(
-        frequency_hertz: numpy.ndarray,
-        frequency_shape: FrequencyShapeOptions,
-        peak_frequency_hertz: float,
-        significant_wave_height: float,
-        direction_degrees: numpy.ndarray=None,
-        direction_shape: DirectionalShapeOptions = 'raised_cosine',
-        mean_direction_degrees: float = 0.0,
-        width_degrees: float = 30.0,
-        depth=numpy.inf,
-        time: datetime = None,
-        latitude: float = None,
-        longitude: float = None,
+    frequency_hertz: numpy.ndarray,
+    frequency_shape: FrequencyShapeOptions,
+    peak_frequency_hertz: float,
+    significant_wave_height: float,
+    direction_degrees: numpy.ndarray = None,
+    direction_shape: DirectionalShapeOptions = "raised_cosine",
+    mean_direction_degrees: float = 0.0,
+    width_degrees: float = 30.0,
+    depth=numpy.inf,
+    time: datetime = None,
+    latitude: float = None,
+    longitude: float = None,
 ) -> FrequencyDirectionSpectrum:
     """
     Deprecated - use create_parametric_frequency_direction_spectrum instead
@@ -323,5 +351,5 @@ def create_parametric_spectrum(
         depth,
         time,
         latitude,
-        longitude
+        longitude,
     )

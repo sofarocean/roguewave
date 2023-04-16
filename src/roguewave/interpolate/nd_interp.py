@@ -16,6 +16,7 @@ class NdInterpolator:
         data_periodic_coordinates,
         data_period=None,
         data_discont=None,
+        nearest_neighbour=False,
     ):
 
         self.get_data = get_data
@@ -27,6 +28,7 @@ class NdInterpolator:
         self.data_periodic_coordinates = data_periodic_coordinates
         self.data_period = data_period
         self.data_discont = data_discont
+        self.nearest_neighbour = nearest_neighbour
 
     @property
     def passive_coordinate_names(self):
@@ -140,6 +142,7 @@ class NdInterpolator:
                 period=period,
                 extrapolate_left=False,
                 extrapolate_right=False,
+                nearest_neighbour=self.nearest_neighbour,
             )
 
         if self.data_is_periodic:

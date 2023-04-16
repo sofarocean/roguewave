@@ -30,6 +30,7 @@ from roguewave.wavespectra._tools import (
     spline_peak_frequency,
     _cdf_interpolate,
 )
+from roguewave.tools.grid import midpoint_rule_step
 
 NAME_F: Literal["frequency"] = "frequency"
 NAME_D: Literal["direction"] = "direction"
@@ -576,12 +577,8 @@ class WaveSpectrum(DatasetWrapper):
         return (1 / self.wavenumber) * self.radian_frequency
 
     def wave_age(self, windspeed, fmin=0, fmax=numpy.inf):
-
-        index = self.slope_spectrum.where(self._range(fmin, fmax), 0).argmax(dim=NAME_F)
-        frequency = self.dataset[NAME_F][index]
-        c = 9.81 * frequency / 2 / numpy.pi
         c = self.peak_wave_speed()
-        return  c / windspeed
+        return c / windspeed
 
     def peak_wave_speed(self) -> DataArray:
         return 2 * numpy.pi * self.peak_frequency() / self.peak_wavenumber
@@ -668,8 +665,12 @@ class WaveSpectrum(DatasetWrapper):
         :return: peak frequency
         """
         if use_spline:
+            data = spline_peak_frequency(self.frequency.values, self.e.values)
+            if len(self.dims_space_time) == 0:
+                data = data[0]
+
             return DataArray(
-                data=spline_peak_frequency(self.frequency.values, self.e.values),
+                data=data,
                 coords=self.coords_space_time,
                 dims=self.dims_space_time,
             )
@@ -861,6 +862,36 @@ class WaveSpectrum(DatasetWrapper):
     @property
     def zero_crossing_period(self) -> DataArray:
         return self.tm02()
+
+    def cdf(self) -> DataArray:
+        """
+
+        :return:
+        """
+        frequency_step = self.frequency_step
+        integration_frequencies = numpy.concatenate(
+            ([0], numpy.cumsum(frequency_step.values))
+        )
+        integration_frequencies = (
+            integration_frequencies
+            - frequency_step.values[0] / 2
+            + self.frequency.values[0]
+        )
+        values = (self.variance_density * frequency_step).values
+
+        frequency_axis = self.dims.index(NAME_F)
+
+        cumsum = numpy.cumsum(values, axis=frequency_axis)
+        # cumsum =  self.variance_density.cumulative_integrate(coord=NAME_F)
+        # return cumsum
+        shape = list(cumsum.shape)
+        shape[frequency_axis] = 1
+
+        cumsum = numpy.concatenate((numpy.zeros(shape), cumsum), axis=frequency_axis)
+
+        coords = {str(coor): self.coords()[coor].values for coor in self.coords()}
+        coords[NAME_F] = integration_frequencies
+        return DataArray(data=cumsum, dims=self.dims, coords=coords)
 
     def interpolate(self: _T, coordinates, extrapolation_value=0.0) -> _T:
         object = self.__class__(interpolate_dataset_grid(coordinates, self.dataset))
@@ -1182,22 +1213,35 @@ class FrequencySpectrum(WaveSpectrum):
         self: "FrequencySpectrum",
         new_frequencies,
         extrapolation_value=0.0,
-        cumulative=False,
+        method: Literal["nearest", "linear", "distribution"] = "linear",
+        **kwargs,
     ) -> "FrequencySpectrum":
-        if cumulative:
+        if method == "distribution":
+            self.fillna(0.0)
             interpolated_data = cumulative_frequency_interpolation_1d_variable(
-                new_frequencies, self.dataset
+                new_frequencies, self.dataset, **kwargs
             )
             object = FrequencySpectrum(interpolated_data)
             object.fillna(extrapolation_value)
             return object
-        else:
+        elif method == "linear":
             return self.interpolate(
-                {NAME_F: new_frequencies}, extrapolation_value=extrapolation_value
+                {NAME_F: new_frequencies},
+                extrapolation_value=extrapolation_value,
+                nearest_neighbour=False,
+            )
+        elif method == "nearest_neighbour":
+            return self.interpolate(
+                {NAME_F: new_frequencies},
+                extrapolation_value=extrapolation_value,
+                nearest_neighbour=True,
             )
 
     def interpolate(
-        self: "FrequencySpectrum", coordinates, extrapolation_value=0.0
+        self: "FrequencySpectrum",
+        coordinates,
+        extrapolation_value=0.0,
+        nearest_neighbour=False,
     ) -> "FrequencySpectrum":
         """
 
@@ -1217,7 +1261,9 @@ class FrequencySpectrum(WaveSpectrum):
             else:
                 _dataset = _dataset.assign({_name: self.dataset[_name]})
 
-        interpolated_data = interpolate_dataset_grid(coordinates, _dataset)
+        interpolated_data = interpolate_dataset_grid(
+            coordinates, _dataset, nearest_neighbour
+        )
         for name in _moments:
             interpolated_data[name] = (
                 interpolated_data[name] / interpolated_data[NAME_E]
@@ -1226,6 +1272,47 @@ class FrequencySpectrum(WaveSpectrum):
         object = FrequencySpectrum(interpolated_data)
         object.fillna(extrapolation_value)
         return object
+
+    def down_sample(self, frequencies):
+        cdf = self.cdf()
+
+        frequency_step = midpoint_rule_step(frequencies)
+        sampling_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
+        sampling_frequencies = (
+            sampling_frequencies - frequency_step[0] / 2 + frequencies[0]
+        )
+
+        dims = self.dims
+        sampled_cdf = cdf.sel({"frequency": sampling_frequencies}, method="nearest")
+        data = {
+            NAME_E: (dims, sampled_cdf.diff(dim="frequency").values / frequency_step),
+            NAME_a1: (
+                dims,
+                self.a1.sel({"frequency": frequencies}, method="nearest").values,
+            ),
+            NAME_b1: (
+                dims,
+                self.b1.sel({"frequency": frequencies}, method="nearest").values,
+            ),
+            NAME_a2: (
+                dims,
+                self.a2.sel({"frequency": frequencies}, method="nearest").values,
+            ),
+            NAME_b2: (
+                dims,
+                self.b2.sel({"frequency": frequencies}, method="nearest").values,
+            ),
+        }
+
+        coords = {x: self.dataset[x].values for x in self.dims}
+        coords[NAME_F] = frequencies
+
+        for x in self.dataset:
+            if x in SPECTRAL_VARS:
+                continue
+            data[x] = (self.dims_space_time, self.dataset[x].values)
+
+        return FrequencySpectrum(Dataset(data_vars=data, coords=coords))
 
     def as_frequency_direction_spectrum(
         self,
@@ -1275,7 +1362,6 @@ def create_1d_spectrum(
     depth: Union[numpy.ndarray, float] = numpy.inf,
     dims=(NAME_T, NAME_F),
 ) -> FrequencySpectrum:
-
     if a1 is None:
         a1 = numpy.nan + numpy.ones_like(variance_density)
     if b1 is None:
@@ -1443,7 +1529,7 @@ def fill_zeros_or_nan_in_tail(
 
 
 def cumulative_frequency_interpolation_1d_variable(
-    interpolation_frequency, dataset: Dataset
+    interpolation_frequency, dataset: Dataset, **kwargs
 ):
     """
     To interpolate the spectrum we first calculate a cumulative density function from the spectrum (which is essentialy
@@ -1474,8 +1560,8 @@ def cumulative_frequency_interpolation_1d_variable(
         interpolation_frequency,
         dataset[NAME_F].values,
         dataset[NAME_E].values,
-        interpolating_spline_order=3,
-        positive=True,
+        interpolating_spline_order=kwargs.get("spline_order", 3),
+        positive=kwargs.get("monotone_interpolation", True),
     )
 
     _dataset = _dataset.assign(
@@ -1496,6 +1582,8 @@ def cumulative_frequency_interpolation_1d_variable(
         interpolating_spline_order=1,
         positive=False,
     )
+    msk = interpolated_energy == 0
+    interpolated_energy[msk] = 1
 
     for _name in SPECTRAL_MOMENTS:
         interpolated_densities = (

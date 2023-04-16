@@ -41,11 +41,11 @@ class JB23WindInput(ST4WindInput):
     @staticmethod
     def default_parameters() -> JB23WaveGenerationParameters:
         return JB23WaveGenerationParameters(
-            wave_age_tuning_parameter=0.006,
-            growth_parameter_betamax=1.52,
+            wave_age_tuning_parameter=0.008,
+            growth_parameter_betamax=2,
             gravitational_acceleration=GRAVITATIONAL_ACCELERATION,
             charnock_maximum_roughness=inf,
-            charnock_constant=0.01,
+            charnock_constant=0.005,
             air_density=AIR.density,
             water_density=WATER.density,
             vonkarman_constant=AIR.vonkarman_constant,

@@ -12,14 +12,14 @@ from roguewave.wavephysics.balance._numba_settings import numba_nocache
 
 @jit(**numba_nocache)
 def _wave_supported_stress_point(
-        wind_input: NDArray,
-        depth,
-        spectral_grid,
-        variance_density,
-        wind,
-        roughness_length,
-        tail_stress_parametrization_function,
-        parameters,
+    wind_input: NDArray,
+    depth,
+    spectral_grid,
+    variance_density,
+    wind,
+    roughness_length,
+    tail_stress_parametrization_function,
+    parameters,
 ) -> Tuple[float, float]:
     """
     :param wind_input:
@@ -38,7 +38,7 @@ def _wave_supported_stress_point(
     gravitational_acceleration = parameters["gravitational_acceleration"]
 
     if depth == inf:
-        wavenumber = radian_frequency ** 2 / gravitational_acceleration
+        wavenumber = radian_frequency**2 / gravitational_acceleration
     else:
         wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
 
@@ -50,28 +50,28 @@ def _wave_supported_stress_point(
     stress_north = 0.0
     for frequency_index in range(number_of_frequencies):
         inverse_wave_speed = (
-                              wavenumber[frequency_index] / radian_frequency[frequency_index]
-                             ) * frequency_step[frequency_index]
+            wavenumber[frequency_index] / radian_frequency[frequency_index]
+        ) * frequency_step[frequency_index]
 
         for direction_index in range(number_of_directions):
             stress_east += (
-                    cosine_step[direction_index]
-                    * wind_input[frequency_index, direction_index]
-                    * inverse_wave_speed
+                cosine_step[direction_index]
+                * wind_input[frequency_index, direction_index]
+                * inverse_wave_speed
             )
 
             stress_north += (
-                    sine_step[direction_index]
-                    * wind_input[frequency_index, direction_index]
-                    * inverse_wave_speed
+                sine_step[direction_index]
+                * wind_input[frequency_index, direction_index]
+                * inverse_wave_speed
             )
 
     # calculate the magnitude
     stress_north *= (
-            parameters["gravitational_acceleration"] * parameters["water_density"]
+        parameters["gravitational_acceleration"] * parameters["water_density"]
     )
     stress_east *= (
-            parameters["gravitational_acceleration"] * parameters["water_density"]
+        parameters["gravitational_acceleration"] * parameters["water_density"]
     )
 
     # Add stress contribution due to unresolved waves in the spectral tail (above the last resolved frequency)
@@ -90,14 +90,14 @@ def _wave_supported_stress_point(
 
 @jit(**numba_nocache)
 def _roughness_estimate_point(
-        guess,
-        variance_density,
-        wind,
-        depth,
-        wind_source_term_function,
-        tail_stress_parametrization_function,
-        spectral_grid,
-        parameters,
+    guess,
+    variance_density,
+    wind,
+    depth,
+    wind_source_term_function,
+    tail_stress_parametrization_function,
+    spectral_grid,
+    parameters,
 ):
     """
 
@@ -112,7 +112,14 @@ def _roughness_estimate_point(
 
     vonkarman_constant = parameters["vonkarman_constant"]
     if guess < 0:
-        guess = exp(-0.1)
+        if wind[2] == "u10":
+            drag_coeficient_wu = (0.8 + 0.065 * wind[0]) / 1000
+            guess = 10 / exp(vonkarman_constant / sqrt(drag_coeficient_wu))
+
+        elif wind[2] in ["ustar", "friction_velocity"]:
+            guess = _charnock_relation_point(wind[0], parameters)
+        else:
+            raise ValueError("unknown wind forcing")
 
     if any(isnan(variance_density)):
         return nan
@@ -152,14 +159,14 @@ def _roughness_estimate_point(
 
 @jit(**numba_nocache)
 def _roughness_estimate(
-        guess,
-        variance_density,
-        wind,
-        depth,
-        wind_source_term_function,
-        tail_stress_parametrization_function,
-        spectral_grid,
-        parameters,
+    guess,
+    variance_density,
+    wind,
+    depth,
+    wind_source_term_function,
+    tail_stress_parametrization_function,
+    spectral_grid,
+    parameters,
 ) -> NDArray:
     """
     :param guess:
@@ -181,15 +188,15 @@ def _roughness_estimate(
         else:
             try:
                 roughness[point_index] = _roughness_estimate_point(
-                        guess=guess[point_index],
-                        variance_density=variance_density[point_index, :, :],
-                        wind=wind_at_point,
-                        depth=depth[point_index],
-                        wind_source_term_function=wind_source_term_function,
-                        tail_stress_parametrization_function=tail_stress_parametrization_function,
-                        spectral_grid=spectral_grid,
-                        parameters=parameters,
-                    )
+                    guess=guess[point_index],
+                    variance_density=variance_density[point_index, :, :],
+                    wind=wind_at_point,
+                    depth=depth[point_index],
+                    wind_source_term_function=wind_source_term_function,
+                    tail_stress_parametrization_function=tail_stress_parametrization_function,
+                    spectral_grid=spectral_grid,
+                    parameters=parameters,
+                )
             except:
                 roughness[point_index] = nan
     return roughness
@@ -197,14 +204,14 @@ def _roughness_estimate(
 
 @jit(**numba_nocache)
 def _wave_supported_stress(
-        variance_density,
-        wind,
-        depth,
-        roughness_length,
-        wind_source_term_function,
-        tail_stress_parametrization_function,
-        spectral_grid,
-        parameters,
+    variance_density,
+    wind,
+    depth,
+    roughness_length,
+    wind_source_term_function,
+    tail_stress_parametrization_function,
+    spectral_grid,
+    parameters,
 ) -> Tuple[NDArray, NDArray]:
     """
     Calculate the wave supported wind stress.
@@ -237,13 +244,13 @@ def _wave_supported_stress(
 
 @jit(**numba_nocache)
 def _tail_supported_stress(
-        variance_density,
-        wind,
-        depth,
-        roughness_length,
-        tail_stress_parametrization_function,
-        spectral_grid,
-        parameters,
+    variance_density,
+    wind,
+    depth,
+    roughness_length,
+    tail_stress_parametrization_function,
+    spectral_grid,
+    parameters,
 ) -> Tuple[NDArray, NDArray]:
     """
     Calculate the wave supported wind stress.
@@ -261,30 +268,34 @@ def _tail_supported_stress(
     stress_north = empty((number_of_points))
     for point_index in range(number_of_points):
         wind_at_point = (wind[0][point_index], wind[1][point_index], wind[2])
-        (stress_east[point_index], stress_north[point_index],) = tail_stress_parametrization_function(
+        (
+            stress_east[point_index],
+            stress_north[point_index],
+        ) = tail_stress_parametrization_function(
             variance_density[point_index, :, :],
             wind_at_point,
             depth[point_index],
             roughness_length[point_index],
             spectral_grid,
-            parameters)
+            parameters,
+        )
 
-    magnitude = sqrt(stress_north**2+stress_east**2)
-    direction = arctan2( stress_north, stress_east )%360
+    magnitude = sqrt(stress_north**2 + stress_east**2)
+    direction = arctan2(stress_north, stress_east) % 360
     return magnitude, direction
 
 
 @jit(**numba_nocache)
 def _stress_iteration_function(
-        log_roughness_length,
-        variance_density,
-        wind,
-        depth,
-        wind_source_term_function,
-        tail_stress_parametrization_function,
-        spectral_grid,
-        parameters,
-        work_array,
+    log_roughness_length,
+    variance_density,
+    wind,
+    depth,
+    wind_source_term_function,
+    tail_stress_parametrization_function,
+    spectral_grid,
+    parameters,
+    work_array,
 ):
     """
     The surface roughness is defined implicitly. We use a fixed-point iteration step to solve for the roughness. This
@@ -304,7 +315,7 @@ def _stress_iteration_function(
     elevation = parameters["elevation"]
     if wind[2] == "u10":
         friction_velocity = (
-                wind[0] * vonkarman_constant / log(elevation / roughness_length)
+            wind[0] * vonkarman_constant / log(elevation / roughness_length)
         )
     else:
         friction_velocity = wind[0]
@@ -332,21 +343,20 @@ def _stress_iteration_function(
         work_array,
     )
 
-    #print(parameters["air_density"] * friction_velocity ** 2 - total_stress_estimate, total_stress_estimate,parameters["air_density"] * friction_velocity ** 2)
-    return parameters["air_density"] * friction_velocity ** 2 - total_stress_estimate
+    return parameters["air_density"] * friction_velocity**2 - total_stress_estimate
 
 
 @jit(**numba_nocache)
 def _total_stress_point(
-        roughness_length,
-        variance_density,
-        wind,
-        depth,
-        wind_source_term_function,
-        tail_stress_parametrization_function,
-        spectral_grid,
-        parameters,
-        work_array=None,
+    roughness_length,
+    variance_density,
+    wind,
+    depth,
+    wind_source_term_function,
+    tail_stress_parametrization_function,
+    spectral_grid,
+    parameters,
+    work_array=None,
 ):
     """
 
@@ -363,7 +373,7 @@ def _total_stress_point(
     elevation = parameters["elevation"]
     if wind[2] == "u10":
         friction_velocity = (
-                wind[0] * vonkarman_constant / log(elevation / roughness_length)
+            wind[0] * vonkarman_constant / log(elevation / roughness_length)
         )
     else:
         friction_velocity = wind[0]
@@ -398,12 +408,12 @@ def _total_stress_point(
     )
 
     viscous_stress = (
-            parameters["viscous_stress_parameter"]
-            * parameters["air_density"]
-            * friction_velocity
-            * parameters["air_viscosity"]
-            / vonkarman_constant
-            / roughness_length
+        parameters["viscous_stress_parameter"]
+        * parameters["air_density"]
+        * friction_velocity
+        * parameters["air_viscosity"]
+        / vonkarman_constant
+        / roughness_length
     )
 
     wind_direction_radian = wind[1] * pi / 180
@@ -412,6 +422,6 @@ def _total_stress_point(
     stress_east += viscous_stress * cos(wind_direction_radian)
 
     stress_direction = (arctan2(stress_north, stress_east) * 180 / pi) % 360
-    stress_magnitude = sqrt(stress_north ** 2 + stress_east ** 2)
+    stress_magnitude = sqrt(stress_north**2 + stress_east**2)
 
     return stress_magnitude, stress_direction

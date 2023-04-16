@@ -140,8 +140,13 @@ class TimeSliceForecast(TimeSlice):
         super().__init__(self.init_time, self.init_time + duration, endpoint)
 
     def time_base(self, time_configuration: ModelTimeConfiguration):
+        init_time = find_closet_init_time(
+            self.init_time,
+            time_configuration.cycle_time_hours,
+            time_configuration.cycle_offset_hours,
+        )
         return timebase_forecast(
-            init_time=self.init_time,
+            init_time=init_time,
             duration=self.duration,
             time_configuration=time_configuration,
             endpoint=self.endpoint,

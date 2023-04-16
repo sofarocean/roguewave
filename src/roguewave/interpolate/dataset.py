@@ -13,6 +13,7 @@ def interpolate_dataset_grid(
     data_set: Dataset,
     periodic_data: Mapping[str, Tuple[int, int]] = None,
     longitude_variable_in_dataset: str = "longitude",
+    nearest_neighbour=False,
 ) -> Dataset:
     if periodic_data is None:
         periodic_data = {}
@@ -32,7 +33,10 @@ def interpolate_dataset_grid(
         else:
             _data_set = return_data_set
         return_data_set = interpolate_dataset_along_axis(
-            coordinate_value, _data_set, coordinate_name
+            coordinate_value,
+            _data_set,
+            coordinate_name,
+            nearest_neighbour=nearest_neighbour,
         )
     return return_data_set
 
@@ -43,6 +47,7 @@ def interpolate_dataset_along_axis(
     coordinate_name: str = "time",
     periodic_data: Mapping[str, Tuple[int, int]] = None,
     periodic_coordinates: Dict = None,
+    nearest_neighbour=False,
 ) -> Dataset:
     if periodic_data is None:
         periodic_data = {"longitude": (360, 180)}
@@ -92,6 +97,7 @@ def interpolate_dataset_along_axis(
             periodic_coordinates,
             period_data,
             discont_data,
+            nearest_neighbour,
         )
 
         coor = {value[0]: value[1] for value in data_coordinates}

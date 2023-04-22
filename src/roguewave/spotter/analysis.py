@@ -72,9 +72,14 @@ def displacement_from_gps_positions(path) -> DataFrame:
     return apply_to_group(process, cum_distance)
 
 
-def spectra_from_raw_gps(path, **kwargs) -> FrequencySpectrum:
-    displacement_doppler = displacement_from_gps_doppler_velocities(path, **kwargs)
-    displacement_location = displacement_from_gps_positions(path)
+def spectra_from_raw_gps(
+    path=None, displacement_doppler=None, displacement_location=None, **kwargs
+) -> FrequencySpectrum:
+    if displacement_doppler is None:
+        displacement_doppler = displacement_from_gps_doppler_velocities(path, **kwargs)
+
+    if displacement_location is None:
+        displacement_location = displacement_from_gps_positions(path)
 
     correct_for_numerical_integration = kwargs.get("response_correction", True)
     order = kwargs.get("order", 4)

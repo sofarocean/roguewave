@@ -17,3 +17,5 @@ numba
 pygrib
 numba_progress
 scipy
+qpsolvers
+cvxopt

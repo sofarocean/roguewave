@@ -4,6 +4,7 @@ from roguewave.interpolate.spline import cubic_spline
 
 from roguewave.tools.grid import midpoint_rule_step
 from roguewave.tools.time_integration import integrated_response_factor_spectral_tail
+from scipy.interpolate import CubicSpline
 
 
 @njit(cache=True)
@@ -170,15 +171,13 @@ def _compound_tail(
     return transition_frequency, starting_energy
 
 
-def _cdf_interpolate(
-    interpolation_frequency: numpy.ndarray,
+def _cdf_interpolate_spline(
     frequency: numpy.ndarray,
     frequency_spectrum: numpy.ndarray,
-    interpolating_spline_order: int = 3,
     monotone_interpolation: bool = False,
     frequency_axis=-1,
     **kwargs
-) -> numpy.ndarray:
+) -> CubicSpline:
     """
     Interpolate the spectrum using the cdf.
 
@@ -189,6 +188,15 @@ def _cdf_interpolate(
     :param positive: Ensure the output is positive (e.g. for A1 or B1 densities output need not be strictly positive).
     :return:
     """
+
+    # Calculate the binsize for each of the frequency bins. We assume that the given frequencies represent the center
+    # of a bin, and that the bin width at frequency i is determined as the sum of half the up and downwind differences:
+    #
+    #  frequency_step[i]   =  (frequency_step[i] - frequency_step[i-1])/2 + (frequency_step[i+1] - frequency_step[i])/2
+    #
+    # At boundaries we simply take twice the up or downwind difference, e.g.:
+    #
+    # frequency_step[0] = (frequency_step[1] - frequency_step[0])
     #
     frequency_step = midpoint_rule_step(frequency)
     integration_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
@@ -205,7 +213,7 @@ def _cdf_interpolate(
         integration_frequencies, cumsum, monotone_interpolation=monotone_interpolation
     )
 
-    return interpolator.derivative()(interpolation_frequency)
+    return interpolator
 
 
 def spline_peak_frequency(
@@ -224,51 +232,15 @@ def spline_peak_frequency(
     """
     #
 
-    # Calculate the binsize for each of the frequency bins. We assume that the given frequencies represent the center
-    # of a bin, and that the bin width at frequency i is determined as the sum of half the up and downwind differences:
-    #
-    #  frequency_step[i]   =  (frequency_step[i] - frequency_step[i-1])/2 + (frequency_step[i+1] - frequency_step[i])/2
-    #
-    # At boundaries we simply take twice the up or downwind difference, e.g.:
-    #
-    # frequency_step[0] = (frequency_step[1] - frequency_step[0])
-    #
-    frequency_step = midpoint_rule_step(frequency)
-
-    # Whereas the given frequencies represent the center, we assume that cumulative function is sampled at the bin
-    # edges. First create the cumulative sum frequency relative to the start...
-    integration_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
-
-    # and then add the origin (first bin centered frequency minus half the step size.
-    integration_frequencies = (
-        integration_frequencies - frequency_step[0] / 2 + frequency[0]
+    interpolator = _cdf_interpolate_spline(
+        frequency, frequency_spectrum, monotone_interpolation, frequency_axis
     )
-
-    # Since spectra are typicall given as densities, muliply with the step to get the bin integrated values.
-    bin_integrated_values = frequency_spectrum * frequency_step
-
-    # calculate the cumulative function
-    cumsum = numpy.cumsum(bin_integrated_values, axis=frequency_axis)
-
-    shape = list(cumsum.shape)
-    shape[frequency_axis] = 1
-
-    # Add leading 0s as at the first frequency the integration is 0.
-    cumsum = numpy.concatenate((numpy.zeros(shape), cumsum), axis=frequency_axis)
-
-    # Construct a cubic spline interpolator, and then differentiate to get the density function.
-    interpolator = cubic_spline(
-        integration_frequencies,
-        cumsum,
-        monotone_interpolation=monotone_interpolation,
-        frequency_axis=frequency_axis,
-    ).derivative()
-
+    interpolator = interpolator.derivative()
     # Find the maxima of the density function by setting dEdf = 0, and finding the roots of all the splines representing
     # the density function.
     list_of_roots_for_all_spectra = interpolator.derivative().roots()
 
-    if len(shape) == 1:
+    if frequency_spectrum.ndim == 1:
         list_of_roots_for_all_spectra = [list_of_roots_for_all_spectra]
 
     # initialize output memory

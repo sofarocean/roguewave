@@ -24,6 +24,8 @@ setuptools.setup(
         "pygrib",
         "numba",
         "numba_progress",
+        "qpsolvers",
+        "cvxopt",
     ],
     description="Python package to interact with Sofar wave data",
     long_description=readme_contents,

@@ -28,7 +28,7 @@ from warnings import warn
 from roguewave.wavespectra._tools import (
     numba_fill_zeros_or_nan_in_tail,
     spline_peak_frequency,
-    _cdf_interpolate,
+    _cdf_interpolate_spline,
 )
 from roguewave.tools.grid import midpoint_rule_step
 
@@ -112,11 +112,13 @@ class DatasetWrapper:
     def __iter__(self) -> Iterator[Hashable]:
         return self.dataset.__iter__()
 
-    def sel(self: _T, *args, **kwargs) -> _T:
+    def sel(self: _T, *args, method="nearest", **kwargs) -> _T:
         cls = type(self)
         dataset = Dataset()
         for var in self.dataset:
-            dataset = dataset.assign({var: self.dataset[var].sel(*args, **kwargs)})
+            dataset = dataset.assign(
+                {var: self.dataset[var].sel(*args, method=method, **kwargs)}
+            )
         return cls(dataset=dataset)
 
     def isel(self: _T, *args, **kwargs) -> _T:
@@ -476,6 +478,14 @@ class WaveSpectrum(DatasetWrapper):
         return self.dataset[NAME_E]
 
     @property
+    def values(self) -> numpy.ndarray:
+        """
+        Get the raw numpy representation of the wave spectrum
+        :return: Numpy ndarray of the wave spectrum.
+        """
+        return self.dataset[NAME_E].values
+
+    @property
     def e(self) -> DataArray:
         """
         :return: 1D spectral values (directionally integrated spectrum).
@@ -655,7 +665,9 @@ class WaveSpectrum(DatasetWrapper):
         """
         return self.e.where(self._range(fmin, fmax), 0).argmax(dim=NAME_F)
 
-    def peak_frequency(self, fmin=0, fmax=numpy.inf, use_spline=False) -> DataArray:
+    def peak_frequency(
+        self, fmin=0, fmax=numpy.inf, use_spline=False, **kwargs
+    ) -> DataArray:
         """
         Peak frequency of the spectrum, i.e. frequency at which the spectrum
         obtains its maximum.
@@ -665,7 +677,7 @@ class WaveSpectrum(DatasetWrapper):
         :return: peak frequency
         """
         if use_spline:
-            data = spline_peak_frequency(self.frequency.values, self.e.values)
+            data = spline_peak_frequency(self.frequency.values, self.e.values, **kwargs)
             if len(self.dims_space_time) == 0:
                 data = data[0]
 
@@ -688,7 +700,9 @@ class WaveSpectrum(DatasetWrapper):
         """
         return self.peak_frequency(fmin, fmax) * numpy.pi * 2
 
-    def peak_period(self, fmin=0, fmax=numpy.inf, use_spline=False) -> DataArray:
+    def peak_period(
+        self, fmin=0, fmax=numpy.inf, use_spline=False, **kwargs
+    ) -> DataArray:
         """
         Peak period of the spectrum, i.e. period at which the spectrum
         obtains its maximum.
@@ -697,7 +711,9 @@ class WaveSpectrum(DatasetWrapper):
         :param fmax: maximum frequency
         :return: peak period
         """
-        peak_period = 1 / self.peak_frequency(fmin, fmax, use_spline=use_spline)
+        peak_period = 1 / self.peak_frequency(
+            fmin, fmax, use_spline=use_spline, **kwargs
+        )
         peak_period.name = "peak period"
         try:
             peak_period = peak_period.drop("frequency")
@@ -1213,10 +1229,14 @@ class FrequencySpectrum(WaveSpectrum):
         self: "FrequencySpectrum",
         new_frequencies,
         extrapolation_value=0.0,
-        method: Literal["nearest", "linear", "distribution"] = "linear",
+        method: Literal["nearest", "linear", "spline"] = "linear",
         **kwargs,
     ) -> "FrequencySpectrum":
-        if method == "distribution":
+
+        if isinstance(new_frequencies, DataArray):
+            new_frequencies = new_frequencies.values
+
+        if method == "spline":
             self.fillna(0.0)
             frequency_axis = self.dims.index(NAME_F)
             interpolated_data = cumulative_frequency_interpolation_1d_variable(
@@ -1237,6 +1257,8 @@ class FrequencySpectrum(WaveSpectrum):
                 extrapolation_value=extrapolation_value,
                 nearest_neighbour=True,
             )
+        else:
+            raise ValueError(f"Unknown interpolation method: {method}")
 
     def interpolate(
         self: "FrequencySpectrum",
@@ -1557,14 +1579,13 @@ def cumulative_frequency_interpolation_1d_variable(
     dims = dataset[NAME_E].dims
 
     # Interpolate energy
-    interpolated_energy = _cdf_interpolate(
-        interpolation_frequency,
+    interpolated_cdf_spline = _cdf_interpolate_spline(
         dataset[NAME_F].values,
         dataset[NAME_E].values,
-        interpolating_spline_order=kwargs.get("spline_order", 3),
         monotone_interpolation=kwargs.get("monotone_interpolation", True),
         frequency_axis=kwargs.get("frequency_axis", -1),
     )
+    interpolated_energy = interpolated_cdf_spline.derivative()(interpolation_frequency)
 
     _dataset = _dataset.assign(
         {
@@ -1579,12 +1600,13 @@ def cumulative_frequency_interpolation_1d_variable(
     msk = interpolated_energy > 0
 
     for _name in SPECTRAL_MOMENTS:
-        interpolated_densities = _cdf_interpolate(
-            interpolation_frequency,
+        interpolated_densities_spline = _cdf_interpolate_spline(
             dataset[NAME_F].values,
             dataset[_name].values * dataset[NAME_E].values,
-            interpolating_spline_order=1,
-            monotone_interpolation=True,
+            monotone_interpolation=kwargs.get("monotone_interpolation_moments", False),
+        )
+        interpolated_densities = interpolated_densities_spline.derivative()(
+            interpolation_frequency
         )
         # Avoid division by zero
         interpolated_densities[msk] = (

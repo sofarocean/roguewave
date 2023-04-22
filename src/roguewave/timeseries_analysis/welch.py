@@ -40,6 +40,7 @@ def estimate_frequency_spectrum(
     options=None,
     spectral_window=None,
     response_functions=None,
+    fft_length=None,
     **kwargs
 ) -> FrequencySpectrum:
     """
@@ -70,6 +71,7 @@ def estimate_frequency_spectrum(
         sampling_frequency,
         options,
         spectral_window,
+        fft_length,
     )
 
     if response_functions is not None:
@@ -110,11 +112,16 @@ def estimate_co_spectra(
     sampling_frequency,
     options: Dict = None,
     spectral_window=None,
+    fft_length=None,
 ) -> Tuple[NDArray, NDArray, NDArray]:
     segments = _segment_timeseries(epoch_time, segment_length_seconds)
 
     number_of_spectra = len(segments)
-    number_of_frequencies = len(window) // 2
+
+    if fft_length is None:
+        fft_length = len(window)
+
+    number_of_frequencies = fft_length // 2
 
     nsig = len(signals)
     co_spectra = numpy.empty(
@@ -135,11 +142,13 @@ def estimate_co_spectra(
             sampling_frequency,
             options,
             spectral_window,
+            fft_length=fft_length,
         )
 
-    df = sampling_frequency / len(window)
+    df = sampling_frequency / fft_length
     frequencies = (
-        numpy.linspace(numpy.int64(0), len(window) // 2 - 1, len(window) // 2) * df
+        numpy.linspace(numpy.int64(0), number_of_frequencies - 1, number_of_frequencies)
+        * df
     )
 
     return spectral_time, frequencies, co_spectra
@@ -158,6 +167,7 @@ def calculate_co_spectra(
     sampling_frequency: float,
     options: Dict = None,
     spectral_window: NDArray = None,
+    fft_length=None,
 ) -> NDArray:
     """
     Calculate co-spectral density matrix using Welch's method.
@@ -182,7 +192,10 @@ def calculate_co_spectra(
 
     # Signal and window lengths
     overlap = int(len(window) * window_overlap_fraction)
-    nyquist_index = len(window) // 2
+    if fft_length is None:
+        fft_length = len(window)
+
+    nyquist_index = fft_length // 2
     nsig = len(signals)
     nt = len(signals[0])
 
@@ -239,9 +252,9 @@ def calculate_co_spectra(
         for index in range(nsig):
             with objmode():
                 # FFT not supported in Numba- yet
-                ffts[index, :] = fft(zero_mean_signals[index, istart:iend] * window)[
-                    0:nyquist_index
-                ]
+                ffts[index, :] = fft(
+                    zero_mean_signals[index, istart:iend] * window, n=fft_length
+                )[0:nyquist_index]
 
         # Calculate the co(spectral) contributions, making use of the Hermetian property of the co-spectral matrix,
         # i.e.   cospectra[mm,nn] == conjugate( cospectra[nn,mm] )

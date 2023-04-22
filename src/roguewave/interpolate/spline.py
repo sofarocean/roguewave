@@ -156,7 +156,6 @@ def _monotone_cubic_spline(
 
     # Initialize arrays
     # -----------------
-
     if spline_coeficients is None:
         spline_coeficients = np.zeros((4, len(x) - 1))
 
@@ -179,6 +178,13 @@ def _monotone_cubic_spline(
 
     delta_y = np.diff(y)
     secant = np.diff(y) / np.diff(x)
+    max_curvature = np.max(
+        np.abs(2 * np.diff(y, n=2) / (np.diff(x)[0:-1] + np.diff(x)[1:]))
+    )  # 2 * np.diff( y,n=2 ) / (np.diff(x)[0:-1] + np.diff(x)[1:])
+    max_secant = np.max(
+        np.abs(secant)
+    )  # [ np.max( (secant[ii],secant[ii+1]) ) for ii in range(0,len(secant)-1) ]
+    max_delta = np.max(np.abs(delta_y))
 
     ones = np.ones_like(delta_x)
     zeros = np.zeros_like(delta_x)
@@ -195,12 +201,13 @@ def _monotone_cubic_spline(
     # -----------------
 
     # Not-a-knot boundary condition.
-    least_squares_matrix[0, 0] = 6
-    least_squares_matrix[0, 3] = -6
-    least_squares_matrix[-1, number_of_splines * 3 - 6] = 6
-    least_squares_matrix[-1, number_of_splines * 3 - 3] = -6
+    least_squares_matrix[0, 0] = 1
+    least_squares_matrix[0, 3] = -1
+    least_squares_matrix[-1, number_of_splines * 3 - 6] = 1
+    least_squares_matrix[-1, number_of_splines * 3 - 3] = -1
 
     # loop over each of the splines, and add its equations
+    weights = [1, 10000, 10000]
     for ii in range(0, number_of_splines - 1):
         # row/column indices in the matrix. The unknown spline coeficients are stored as a linear vector of the form
         # solution = [ a0,b0,c0; a1,b1,c1; .... ]. So the spline coeficients of the ii'th spline start in the
@@ -208,44 +215,46 @@ def _monotone_cubic_spline(
         jcol = ii * 3
         jrow = ii * 3 + 1
 
-        # dy/dx continuity at spline edges
-        least_squares_matrix[jrow, jcol : jcol + 5] = d2y_dx2_coef[ii, :]
-
         # d2y/dx2 continuity at spline edges. Note technically this is the only equation we minimize
-        least_squares_matrix[jrow + 1, jcol : jcol + 6] = dy_dx_coef[ii, :]
+        least_squares_matrix[jrow, jcol : jcol + 5] = (
+            d2y_dx2_coef[ii, :] / max_curvature * weights[0]
+        )
+
+        # dy/dx continuity at spline edges
+        least_squares_matrix[jrow + 1, jcol : jcol + 6] = (
+            dy_dx_coef[ii, :] / max_secant * weights[1]
+        )
 
         # y continuity at spline edges
-        least_squares_matrix[jrow + 2, jcol : jcol + 3] = y_coef[ii, :]
-        least_squares_rhs[jrow + 2] = delta_y[ii]
+        least_squares_matrix[jrow + 2, jcol : jcol + 3] = (
+            y_coef[ii, :] / max_delta * weights[2]
+        )
+        least_squares_rhs[jrow + 2] = delta_y[ii] / max_delta * weights[2]
 
         # build the matrix with the equality constrains
         jrow = ii * 2
 
-        # dy/dx continuity at spline edges
+        # # dy/dx continuity at spline edges.
         if secant[ii] * secant[ii + 1] > 0.0:
+            # Note we skip this constraint if we are at a peak in the data- or if one of the surrounding secants is 0.
+            # Enforcing 0.0 slope (the other posibility in this case) can lead to a system of equations that is not
+            # solvable.
             equality_constraint_matrix[jrow, jcol : jcol + 6] = dy_dx_coef[ii, :]
         else:
-            equality_constraint_matrix[jrow, jcol + 1] = 1.0
+            equality_constraint_matrix[jrow, jcol : jcol + 3] = dy_dx_coef[ii, :3]
 
         equality_constraint_matrix[jrow + 1, jcol : jcol + 3] = y_coef[ii, :]
-
-        if np.abs(secant[ii]) > 0.0:
-            equality_constraint_rhs[jrow + 1] = delta_y[ii]
-        else:
-            equality_constraint_rhs[jrow + 1] = 0.0
+        equality_constraint_rhs[jrow + 1] = delta_y[ii]
 
     # Add the end node values for the final spline
     equality_constraint_matrix[-1, -3:] = y_coef[-1, :]
+    equality_constraint_rhs[-1] = delta_y[-1]
 
-    if np.abs(secant[-1]) > 0.0:
-        equality_constraint_rhs[-1] = delta_y[-1]
-    else:
-        equality_constraint_rhs[-1] = 0.0
-
-    least_squares_matrix[-2, number_of_splines * 3 - 3 :] = y_coef[-1, :]
-    least_squares_rhs[-1] = delta_y[-1]
+    least_squares_matrix[-2, number_of_splines * 3 - 3 :] = y_coef[-1, :] / max_delta
+    least_squares_rhs[-2] = delta_y[-1] / max_delta
 
     # Build the matrix for the inequality constraints. These constraints enfore monotone behaviour of each spline.
+    eps = 0.0  # 1e-10
     for ii in range(0, number_of_splines):
         jcol = ii * 3
         jrow = ii * 4
@@ -264,14 +273,14 @@ def _monotone_cubic_spline(
 
             # dy/dx start of spline must be of the same sign as the secant
             inequality_constraint_matrix[jrow + 2, jcol + 2] = -sign
-            inequality_constraint_rhs[jrow + 2] = 1e-10
+            inequality_constraint_rhs[jrow + 2] = eps
         else:
             # secants change sign across node - slope must be zero-> slope <= 0  & -slope <=0
             inequality_constraint_matrix[jrow, jcol + 2] = 1.0
-            inequality_constraint_rhs[jrow] = 1e-10
+            inequality_constraint_rhs[jrow] = eps
 
             inequality_constraint_matrix[jrow + 2, jcol + 2] = -1
-            inequality_constraint_rhs[jrow + 2] = 1e-10
+            inequality_constraint_rhs[jrow + 2] = eps
 
         if ii < number_of_splines - 1:
             check = secant[ii + 1] * secant[ii] > 0
@@ -289,16 +298,16 @@ def _monotone_cubic_spline(
             inequality_constraint_matrix[jrow + 3, jcol : jcol + 3] = (
                 -sign * dy_dx_coef[ii, :3]
             )
-            inequality_constraint_rhs[jrow + 3] = 1e-10
+            inequality_constraint_rhs[jrow + 3] = eps
         else:
             # secants change sign across node - slope must be zero-> slope <= 0  & -slope <=0
             inequality_constraint_matrix[jrow + 1, jcol : jcol + 3] = dy_dx_coef[ii, :3]
-            inequality_constraint_rhs[jrow + 1] = 1e-10
+            inequality_constraint_rhs[jrow + 1] = eps
 
             inequality_constraint_matrix[jrow + 3, jcol : jcol + 3] = -dy_dx_coef[
                 ii, :3
             ]
-            inequality_constraint_rhs[jrow + 3] = 1e-10
+            inequality_constraint_rhs[jrow + 3] = eps
 
     # Solve system and return results
     # -----------------
@@ -312,6 +321,7 @@ def _monotone_cubic_spline(
         A=equality_constraint_matrix,
         b=equality_constraint_rhs,
         verbose=False,
+        solver="cvxopt",
     )
 
     # The unknown spline coeficients are stored as a linear vector of the form:
@@ -319,6 +329,27 @@ def _monotone_cubic_spline(
     #    solution = [ a0,b0,c0; a1,b1,c1; .... ].
     #
     # here we unpack that.
+    if solution is None:
+        # Remove the dydx continuity requirement.. as a last resort
+        equality_constraint_rhs = equality_constraint_rhs[1::2]
+        equality_constraint_matrix = equality_constraint_matrix[1::2, :]
+        solution = solve_ls(
+            R=least_squares_matrix,
+            s=least_squares_rhs,
+            G=inequality_constraint_matrix,
+            h=inequality_constraint_rhs,
+            A=equality_constraint_matrix,
+            b=equality_constraint_rhs,
+            verbose=False,
+            solver="cvxopt",
+        )
+        print(
+            "warning - no monotone solution found attempting to solve without C1 constraint"
+        )
+        if solution is None:
+            print("warning - no monotone solution found")
+            raise Exception("No solution found.")
+
     solution = np.reshape(solution, (number_of_splines, 3))
 
     spline_coeficients[0, :] = solution[:, 0]  # "a" coef

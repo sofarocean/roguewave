@@ -319,7 +319,7 @@ def calculate_co_spectra(
 
                 # Update the opposite diagonal with the conjugate of the signal
                 if mm != nn:
-                    output[nn, mm] = numpy.conjugate(output[mm, nn])
+                    output[nn, mm, :] = numpy.conjugate(output[mm, nn, :])
 
     return output
 

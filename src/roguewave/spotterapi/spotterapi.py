@@ -130,7 +130,7 @@ def get_bulk_wave_data(
     corresponding value a dataframe containing the output.
     """
     df = get_spotter_data(spotter_ids, "waves", start_date, end_date, **kwargs)
-    return {key: value for (key, value) in df.groupby(["spotter_id"])}
+    return {key[0]: value for (key, value) in df.groupby(["spotter_id"])}
 
 
 # -----------------------------------------------------------------------------

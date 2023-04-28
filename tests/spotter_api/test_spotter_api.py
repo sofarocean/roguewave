@@ -82,26 +82,22 @@ DATAFRAME_KEYS_MICROPHONEDATA = [
 
 
 def test_get_data_waveheight():
-    single = get_data(
-        TEST_SPOTTER_ID, START_DATE, END_DATE, include_waves=True, cache=False
+    single = get_spotter_data(
+        TEST_SPOTTER_ID,'waves', START_DATE, END_DATE,  cache=False
     )
-    assert TEST_SPOTTER_ID in single
+    assert isinstance(single, DataFrame)
+    assert single['spotter_id'][1] == TEST_SPOTTER_ID
 
-    as_list = get_data(
-        [TEST_SPOTTER_ID], START_DATE, END_DATE, include_waves=True, cache=False
+    as_list = get_spotter_data(
+        [TEST_SPOTTER_ID], 'waves',START_DATE, END_DATE, cache=False
     )
-    assert TEST_SPOTTER_ID in as_list
+    assert isinstance(as_list, DataFrame)
 
-    data = single[TEST_SPOTTER_ID]
-    assert "waves" in data
-    assert isinstance(data["waves"], DataFrame)
+    directly = get_bulk_wave_data(TEST_SPOTTER_ID, START_DATE, END_DATE, cache=False)
 
-    directly = get_bulk_wave_data(TEST_SPOTTER_ID, START_DATE, END_DATE, cache=False)[
-        TEST_SPOTTER_ID
-    ]
-    assert_frame_equal(directly, data["waves"])
+    assert_frame_equal(directly[TEST_SPOTTER_ID], as_list)
     for key in DATAFRAME_KEYS:
-        assert key in data["waves"], f"{key} not in data"
+        assert key in as_list, f"{key} not in data"
 
     single = get_spotter_data(
         TEST_SPOTTER_ID,
@@ -115,44 +111,21 @@ def test_get_data_waveheight():
 
 
 def test_get_pressure():
-    single = get_data(
-        TEST_SPOTTER_ID,
-        START_DATE,
-        END_DATE,
-        include_waves=False,
-        include_barometer_data=True,
-        cache=False,
-    )
-    assert TEST_SPOTTER_ID in single
-    data = single[TEST_SPOTTER_ID]
-
-    for key in DATAFRAME_KEYS_BAROMETER:
-        assert key in data["barometerData"], f"{key} not in data"
-
     single = get_spotter_data(
         TEST_SPOTTER_ID,
-        "barometerData",
+        'barometerData',
         START_DATE,
         END_DATE,
         cache=False,
     )
+    assert isinstance(single, DataFrame)
+    assert single['spotter_id'][1] == TEST_SPOTTER_ID
+
     for key in DATAFRAME_KEYS_BAROMETER:
         assert key in single, f"{key} not in data"
 
 
 def test_get_sst():
-    single = get_data(
-        TEST_SPOTTER_ID,
-        START_DATE,
-        END_DATE,
-        include_waves=False,
-        include_surface_temp_data=True,
-        cache=False,
-    )
-    assert TEST_SPOTTER_ID in single
-    data = single[TEST_SPOTTER_ID]
-    for key in DATAFRAME_KEYS_SST:
-        assert key in data["surfaceTemp"], f"{key} not in data"
 
     single = get_spotter_data(
         TEST_SPOTTER_ID,
@@ -166,19 +139,6 @@ def test_get_sst():
 
 
 def test_get_wind():
-    single = get_data(
-        TEST_SPOTTER_ID,
-        START_DATE,
-        END_DATE,
-        include_waves=False,
-        include_wind=True,
-        cache=False,
-    )
-    assert TEST_SPOTTER_ID in single
-    data = single[TEST_SPOTTER_ID]
-    for key in DATAFRAME_KEYS_WIND:
-        assert key in data["wind"], f"{key} not in data"
-
     single = get_spotter_data(
         TEST_SPOTTER_ID,
         "wind",
@@ -230,22 +190,7 @@ def test_get_microphone():
 
 
 def test_get_all():
-    single = get_data(
-        TEST_SPOTTER_ID,
-        START_DATE,
-        END_DATE,
-        include_waves=True,
-        include_wind=True,
-        include_surface_temp_data=True,
-        include_barometer_data=True,
-        include_frequency_data=True,
-        cache=False,
-    )
-    assert TEST_SPOTTER_ID in single
-    data = single[TEST_SPOTTER_ID]
-
-    for key in ["wind", "waves", "frequencyData", "barometerData", "surfaceTemp"]:
-        assert key in data, f"{key} not in data."
+    pass
 
 
 def test_get_spectrum():

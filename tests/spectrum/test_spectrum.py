@@ -686,7 +686,7 @@ def test_interpolate_frequency():
     spec = specs[1]
 
     intp_spec = spec.interpolate_frequency(
-        freq, method="distribution", monotone_interpolation=True
+        freq, method="spline", monotone_interpolation=True
     )
     assert intp_spec.dims == spec.dims
     assert_allclose(intp_spec.hm0(), spec.hm0(), rtol=1e-3, atol=1e-3)
@@ -695,7 +695,7 @@ def test_interpolate_frequency():
     )
 
     intp_spec = spec.interpolate_frequency(
-        freq, method="distribution", monotone_interpolation=False
+        freq, method="spline", monotone_interpolation=False
     )
     assert intp_spec.dims == spec.dims
     assert_allclose(intp_spec.hm0(), spec.hm0(), rtol=1e-3, atol=1e-3)

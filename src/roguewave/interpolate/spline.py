@@ -186,6 +186,10 @@ def _monotone_cubic_spline(
     )  # [ np.max( (secant[ii],secant[ii+1]) ) for ii in range(0,len(secant)-1) ]
     max_delta = np.max(np.abs(delta_y))
 
+    if max_delta == 0:
+        # Zero solution
+        return spline_coeficients
+
     ones = np.ones_like(delta_x)
     zeros = np.zeros_like(delta_x)
     twos = np.full_like(delta_x, 2)

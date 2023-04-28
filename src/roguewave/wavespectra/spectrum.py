@@ -581,14 +581,12 @@ class WaveSpectrum(DatasetWrapper):
         """
         :return:
         """
-
         # Note we multiply inverse wavenumber with frequency to force xarray to return a number_of_points by
         # by number of frequencies data structure.
         return (1 / self.wavenumber) * self.radian_frequency
 
     def wave_age(self, windspeed):
-        c = self.peak_wave_speed()
-        return c / windspeed
+        return self.peak_wave_speed() / windspeed
 
     def peak_wave_speed(self) -> DataArray:
         return 2 * numpy.pi * self.peak_frequency() / self.peak_wavenumber
@@ -666,7 +664,7 @@ class WaveSpectrum(DatasetWrapper):
         return self.e.where(self._range(fmin, fmax), 0).argmax(dim=NAME_F)
 
     def peak_frequency(
-        self, fmin=0, fmax=numpy.inf, use_spline=False, **kwargs
+        self, fmin=0.0, fmax=numpy.inf, use_spline=False, **kwargs
     ) -> DataArray:
         """
         Peak frequency of the spectrum, i.e. frequency at which the spectrum
@@ -674,9 +672,16 @@ class WaveSpectrum(DatasetWrapper):
 
         :param fmin: minimum frequency
         :param fmax: maximum frequency
+        :param use_spline: Use a spline based interpolation and determine peak frequency from the spline. This
+        allows for a continuous estimate of the peak frequency. WARNING: if True the fmin and fmax paramteres are IGNORED
         :return: peak frequency
         """
         if use_spline:
+            if not fmin == 0.0 or numpy.isfinite(fmax):
+                warn(
+                    f"The fmin and fmax parameters are ignored if use_spline is set to True"
+                )
+
             data = spline_peak_frequency(self.frequency.values, self.e.values, **kwargs)
             if len(self.dims_space_time) == 0:
                 data = data[0]

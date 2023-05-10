@@ -359,6 +359,26 @@ def timebase_lead(
     # Get the output interval at the requested lead time
     interval = time_configuration.interval_at_lead_time(lead_time=lead_time)
 
+    # we need to round the start time to be on time base.
+    nearest_start_time = (
+            (
+                ( start_time.timestamp()
+                  - time_configuration.cycle_offset_hours.total_seconds()
+                )
+                // interval.total_seconds()
+            )
+            * interval.total_seconds()
+            + time_configuration.cycle_offset_hours.total_seconds()
+    )
+    nearest_start_time = datetime.fromtimestamp(nearest_start_time ,tz=timezone.utc)
+    if nearest_start_time < start_time:
+        # If when rounding down we end up below the requested start time we add one output interval to ensure
+        # output is within the requested interval.
+        start_time = nearest_start_time + time_configuration.output_interval[0][1]
+    else:
+        #
+        start_time = nearest_start_time
+
     # Calculate number of instances we will return (upper bound)
     n = int((end_time - start_time) / interval) + int(endpoint)
 

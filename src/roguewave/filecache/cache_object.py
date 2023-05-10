@@ -96,7 +96,7 @@ class FileCache:
         do_cache_eviction_on_startup: bool = False,
         resources: List[RemoteResource] = None,
         parallel=True,
-        allow_for_missing_files=False,
+        allow_for_missing_files=True,
     ):
         """
         Initialize Cache
@@ -510,7 +510,7 @@ class FileCache:
 
         # for all URI's not in cache
         if cache_misses := self.get_cache_misses(uris, directives):
-            _ = _download_from_resources(
+            was_succesfully_downloaded = _download_from_resources(
                 cache_misses,
                 self.resources,
                 parallel_download=self.parallel,
@@ -518,8 +518,12 @@ class FileCache:
                 desc=self.description,
             )
 
-            for cache_miss in cache_misses:
-                self._add_to_cache(cache_miss.filename, cache_miss.filepath)
+            for cache_miss, success in zip(cache_misses, was_succesfully_downloaded):
+                if success:
+                    self._add_to_cache(cache_miss.filename, cache_miss.filepath)
+                else:
+                    index = filepaths.index(cache_miss.filepath)
+                    filepaths.pop(index)
 
         size_of_requested_data = _get_total_size_of_files_in_bytes(filepaths)
         if size_of_requested_data > self.max_size_bytes:
@@ -703,7 +707,9 @@ def _get_total_size_of_files_in_bytes(filenames: List[str], path=None) -> int:
             filepath = filename
         else:
             filepath = os.path.join(path, filename)
-        size += os.path.getsize(filepath)
+
+        if os.path.exists(filepath):
+            size += os.path.getsize(filepath)
     return size
 
 

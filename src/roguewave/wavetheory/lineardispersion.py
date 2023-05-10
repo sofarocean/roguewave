@@ -1,15 +1,19 @@
 import numpy
-from numba import njit, generated_jit, types
+from numba import njit, types
+from numba.extending import overload
 
 GRAV = 9.81
 
-
-@generated_jit(nopython=True)
 def atleast_1d(x):
     if x in types.number_domain:
         return lambda x: numpy.array([x])
     return lambda x: numpy.atleast_1d(x)
 
+@overload(atleast_1d)
+def overloaded_atleast_1d(x):
+    if x in types.number_domain:
+        return lambda x: numpy.array([x])
+    return lambda x: numpy.atleast_1d(x)
 
 @njit(cache=True)
 def inverse_intrinsic_dispersion_relation(
@@ -57,6 +61,8 @@ def inverse_intrinsic_dispersion_relation(
         error = numpy.abs(F) / w
         if numpy.all(error < tolerance):
             break
+    else:
+        print('inverse_intrinsic_dispersion_relation:: No convergence in solving for wavenumber')
 
     return k0
 

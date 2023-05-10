@@ -91,7 +91,7 @@ def _open_uris_as_dataset(
     # downloaded file so we can use a unified netcdf interface and because
     # Grib == Slow.
     def postprocess(filepath: str):
-        _convert_grib_to_netcdf_pygrib(filepath, model_variables)
+        _convert_grib_to_netcdf(filepath, model_variables)
 
     def validate(filepath: str) -> bool:
         if not single_variables_per_file:
@@ -127,7 +127,7 @@ def _open_uris_as_dataset(
     for dataset in datasets:
         init_time = to_datetime_utc(dataset.attrs.get("init_time"))
         if init_time is not None:
-            dataset["init_time"] = [numpy.datetime64(init_time)]
+            dataset["init_time"] = [numpy.datetime64(init_time).astype('<M8[ns]')]
 
     # Concatenate and return resulting dataset
     return xarray.concat(datasets, dim=concatenation_dimension)
@@ -232,33 +232,7 @@ def _open_variables(
 # Helper Functions
 # =============================================================================
 
-
 def _convert_grib_to_netcdf(filepath: str, model_variables) -> None:
-    """
-    Convert a grib file to a netcdf file
-
-    :param filepath: filepath of the grib file
-    :return: None
-    """
-    # open the dataset
-    dataset = xarray.open_dataset(filepath, engine="cfgrib", decode_times=False)
-    dataset = dataset[model_variables]
-
-    # convert the dataset and close
-    dataset.to_netcdf(filepath + ".nc")
-    dataset.close()
-
-    # delete old file and any lingering idx files
-    remove(filepath)
-    if grib_idx_file := glob(filepath + "*" + ".idx"):
-        remove(grib_idx_file[0])
-
-    # rename to old file name to ensure consistency.
-    rename(filepath + ".nc", filepath)
-    return None
-
-
-def _convert_grib_to_netcdf_pygrib(filepath: str, model_variables) -> None:
     """
     Convert a grib file to a netcdf file
 

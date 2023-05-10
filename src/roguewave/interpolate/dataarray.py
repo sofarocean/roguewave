@@ -89,11 +89,23 @@ def interpolate_track_data_arrray(
         tracks[coordinate_name] = numpy.atleast_1d(tracks[coordinate_name])
 
     if len(tracks) != len(dimensions):
+        # The number of dimensions does not match the number of dimensions of the points we are interpolating over.
+        # If the dataset has a number of singleton dimensions (e.g. for Hycon the surface velocities have a depth
+        # dimension that is always located at z=0) we may be able to add these to the track points.
         dim_str = [str(dim) for dim in dimensions]
-        raise ValueError(
-            f" Points expected to have {len(dimensions)} "
-            f'coordinates corresponding to: {", ".join(dim_str)}'
-        )
+
+        track_key = list(tracks.keys())[0]
+        for dim in dim_str:
+            if dim not in tracks:
+                # Singleton dimension is ok to interpolate over. Add points to the tracks that correspond to the
+                # singleton dimension.
+                if data_array[dim].shape[0] == 1:
+                    tracks[dim] = numpy.ones(tracks[track_key].shape) * data_array[dim].values[0]
+                else:
+                    raise ValueError(
+                        f" Points expected to have {len(dimensions)} "
+                        f'coordinates corresponding to: {", ".join(dim_str)}'
+                    )
 
     for coordinate_name in tracks:
         dim_str = [str(dim) for dim in dimensions]

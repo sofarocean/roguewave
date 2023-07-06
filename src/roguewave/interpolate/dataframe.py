@@ -3,8 +3,11 @@ from roguewave.interpolate.general import interpolate_periodic
 from roguewave.tools.time import to_datetime64
 import numpy
 
-
-def interpolate_dataframe_time(dataframe: DataFrame, new_time: numpy.ndarray):
+def interpolate_dataframe_time(dataframe: DataFrame, new_time: numpy.ndarray) -> DataFrame:
+    """
+    A function to interpolate data in a dataframe. We need this function to be able to interpolate wrapped variables
+    (e.g.longitudes and directions).
+    """
 
     output = DataFrame()
     output["time"] = new_time
@@ -29,7 +32,6 @@ def interpolate_dataframe_time(dataframe: DataFrame, new_time: numpy.ndarray):
         # (do not include column in output). Fixes a crash due to the new "processing_source" adding a string to
         # Spotter Api data that descibes where the data was processed.
         if dataframe[name].dtype == numpy.dtype(object):
-            print(name)
             continue
 
         output[name] = interpolate_periodic(

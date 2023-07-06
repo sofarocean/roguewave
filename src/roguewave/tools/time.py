@@ -57,7 +57,7 @@ def to_datetime_utc(time: input_types) -> Union[datetime, Sequence[datetime], No
 
                 return dt.astimezone(
                     timezone.utc
-                )  # datetime.fromisoformat(time).astimezone(timezone.utc)
+                )
             except ValueError:
                 return datetime.strptime(time, "%Y-%m-%dT%H:%M:%S.%f%z").astimezone(
                     timezone.utc
@@ -68,6 +68,7 @@ def to_datetime_utc(time: input_types) -> Union[datetime, Sequence[datetime], No
             return datetime.fromtimestamp(
                 datetime64(time, "s").astype("float64"), tz=timezone.utc
             ).replace(tzinfo=timezone.utc)
+
         elif isinstance(time, Number):
             return datetime.fromtimestamp(time, tz=timezone.utc)
 
@@ -101,10 +102,10 @@ def to_datetime64(time) -> Union[None, datetime64, NDArray[datetime64]]:
 
     if isinstance(time, datetime):
         # If a datetime- do conversion
-        return datetime64(int(time.timestamp()), "s")
+        return datetime64(int(time.timestamp()), "s").astype('<M8[ns]')
     else:
         # if  a sequence, do list comprehension and return an array
-        return array([datetime64(int(x.timestamp()), "s") for x in time])
+        return array([datetime64(int(x.timestamp()), "s").astype('<M8[ns]') for x in time])
 
 
 def time_from_timeint(t: int) -> timedelta:

@@ -22,7 +22,6 @@ from roguewave.modeldata import (
 # Interpolate
 from roguewave.interpolate import (
     interpolate_dataset,
-    tracks_as_dataset,
     TrackSet,
     Track,
     Cluster,
@@ -68,7 +67,6 @@ from roguewave.wavespectra.partitioning import (
 # Colocation
 from roguewave.colocate import (
     colocate_model_spotter,
-    colocated_tracks_as_dataset,
     colocate_model_spotter_spectra,
 )
 from roguewave.spotterapi import get_spotter_data, get_spectrum

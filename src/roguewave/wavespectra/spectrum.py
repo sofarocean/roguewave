@@ -244,7 +244,7 @@ class WaveSpectrum(DatasetWrapper):
     def drop_invalid(self: _T) -> _T:
         return self._apply_filter(self.is_valid())
 
-    def where(self: _T, condition) -> _T:
+    def where(self: _T, condition: DataArray) -> _T:
         return self._apply_filter(condition)
 
     def _apply_filter(self: _T, boolean_mask: DataArray) -> _T:

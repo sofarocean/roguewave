@@ -4,16 +4,28 @@ from numba.extending import overload
 
 GRAV = 9.81
 
-def atleast_1d(x):
-    if x in types.number_domain:
-        return lambda x: numpy.array([x])
-    return lambda x: numpy.atleast_1d(x)
+# The following overloading trick is needed because "atleast_1d" is not supported for scalars by default in numba.
+def atleast_1d(x) -> numpy.ndarray:
+    if type(x) in types.number_domain:
+        return numpy.array([x])
+    return numpy.atleast_1d(x)
 
 @overload(atleast_1d)
 def overloaded_atleast_1d(x):
     if x in types.number_domain:
         return lambda x: numpy.array([x])
     return lambda x: numpy.atleast_1d(x)
+
+def atleast_2d(x) -> numpy.ndarray:
+    if x in types.number_domain:
+        return numpy.array([x])
+    return numpy.atleast_1d(x)
+
+@overload(atleast_2d)
+def overloaded_atleast_2d(x):
+    if x in types.number_domain:
+        return lambda x: numpy.array([[x]])
+    return lambda x: numpy.atleast_2d(x)
 
 @njit(cache=True)
 def inverse_intrinsic_dispersion_relation(
@@ -87,7 +99,7 @@ def phase_velocity(k, depth, grav=GRAV):
     :param grav: Gravitational acceleration (m/s^2)
     :return:
     """
-    return intrinsic_dispersion_relation(k, depth, grav=GRAV) / k
+    return intrinsic_dispersion_relation(k, depth, grav=grav) / k
 
 
 @njit(cache=True)
@@ -110,7 +122,7 @@ def intrinsic_group_velocity(k, depth, grav=GRAV):
     :param grav: Gravitational acceleration (m/s^2)
     :return:
     """
-    return ratio_group_velocity_to_phase_velocity(k, depth, grav=GRAV) * phase_velocity(
+    return ratio_group_velocity_to_phase_velocity(k, depth, grav=grav) * phase_velocity(
         k, depth, grav
     )
 
@@ -136,6 +148,26 @@ def jacobian_radial_frequency_to_wavenumber(k, depth, grav=GRAV):
     """
     return intrinsic_group_velocity(k, depth, grav)
 
+@njit(cache=True)
+def dispersion_relation( kx,ky=None,ux=None,uy=None, depth=numpy.inf, grav=GRAV ):
+    """
+    :param k: Wavenumber (rad/m)
+    :param depth: Depth (m)
+    :param current: Representative current (m/s)
+    :param grav: Gravitational acceleration (m/s^2)
+    :return:
+    """
+    kx = atleast_1d(kx)
+    ux = numpy.zeros_like(kx) if ux is None else atleast_1d(ux)
+    uy = numpy.zeros_like(kx) if uy is None else atleast_1d(uy)
+    ky = numpy.zeros_like(kx) if uy is None else atleast_1d(ky)
+
+    k = numpy.sqrt(kx**2 + ky**2)
+    doppler_shift = kx*ux + ky*uy
+    return intrinsic_dispersion_relation(k, depth,grav) + doppler_shift
+
+def inverse_dispersion_relation( omega, direction=None, ux=None,uy=None, depth=numpy.inf, grav=GRAV):
+    pass
 
 # Aliasses based on common notation in linear wave theory
 c = phase_velocity

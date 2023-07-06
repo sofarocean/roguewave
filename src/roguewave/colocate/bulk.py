@@ -4,25 +4,15 @@ from xarray import DataArray
 from datetime import timedelta
 
 from roguewave.spotterapi.spotterapi import get_spotter_data
-from roguewave.interpolate.dataset import tracks_as_dataset
 from roguewave.modeldata.extract import extract_from_remote_dataset
 from roguewave.interpolate.dataframe import interpolate_dataframe_time
 from roguewave.modeldata.timebase import TimeSlice
 
 
 # =============================================================================
-def colocate_model_spotter(
-    variable: Union[Sequence[str], str],
-    spotter_ids: Sequence[str],
-    time_slice: TimeSlice,
-    model_name: str,
-    cache_name: str = None,
-    parallel: bool = True,
-    timebase: str = "model",
-    slice_remotely=False,
-    return_as_dataset=False,
-) -> Union[
-    Tuple[Mapping[str, DataFrame], Mapping[str, DataFrame]], Tuple[DataArray, DataArray]
+def colocate_model_spotter(variable: Union[Sequence[str], str], spotter_ids: Sequence[str], time_slice: TimeSlice,
+                           model_name: str, cache_name: str = None, timebase: str = "model") -> Tuple[
+    DataFrame, DataFrame
 ]:
     """
     Colocate spoter output and modek data
@@ -31,14 +21,6 @@ def colocate_model_spotter(
     :param spotter_ids: List of spotter ids of interest
     :param time_slice: time slice of interest.
     :param model_name: model name
-    :param slice_remotely: (default False) if True Skip local cache and try to
-    read directly from
-        remote. This tries to avoid downloading full files and instead tries
-        to only grab the data it needs. Typically slower.
-        Does not work for grib files.
-    :param parallel: If slice_remotely=True controls whether we download in
-        parallel. To note- if parallel is enabled we need to make sure the
-        main script is guarded by if __name__ == '__main__'.
     :param cache_name: name of local cache. If None, default cache setup will
         be used.
     :param timebase: Can be ['native','spotter','model'] if
@@ -51,13 +33,6 @@ def colocate_model_spotter(
         dimensions of the datastructure (a "column" if you will)
     :return:
     """
-
-    if return_as_dataset:
-        if (not timebase == "model") and (len(spotter_ids) > 1):
-            raise ValueError(
-                "Cannot return as an xarray dataset if the "
-                "time base is native or spotter"
-            )
 
     if timebase.lower() == "model":
         # If we have a model time base we interpolate spotter observations onto the model grid
@@ -93,15 +68,13 @@ def colocate_model_spotter(
         variable,
         time_slice,
         model_name,
-        slice_remotely=slice_remotely,
-        parallel=parallel,
         cache_name=cache_name,
     )
 
     for spotter_id in spotters:
         s = spotters[spotter_id]  # type: DataFrame
         m = model[spotter_id]  # type: DataFrame
-        model_time = m["time"].values
+
         if timebase.lower() == "native":
             pass
         elif timebase.lower() == "observed" or timebase.lower() == "spotter":
@@ -117,30 +90,9 @@ def colocate_model_spotter(
         model[spotter_id] = m
         spotters[spotter_id] = s
 
-    if return_as_dataset:
-        return tracks_as_dataset(model_time, model), tracks_as_dataset(
-            model_time, spotters
-        )
-    else:
-        model = colocate_into_single_dataframe(model)
-        spotters = colocate_into_single_dataframe(spotters)
-        return model, spotters
-
-
-def colocated_tracks_as_dataset(*args) -> Tuple[DataArray, DataArray]:
-    if len(args) == 1:
-        """
-        for convinience if passing immediately from the track interpolation
-        """
-        model, spotter = args[0]
-    else:
-        model, spotter = args
-
-    keys = list(model.keys())
-    time = model[keys[0]].index.values
-    model = tracks_as_dataset(time, model)
-    spotter = tracks_as_dataset(time, spotter)
-    return spotter, model
+    model = colocate_into_single_dataframe(model)
+    spotters = colocate_into_single_dataframe(spotters)
+    return model, spotters
 
 
 def colocate_into_single_dataframe(data: dict[str, DataFrame]) -> DataFrame:

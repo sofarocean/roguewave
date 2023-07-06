@@ -13,33 +13,7 @@ def test_colocate_waveheight_timebase_model():
     variable = "significantWaveHeight"
     time_slice = TimeSliceForecast(START_DATE, END_DATE - START_DATE)
 
-    model, spotter = colocate_model_spotter(
-        variable,
-        [TEST_SPOTTER_ID],
-        time_slice,
-        MODEL,
-        timebase="model",
-        return_as_dataset=True,
-    )
-
-    sig_mod = model.sel({"variables": variable})
-    sig_obs = spotter.sel({"variables": variable})
-
-    assert to_datetime_utc(sig_mod["time"])[0] == START_DATE
-    assert to_datetime_utc(sig_mod["time"])[-1] == END_DATE
-    assert to_datetime_utc(sig_obs["time"])[0] == START_DATE
-    assert to_datetime_utc(sig_obs["time"])[-1] == END_DATE
-
-    model, spotter = colocate_model_spotter(
-        variable,
-        [TEST_SPOTTER_ID],
-        time_slice,
-        MODEL,
-        timebase="model",
-        return_as_dataset=False,
-    )
-    assert_array_equal(model[variable].values, squeeze(sig_mod.values))
-    assert_array_equal(spotter[variable].values, squeeze(sig_obs.values))
+    model, spotter = colocate_model_spotter(variable, [TEST_SPOTTER_ID], time_slice, MODEL, timebase="model")
 
     assert to_datetime_utc(model["time"])[0] == START_DATE
     assert to_datetime_utc(model["time"])[-1] == END_DATE
@@ -62,14 +36,7 @@ def test_colocate_waveheight_timebase_spotter():
     variable = "significantWaveHeight"
     time_slice = TimeSliceForecast(START_DATE, END_DATE - START_DATE)
 
-    model, spotter = colocate_model_spotter(
-        variable,
-        [TEST_SPOTTER_ID],
-        time_slice,
-        MODEL,
-        timebase="spotter",
-        return_as_dataset=False,
-    )
+    model, spotter = colocate_model_spotter(variable, [TEST_SPOTTER_ID], time_slice, MODEL, timebase="spotter")
 
     assert to_datetime_utc(model["time"])[0] == to_datetime_utc(spotter["time"])[0]
     assert to_datetime_utc(model["time"])[-1] == to_datetime_utc(spotter["time"])[-1]

@@ -23,14 +23,14 @@ def get_spotter_ids(sofar_api: SofarApi = None) -> List[str]:
     :return: List of spotters available through this account.
     """
     if sofar_api is None:
-        sofar_api = _get_sofar_api()
+        sofar_api = get_sofar_api()
     return sofar_api.device_ids
 
 
 # -----------------------------------------------------------------------------
 
 
-def _get_sofar_api() -> SofarApi:
+def get_sofar_api(token=None) -> SofarApi:
     """
     Gets a new sofar API object if requested. Returned object is essentially a
     Singleton class-> next calls will return the stored object instead of
@@ -40,7 +40,7 @@ def _get_sofar_api() -> SofarApi:
     """
     global _API
     if _API is None:
-        _API = SofarApi()
+        _API = SofarApi(custom_token=token)
     return _API
 
 

@@ -40,7 +40,7 @@ from roguewave.spotter.analysis import spotter_api_spectra_post_processing
 from typing import Dict, List, Union, Sequence, Literal, Any
 from pandas import DataFrame, concat
 from .helper_functions import (
-    _get_sofar_api,
+    get_sofar_api,
     get_spotter_ids,
     _unique_filter,
     as_dataframe,
@@ -237,11 +237,11 @@ def get_spotter_data(
             belong.
     """
 
-    if spotter_ids is None:
-        spotter_ids = get_spotter_ids()
-
     if session is None:
-        session = _get_sofar_api()
+        session = get_sofar_api()
+
+    if spotter_ids is None:
+        spotter_ids = get_spotter_ids(sofar_api=session)
 
     # Make sure we have a list object
     if not isinstance(spotter_ids, (list, tuple)):

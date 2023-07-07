@@ -2,4 +2,4 @@ from .spotterapi import get_bulk_wave_data, get_data, get_spectrum, get_spotter_
 
 from .search_endpoint import search_circle, search_rectangle
 
-from .helper_functions import get_spotter_ids, _get_sofar_api
+from .helper_functions import get_spotter_ids, get_sofar_api

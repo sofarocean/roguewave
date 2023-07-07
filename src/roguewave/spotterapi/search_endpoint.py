@@ -28,7 +28,7 @@ from typing import (
     Literal,
     Sequence,
 )
-from .helper_functions import _get_sofar_api, _get_class, _unique_filter, as_dataframe
+from .helper_functions import get_sofar_api, _get_class, _unique_filter, as_dataframe
 import roguewave.spotterapi.spotter_cache as spotter_cache
 
 # 2) Constants & Private Variables
@@ -68,7 +68,7 @@ def search_circle(
     geometry = {"type": "circle", "points": center_lat_lon, "radius": radius}
 
     if session is None:
-        session = _get_sofar_api()
+        session = get_sofar_api()
 
     if cache:
         return spotter_cache.get_data_search(
@@ -109,7 +109,7 @@ def search_rectangle(
     geometry = {"type": "envelope", "points": bounding_box, "radius": None}
 
     if session is None:
-        session = _get_sofar_api()
+        session = get_sofar_api()
 
     print("Get Spotter data: retrieving all data from spatio-temporal region")
     if cache:
@@ -136,7 +136,7 @@ def _search(
     page_size=500,
 ):
     if session is None:
-        session = _get_sofar_api()
+        session = get_sofar_api()
 
     if variables is None:
         variables = ["waves", "wind", "surfaceTemp", "barometerData", "frequencyData"]

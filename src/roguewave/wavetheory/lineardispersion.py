@@ -1,40 +1,41 @@
-import numpy
-from numba import njit, types
-from numba.extending import overload
+"""
+Contents: Routines to calculate (inverse) linear dispersion relation and some related quantities such as phase and
+group velocity. NOTE: the effect of surface currents is currently not included in these calculations.
 
-GRAV = 9.81
+The implementation uses numba to speed up calculations. Consequently, all functions are compiled to machine code, but
+the first call to a function will be slow. Subsequent calls will be much faster.
 
-# The following overloading trick is needed because "atleast_1d" is not supported for scalars by default in numba.
-def atleast_1d(x) -> numpy.ndarray:
-    if type(x) in types.number_domain:
-        return numpy.array([x])
-    return numpy.atleast_1d(x)
+Copyright (C) 2023
+Sofar Ocean Technologies
 
-@overload(atleast_1d)
-def overloaded_atleast_1d(x):
-    if x in types.number_domain:
-        return lambda x: numpy.array([x])
-    return lambda x: numpy.atleast_1d(x)
+Authors: Pieter Bart Smit
+======================
 
-def atleast_2d(x) -> numpy.ndarray:
-    if x in types.number_domain:
-        return numpy.array([x])
-    return numpy.atleast_1d(x)
+Functions:
+- `intrinsic_dispersion_relation`, calculate angular frequency for a given wavenumber and depth
+- `inverse_intrinsic_dispersion_relation`, calculate wavenumber for a given angular frequency and depth
+- `intrinsic_group_velocity`, calculate the group velocity given wave number and depth
+- `phase_velocity`, calculate the phase velocity given wave number and depth
+- `ratio_of_group_to_phase_velocity`, calculate the ratio of group to phase velocity given wave number and depth
+- `jacobian_wavenumber_to_radial_frequency`, calculate the Jacobian of the wavenumber to radial frequency transformation
+- `jacobian_radial_frequency_to_wavenumber`, calculate the Jacobian of the radial frequency to wavenumber transformation
+"""
 
-@overload(atleast_2d)
-def overloaded_atleast_2d(x):
-    if x in types.number_domain:
-        return lambda x: numpy.array([[x]])
-    return lambda x: numpy.atleast_2d(x)
+import numpy as np
+from numba import njit
+from _tools import atleast_1d
+from constants import GRAV
+from ._numba_settings import numba_default
 
-@njit(cache=True)
+
+@njit(**numba_default)
 def inverse_intrinsic_dispersion_relation(
-    angular_frequency,
-    dep,
-    grav=GRAV,
-    maximum_number_of_iterations=10,
-    tolerance=1e-3,
-):
+        angular_frequency,
+        dep,
+        grav=GRAV,
+        maximum_number_of_iterations=10,
+        tolerance=1e-3,
+) -> np.ndarray:
     """
     Find wavenumber k for a given radial frequency w using Newton Iteration.
     Exit when either maximum number of iterations is reached, or tolerance
@@ -45,42 +46,51 @@ def inverse_intrinsic_dispersion_relation(
     :param grav:  gravitational acceleration
     :param maximum_number_of_iterations: maximum number of iterations
     :param tolerance: relative accuracy
-    :return:
+    :return: The wavenumber as a numpy array.
     """
 
     # Numba does not recognize "atleast_1d" for scalars
     w = atleast_1d(angular_frequency)
 
-    k_deep_water_estimate = w**2 / grav
-    k_shallow_water_estimate = w / numpy.sqrt(grav * dep)
+    k_deep_water_estimate = w ** 2 / grav
+    k_shallow_water_estimate = w / np.sqrt(grav * dep)
 
     # == FIRST GUESS==
     # Use the intersection between shallow and deep water estimates to guestimate
     # which relation to use
-    k0 = numpy.where(
-        w > numpy.sqrt(grav / dep), k_deep_water_estimate, k_shallow_water_estimate
+    wavenumber_estimate = np.where(
+        w > np.sqrt(grav / dep), k_deep_water_estimate, k_shallow_water_estimate
     )
 
     # == Newton Iteration ==
-    F = numpy.sqrt(k0 * grav * numpy.tanh(k0 * dep)) - w
+    error = intrinsic_dispersion_relation(wavenumber_estimate, dep, grav) - w
     for ii in range(0, maximum_number_of_iterations):
-        kd = k0 * dep
-        cg = numpy.where(
-            kd > 5, 0.5 * w / k0, (1 / 2 + kd / numpy.sinh(2 * kd)) * w / k0
+        # Calculate the derivative of the error function with respect to wavenumber. To note: the derivative is
+        # merely the group velocity
+        kd = wavenumber_estimate * dep
+        error_derivative_to_wavenumber = np.where(
+            kd > 5,
+            0.5 * w / wavenumber_estimate,
+            (1 / 2 + kd / np.sinh(2 * kd)) * w / wavenumber_estimate
         )
-        k0 = k0 - F / cg
-        F = numpy.sqrt(k0 * grav * numpy.tanh(k0 * dep)) - w
-        error = numpy.abs(F) / w
-        if numpy.all(error < tolerance):
+        # Newton Iteration
+        wavenumber_estimate = wavenumber_estimate - error / error_derivative_to_wavenumber
+
+        # Update error
+        error = intrinsic_dispersion_relation(wavenumber_estimate, dep, grav) - w
+
+        # Check for convergence
+        relative_absolute_error = np.abs(error) / w
+        if np.all(relative_absolute_error < tolerance):
             break
     else:
         print('inverse_intrinsic_dispersion_relation:: No convergence in solving for wavenumber')
 
-    return k0
+    return wavenumber_estimate
 
 
-@njit(cache=True)
-def intrinsic_dispersion_relation(k, dep, grav=GRAV):
+@njit(**numba_default)
+def intrinsic_dispersion_relation(k, dep, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
     :param depth: Depth (m)
@@ -88,11 +98,11 @@ def intrinsic_dispersion_relation(k, dep, grav=GRAV):
     :return:
     """
     k = atleast_1d(k)
-    return numpy.sqrt(grav * k * numpy.tanh(k * dep))
+    return np.sqrt(grav * k * np.tanh(k * dep))
 
 
-@njit(cache=True)
-def phase_velocity(k, depth, grav=GRAV):
+@njit(**numba_default)
+def phase_velocity(k, depth, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
     :param depth: Depth (m)
@@ -102,8 +112,8 @@ def phase_velocity(k, depth, grav=GRAV):
     return intrinsic_dispersion_relation(k, depth, grav=grav) / k
 
 
-@njit(cache=True)
-def ratio_group_velocity_to_phase_velocity(k, depth, grav):
+@njit(**numba_default)
+def ratio_group_velocity_to_phase_velocity(k, depth, grav) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
     :param depth: Depth (m)
@@ -111,11 +121,11 @@ def ratio_group_velocity_to_phase_velocity(k, depth, grav):
     :return:
     """
     kd = k * depth
-    return numpy.where(kd > 5, 0.5, 0.5 + kd / numpy.sinh(2 * kd))
+    return np.where(kd > 5, 0.5, 0.5 + kd / np.sinh(2 * kd))
 
 
-@njit(cache=True)
-def intrinsic_group_velocity(k, depth, grav=GRAV):
+@njit(**numba_default)
+def intrinsic_group_velocity(k, depth, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
     :param depth: Depth (m)
@@ -127,8 +137,8 @@ def intrinsic_group_velocity(k, depth, grav=GRAV):
     )
 
 
-@njit(cache=True)
-def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV):
+@njit(**numba_default)
+def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
     :param depth: Depth (m)
@@ -138,8 +148,8 @@ def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV):
     return 1 / intrinsic_group_velocity(k, depth, grav)
 
 
-@njit(cache=True)
-def jacobian_radial_frequency_to_wavenumber(k, depth, grav=GRAV):
+@njit(**numba_default)
+def jacobian_radial_frequency_to_wavenumber(k, depth, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
     :param depth: Depth (m)
@@ -148,26 +158,6 @@ def jacobian_radial_frequency_to_wavenumber(k, depth, grav=GRAV):
     """
     return intrinsic_group_velocity(k, depth, grav)
 
-@njit(cache=True)
-def dispersion_relation( kx,ky=None,ux=None,uy=None, depth=numpy.inf, grav=GRAV ):
-    """
-    :param k: Wavenumber (rad/m)
-    :param depth: Depth (m)
-    :param current: Representative current (m/s)
-    :param grav: Gravitational acceleration (m/s^2)
-    :return:
-    """
-    kx = atleast_1d(kx)
-    ux = numpy.zeros_like(kx) if ux is None else atleast_1d(ux)
-    uy = numpy.zeros_like(kx) if uy is None else atleast_1d(uy)
-    ky = numpy.zeros_like(kx) if uy is None else atleast_1d(ky)
-
-    k = numpy.sqrt(kx**2 + ky**2)
-    doppler_shift = kx*ux + ky*uy
-    return intrinsic_dispersion_relation(k, depth,grav) + doppler_shift
-
-def inverse_dispersion_relation( omega, direction=None, ux=None,uy=None, depth=numpy.inf, grav=GRAV):
-    pass
 
 # Aliasses based on common notation in linear wave theory
 c = phase_velocity

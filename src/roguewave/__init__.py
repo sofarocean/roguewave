@@ -56,14 +56,6 @@ from roguewave.wavewatch3 import (
     read_model_definition,
 )
 
-# Partitioning
-from roguewave.wavespectra.partitioning import (
-    get_bulk_partitions_from_spectral_partitions,
-    get_spectral_partitions_from_2dspectra,
-    get_bulk_partitions_from_observations,
-    get_spectral_partitions_from_observations,
-)
-
 # Colocation
 from roguewave.colocate import (
     colocate_model_spotter,

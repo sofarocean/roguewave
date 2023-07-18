@@ -1,5 +1,10 @@
 import numpy
-from qpsolvers import solve_ls
+
+try:
+    from qpsolvers import solve_ls
+except ImportError:
+    pass
+
 from .utils import get_direction_increment, get_rhs, get_constraint_matrix
 
 

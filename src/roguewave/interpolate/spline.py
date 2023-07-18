@@ -14,8 +14,11 @@ Functions:
 """
 import numpy as np
 from scipy.interpolate import CubicSpline
-from qpsolvers import solve_ls
 
+try:
+    from qpsolvers import solve_ls
+except ImportError:
+    pass
 
 def cubic_spline(
     x: np.ndarray,

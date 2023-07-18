@@ -22,13 +22,13 @@ Functions:
 """
 
 import numpy as np
-from numba import njit
-from _tools import atleast_1d
-from constants import GRAV
+from numba import jit
+from ._tools import atleast_1d
+from .constants import GRAV
 from ._numba_settings import numba_default
 
 
-@njit(**numba_default)
+@jit(**numba_default)
 def inverse_intrinsic_dispersion_relation(
         angular_frequency,
         dep,
@@ -89,7 +89,7 @@ def inverse_intrinsic_dispersion_relation(
     return wavenumber_estimate
 
 
-@njit(**numba_default)
+@jit(**numba_default)
 def intrinsic_dispersion_relation(k, dep, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
@@ -101,7 +101,7 @@ def intrinsic_dispersion_relation(k, dep, grav=GRAV) -> np.ndarray:
     return np.sqrt(grav * k * np.tanh(k * dep))
 
 
-@njit(**numba_default)
+@jit(**numba_default)
 def phase_velocity(k, depth, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
@@ -112,7 +112,7 @@ def phase_velocity(k, depth, grav=GRAV) -> np.ndarray:
     return intrinsic_dispersion_relation(k, depth, grav=grav) / k
 
 
-@njit(**numba_default)
+@jit(**numba_default)
 def ratio_group_velocity_to_phase_velocity(k, depth, grav) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
@@ -124,7 +124,7 @@ def ratio_group_velocity_to_phase_velocity(k, depth, grav) -> np.ndarray:
     return np.where(kd > 5, 0.5, 0.5 + kd / np.sinh(2 * kd))
 
 
-@njit(**numba_default)
+@jit(**numba_default)
 def intrinsic_group_velocity(k, depth, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
@@ -137,7 +137,7 @@ def intrinsic_group_velocity(k, depth, grav=GRAV) -> np.ndarray:
     )
 
 
-@njit(**numba_default)
+@jit(**numba_default)
 def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)
@@ -148,7 +148,7 @@ def jacobian_wavenumber_to_radial_frequency(k, depth, grav=GRAV) -> np.ndarray:
     return 1 / intrinsic_group_velocity(k, depth, grav)
 
 
-@njit(**numba_default)
+@jit(**numba_default)
 def jacobian_radial_frequency_to_wavenumber(k, depth, grav=GRAV) -> np.ndarray:
     """
     :param k: Wavenumber (rad/m)

@@ -77,6 +77,12 @@ def read_model_definition(
     # https://gcc.gnu.org/
     #    onlinedocs/gfortran/File-format-of-unformatted-sequential-files.html
     #
+    # According to
+    # https://www.intel.com/content/www/us/en/docs/fortran-compiler/
+    #           developer-guide-reference/2023-0/record-types.html
+    #
+    # the intel compiler uses the same format.
+    #
     # Each record in the file contains a leading
     # start of record (sor) 4 byte marker indicating size N of the record,
     # the data written (N bytes), and a trailing end of record (eor) marker again

@@ -27,7 +27,7 @@ from roguewave import FrequencySpectrum
 from scipy.signal.windows import get_window
 from typing import List, Tuple, Mapping
 from xarray import Dataset
-
+from roguewave.tools.time import to_datetime64
 
 def estimate_frequency_spectrum(
     epoch_time: NDArray,
@@ -98,7 +98,7 @@ def estimate_frequency_spectrum(
             "latitude": (["time"], numpy.full(szz.shape[0], numpy.nan)),
             "longitude": (["time"], numpy.full(szz.shape[0], numpy.nan)),
         },
-        coords={"time": spectral_time.astype("<M8[s]"), "frequency": frequencies},
+        coords={"time": to_datetime64(spectral_time), "frequency": frequencies},
     )
     return FrequencySpectrum(dataset)
 

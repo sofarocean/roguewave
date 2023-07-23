@@ -668,7 +668,7 @@ def _download_from_resources(
             raise ValueError(f"No resource available for URI: " f"{cache_miss.uri}")
 
     # Download the requested objects.
-    if parallel_download and len(cache_misses) > 0:
+    if parallel_download and len(cache_misses) > 1:
         with ThreadPool(processes=MAXIMUM_NUMBER_OF_WORKERS) as pool:
             output = list(
                 tqdm(

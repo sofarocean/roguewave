@@ -26,15 +26,17 @@ from numba import jit
 from ._tools import atleast_1d
 from .constants import GRAV
 from ._numba_settings import numba_default
+from numbers import Real
+from typing import Union
 
 
 @jit(**numba_default)
 def inverse_intrinsic_dispersion_relation(
-        angular_frequency,
-        dep,
-        grav=GRAV,
-        maximum_number_of_iterations=10,
-        tolerance=1e-3,
+        angular_frequency: Union[Real,np.ndarray],
+        dep: Union[Real,np.ndarray],
+        grav:Real=GRAV,
+        maximum_number_of_iterations:int=10,
+        tolerance:Real=1e-3,
 ) -> np.ndarray:
     """
     Find wavenumber k for a given radial frequency w using Newton Iteration.
@@ -66,7 +68,7 @@ def inverse_intrinsic_dispersion_relation(
     error = intrinsic_dispersion_relation(wavenumber_estimate, dep, grav) - w
     for ii in range(0, maximum_number_of_iterations):
         # Calculate the derivative of the error function with respect to wavenumber. To note: the derivative is
-        # merely the group velocity
+        # merely the group velocity.
         kd = wavenumber_estimate * dep
         error_derivative_to_wavenumber = np.where(
             kd > 5,
@@ -92,10 +94,16 @@ def inverse_intrinsic_dispersion_relation(
 @jit(**numba_default)
 def intrinsic_dispersion_relation(k, dep, grav=GRAV) -> np.ndarray:
     """
+    The intrinsic dispersion relation for linear waves in water of constant depth that relates the specific angular
+    frequency to a given wavenumber and depth in a reference frame following mean ambient flow.
+
+    Wavenumber may be a scalar or a numpy array. The function always returns a numpy array. If depth is specified as a
+    numpy array it must have the same shape as the wavenumber array.
+
     :param k: Wavenumber (rad/m)
     :param depth: Depth (m)
     :param grav: Gravitational acceleration (m/s^2)
-    :return:
+    :return: Intrinsic angular frequency (rad/s)
     """
     k = atleast_1d(k)
     return np.sqrt(grav * k * np.tanh(k * dep))

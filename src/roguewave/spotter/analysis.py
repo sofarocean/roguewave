@@ -79,7 +79,10 @@ def spectra_from_raw_gps(
         displacement_doppler = displacement_from_gps_doppler_velocities(path, **kwargs)
 
     if displacement_location is None:
-        displacement_location = displacement_from_gps_positions(path)
+        try:
+            displacement_location = displacement_from_gps_positions(path)
+        except:
+            displacement_location = None
 
     correct_for_numerical_integration = kwargs.get("response_correction", True)
     order = kwargs.get("order", 4)

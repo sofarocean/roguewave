@@ -28,7 +28,11 @@ from glob import glob
 from .timebase import TimeSlice
 from .keygeneration import generate_uris
 import numpy
-import pygrib
+
+try:
+    import pygrib
+except ImportError as e:
+    pass
 
 
 # Main functions to interact with module
@@ -241,7 +245,11 @@ def _convert_grib_to_netcdf(filepath: str, model_variables) -> None:
     """
 
     # Open the grib file
-    grib = pygrib.open(filepath)
+    try:
+        grib = pygrib.open(filepath)
+    except NameError as e:
+        raise Exception('pygrib not installed. Please install pygrib to convert grib files to netcdf.')
+
     coords = {}
     data = {}
     for variable in model_variables:

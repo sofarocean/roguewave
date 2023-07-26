@@ -402,7 +402,7 @@ class WaveSpectrum(DatasetWrapper):
             freqs = self.frequency[_range]
 
         if fmin > 0:
-            if freqs[0] != fmin:
+            if freqs[0] > fmin:
                 freqs = concat(
                     [
                         DataArray([fmin], dims=NAME_F, coords={'frequency': [fmin]}),

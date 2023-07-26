@@ -1,3 +1,5 @@
+import numpy as np
+
 from roguewave import (
     FrequencySpectrum,
     FrequencyDirectionSpectrum,
@@ -424,8 +426,11 @@ def test_hm0_partial():
     specs = helper_create_spectra(4)
     hm0 = helper_waveheights(4)
     for spec in specs:
-        _ = spec.hm0(fmin=0.1, fmax=0.2).values
-        _ = spec.hm0(fmax=0.2).values
+        hm0low = spec.hm0(fmax=0.2)
+        hm0high = spec.hm0(fmin=0.2)
+        hm0_total = np.sqrt(hm0low**2 + hm0high**2)
+        helper_assert(hm0_total, ["time"], (4,), hm0)
+
 
 def test_tm01():
     specs = helper_create_spectra(4)

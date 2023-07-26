@@ -431,6 +431,11 @@ def test_hm0_partial():
         hm0_total = np.sqrt(hm0low**2 + hm0high**2)
         helper_assert(hm0_total, ["time"], (4,), hm0)
 
+        hm0low = spec.hm0(fmax=0.201)
+        hm0high = spec.hm0(fmin=0.201)
+        hm0_total = np.sqrt(hm0low**2 + hm0high**2)
+        helper_assert(hm0_total, ["time"], (4,), hm0)
+
 
 def test_tm01():
     specs = helper_create_spectra(4)

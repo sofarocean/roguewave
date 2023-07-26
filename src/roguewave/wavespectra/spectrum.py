@@ -386,10 +386,20 @@ class WaveSpectrum(DatasetWrapper):
         :param fmax: maximum frequency
         :return: frequency moment
         """
+
+        # Get frequency mask for [ fmin, fmax )
         _range = self._range(fmin, fmax)
 
+        # We may have to interpolate the spectrum to get the correct frequency for the fmin and fmax cut-off
+        # frequencies. To do the interpolation we
+        # 1) get the frequencies such that  fmin <= f < fmax, and then
+        # 2) fmin and fmax to the frequency array
+        # 3) interpolate the spectrum to the new frequency array, if either fmin or fmax was added.
+        # 4) calculate the integral.
+        #
         interpolate = False
         if numpy.isfinite(fmax):
+            # If fmax is finite we will need to add it since _range only contains frequencies such f < fmax
             freqs = concat(
                 [
                     self.frequency[_range],
@@ -402,6 +412,7 @@ class WaveSpectrum(DatasetWrapper):
             freqs = self.frequency[_range]
 
         if fmin > 0:
+            # If fmin is larger than 0 we may have to add it if the first frequency is larger than fmin.
             if freqs[0] > fmin:
                 freqs = concat(
                     [

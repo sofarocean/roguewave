@@ -420,6 +420,12 @@ def test_hm0():
     for spec in specs:
         helper_assert(spec.hm0(), ["time"], (4,), hm0)
 
+def test_hm0_partial():
+    specs = helper_create_spectra(4)
+    hm0 = helper_waveheights(4)
+    for spec in specs:
+        _ = spec.hm0(fmin=0.1, fmax=0.2).values
+        _ = spec.hm0(fmax=0.2).values
 
 def test_tm01():
     specs = helper_create_spectra(4)

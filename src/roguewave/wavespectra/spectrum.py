@@ -388,9 +388,38 @@ class WaveSpectrum(DatasetWrapper):
         """
         _range = self._range(fmin, fmax)
 
+        interpolate = False
+        if numpy.isfinite(fmax):
+            freqs = concat(
+                [
+                    self.frequency[_range],
+                    DataArray([fmax], dims=NAME_F, coords={'frequency': [fmax]})
+                ],
+                dim=NAME_F
+            )
+            interpolate = True
+        else:
+            freqs = self.frequency[_range]
+
+        if fmin > 0:
+            if freqs[0] != fmin:
+                freqs = concat(
+                    [
+                        DataArray([fmin], dims=NAME_F, coords={'frequency': [fmin]}),
+                        freqs
+                    ],
+                    dim=NAME_F
+                )
+                interpolate = True
+
+        if interpolate:
+            energy = self.e.interp(frequency=freqs)
+        else:
+            energy = self.e.isel({NAME_F: _range})
+
         # Integrate dataset over frequencies. Make sure to fill any NaN entries with 0 before the integration.
         return (
-            (self.e.isel({NAME_F: _range}) * self.frequency[_range] ** power)
+            (energy * freqs ** power)
             .fillna(0)
             .integrate(coord=NAME_F)
         )

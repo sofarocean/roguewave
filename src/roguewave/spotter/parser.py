@@ -105,7 +105,11 @@ def _files_to_parse(
 
     # Get the files conforming to a specific pattern- say ????_LOC.csv
     # For Spotter these are the location files, 0000_LOC.csv, 0001_LOC.csv, etc.
+
     files = glob(os.path.join(path, pattern))
+    if len(files) == 0:
+        pattern = pattern.replace(".csv", ".CSV")
+        files = glob(os.path.join(path, pattern))
 
     time_file_format = get_csv_file_format("TIME")
     if (start_date is not None) or (end_date is not None):

@@ -19,9 +19,8 @@ How To Use This Module
 from roguewave.wavespectra import (
     FrequencySpectrum,
     FrequencyDirectionSpectrum,
-    create_1d_spectrum,
 )
-from pandas import DataFrame, read_json
+from pandas import DataFrame
 from typing import Union, Dict, List
 from datetime import datetime
 import gzip
@@ -29,7 +28,7 @@ import json
 import numpy
 import base64
 from io import BytesIO
-from roguewave import to_datetime_utc, filecache
+from roguewave import filecache
 from xarray import Dataset, open_dataset, DataArray
 import boto3
 from botocore.errorfactory import ClientError
@@ -103,30 +102,41 @@ def _b64_decode_dataarray(data) -> DataArray:
     return dataset["dataarray"]
 
 
-class NumpyEncoder(json.JSONEncoder):
+class DataEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, numpy.ndarray):
             return _b64_encode_numpy(obj)
+
         elif isinstance(obj, numpy.int32):
             return int(obj)
+
         elif isinstance(obj, numpy.float32):
             return float(obj)
+
         elif isinstance(obj, numpy.int64):
             return int(obj)
+
         elif isinstance(obj, numpy.float64):
             return float(obj)
+
         elif isinstance(obj, Dataset):
             return _b64_encode_dataset(obj, "Dataset")
+
         elif isinstance(obj, DataArray):
             return _b64_encode_dataarray(obj, "DataArray")
+
         elif isinstance(obj, FrequencySpectrum):
             return _b64_encode_dataset(obj.dataset, "FrequencySpectrum")
+
         elif isinstance(obj, FrequencyDirectionSpectrum):
             return _b64_encode_dataset(obj.dataset, "FrequencyDirectionSpectrum")
+
         elif isinstance(obj, datetime):
             return {"__class__": "datetime", "data": datetime.isoformat(obj)}
+
         elif isinstance(obj, DataFrame):
-            return {"__class__": "DataFrame", "data": obj.to_json(date_unit="s")}
+            return _b64_encode_dataset(Dataset.from_dataframe(obj), "DataFrame")
+
         else:
             return json.JSONEncoder.default(self, obj)
 
@@ -134,38 +144,7 @@ class NumpyEncoder(json.JSONEncoder):
 def object_hook(dictionary: dict):
     if "__class__" in dictionary:
         if dictionary["__class__"] == "DataFrame":
-            # This is a mess- needs to be refactored.
-            df = read_json(dictionary["data"])
-            if "timestamp" in df:
-                df["timestamp"] = df["timestamp"].apply(lambda x: x.tz_localize("utc"))
-            elif "time" in df:
-                time = to_datetime_utc(df["time"].values)
-                # df["time"] = df["time"].apply(lambda x: x.tz_localize("utc"))
-                df["time"] = time
-            elif "valid_time" in df:
-                df["valid_time"] = df["valid_time"].apply(
-                    lambda x: x.tz_localize("utc")
-                )
-            elif "init_time" in df:
-                df["valid_time"] = df["valid_time"].apply(
-                    lambda x: x.tz_localize("utc")
-                )
-            else:
-                df.index = [x.tz_localize("utc") for x in df.index]
-            return df
-        elif dictionary["__class__"] == "WaveSpectrum1D":
-            data = dictionary["data"]
-            return create_1d_spectrum(
-                frequency=data["frequency"],
-                variance_density=data["varianceDensity"],
-                time=data["timestamp"],
-                latitude=data["latitude"],
-                longitude=data["longitude"],
-                a1=data["a1"],
-                b1=data["b1"],
-                a2=data["a2"],
-                b2=data["b2"],
-            )
+            return _b64_decode_dataset(dictionary["data"]).to_dataframe()
         elif dictionary["__class__"] == "Dataset":
             return _b64_decode_dataset(dictionary["data"])
         elif dictionary["__class__"] == "DataArray":
@@ -209,10 +188,12 @@ def load(filename: str, force_redownload_if_remote=False, filetype="roguewave"):
         with gzip.open(filename, "rb") as file:
             data = file.read().decode("utf-8")
         return json.loads(data, object_hook=object_hook)
+
     elif filetype == "pickle":
         with open(filename, "rb") as file:
             data = pickle.load(file)
         return data
+
     elif filetype == "netcdf":
         return open_dataset(filename)
 
@@ -249,7 +230,7 @@ def save(
                 pickle.dump(_input, file)
         else:
             with gzip.open(filename, "wt") as file:
-                json.dump(_input, file, cls=NumpyEncoder)
+                json.dump(_input, file, cls=DataEncoder)
 
     if filename.startswith("s3://"):
         with tempfile.TemporaryFile() as temp_file:

@@ -28,7 +28,7 @@ Use:
 from roguewave.filecache.remote_resources import RemoteResource
 from roguewave import filecache
 from roguewave import save, load
-from roguewave.io.io import NumpyEncoder, object_hook
+from roguewave.io.io import DataEncoder, object_hook
 import json
 from typing import List, Callable
 from pysofar.spotter import SofarApi
@@ -219,7 +219,7 @@ def _spotter_cache_uri(request_type: str, **kwargs):
     :return:  uri
     """
     kwargs["request_type"] = request_type
-    return "wavefleet://" + json.dumps(kwargs, cls=NumpyEncoder)
+    return "wavefleet://" + json.dumps(kwargs, cls=DataEncoder)
 
 
 def _decode_spotter_cache_uri(uri: str):

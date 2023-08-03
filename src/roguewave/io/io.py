@@ -35,6 +35,7 @@ from botocore.errorfactory import ClientError
 import tempfile
 import pickle
 import os
+from roguewave.tools.time import to_datetime64
 
 
 _UNION = Union[
@@ -135,6 +136,8 @@ class DataEncoder(json.JSONEncoder):
             return {"__class__": "datetime", "data": datetime.isoformat(obj)}
 
         elif isinstance(obj, DataFrame):
+            if 'time' in obj.columns:
+                obj['time'] = to_datetime64(obj['time'])
             return _b64_encode_dataset(Dataset.from_dataframe(obj), "DataFrame")
 
         else:

@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewave",
-    version="0.2.18",
+    version="0.2.19",
     license="Apache 2 License",
     install_requires=[
         "pysofar>=0.1.13",
@@ -22,6 +22,7 @@ setuptools.setup(
         "requests",
         "numba",
         "numba_progress",
+        "linearwavetheory",
     ],
     extras_require={
         "full": [

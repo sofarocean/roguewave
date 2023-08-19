@@ -8,7 +8,7 @@ from roguewave.wavephysics.fluidproperties import GRAVITATIONAL_ACCELERATION, AI
 
 from numpy import cos, pi, log, exp, empty, inf, sin
 from numba import njit
-from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
+from linearwavetheory import inverse_intrinsic_dispersion_relation
 from typing import TypedDict
 
 

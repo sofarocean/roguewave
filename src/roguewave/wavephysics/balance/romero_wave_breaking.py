@@ -3,9 +3,9 @@ from roguewave.wavephysics.balance import Dissipation
 from numpy.typing import NDArray
 from numpy import pi, abs, cos, sin, sqrt, empty, max, exp
 from numba import njit
-from roguewave.wavetheory import (
+from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
-    intrinsic_group_velocity,
+    intrinsic_group_speed,
 )
 from roguewave.wavephysics.fluidproperties import (
     GRAVITATIONAL_ACCELERATION
@@ -79,7 +79,7 @@ def romero_dissipation_breaking(
 
     wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
     wave_speed = radian_frequency / wavenumber
-    group_velocity = intrinsic_group_velocity(wavenumber, depth)
+    group_velocity = intrinsic_group_speed(wavenumber, depth)
 
     directionaL_saturation = romero_saturation(
         variance_density=variance_density,

@@ -18,3 +18,4 @@ scipy
 qpsolvers
 cvxopt
 twine
+linearwavetheory

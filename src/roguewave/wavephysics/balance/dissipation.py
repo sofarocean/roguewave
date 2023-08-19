@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 from typing import Tuple, Mapping
 from roguewave.wavephysics.balance.source_term import SourceTerm
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
-from roguewave.wavetheory.lineardispersion import inverse_intrinsic_dispersion_relation
+from linearwavetheory import inverse_intrinsic_dispersion_relation
 from numba import jit, prange
 from roguewave.wavephysics.balance._numba_settings import (
     numba_nocache_parallel,

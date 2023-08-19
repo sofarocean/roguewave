@@ -5,10 +5,11 @@ from roguewave.interpolate.dataset import (
 )
 from roguewave.tools.math import wrapped_difference
 from roguewave.tools.time import to_datetime64
-from roguewave.wavetheory.lineardispersion import (
+from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
-    intrinsic_group_velocity,
+    intrinsic_group_speed,
 )
+from linearwavetheory.settings import PhysicsOptions
 from roguewave.wavespectra.estimators import (
     estimate_directional_distribution,
     Estimators,
@@ -760,10 +761,8 @@ class WaveSpectrum(DatasetWrapper):
             fmin, fmax, use_spline=use_spline, **kwargs
         )
         peak_period.name = "peak period"
-        try:
-            peak_period = peak_period.drop("frequency")
-        except Exception:
-            pass
+        peak_period = peak_period.drop_vars(names=NAME_F, errors="ignore")
+
         return peak_period
 
     def peak_direction(self, fmin=0, fmax=numpy.inf) -> DataArray:
@@ -838,7 +837,7 @@ class WaveSpectrum(DatasetWrapper):
             coords[dim] = self.dataset[dim].values
 
         return DataArray(
-            data=intrinsic_group_velocity(k, depth),
+            data=intrinsic_group_speed(k, depth),
             dims=return_dimensions,
             coords=coords,
         )
@@ -870,9 +869,10 @@ class WaveSpectrum(DatasetWrapper):
         coords = {}
         for dim in return_dimensions:
             coords[dim] = self.dataset[dim].values
-
+        physics_options = PhysicsOptions(wave_type='gravity')
         return DataArray(
-            data=inverse_intrinsic_dispersion_relation(radian_frequency, depth),
+            data=inverse_intrinsic_dispersion_relation(radian_frequency, depth,
+                                                       physics_options=physics_options),
             dims=return_dimensions,
             coords=coords,
         )

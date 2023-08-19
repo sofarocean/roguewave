@@ -13,3 +13,4 @@ numba_progress
 scipy
 qpsolvers
 cvxopt
+linearwavetheory

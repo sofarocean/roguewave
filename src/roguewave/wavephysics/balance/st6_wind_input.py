@@ -1,8 +1,8 @@
 from roguewave.wavephysics.fluidproperties import AIR, WATER, GRAVITATIONAL_ACCELERATION
 from roguewave.wavespectra.operations import numba_directionally_integrate_spectral_data
-from roguewave.wavetheory import (
+from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
-    intrinsic_group_velocity,
+    intrinsic_group_speed,
 )
 from roguewave.wavephysics.balance import WindGeneration
 from numpy import tanh, cos, pi, sqrt, log, empty, argmax, inf
@@ -108,7 +108,7 @@ def _st6_wind_generation_point(
     )
     wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
     wavespeed = radian_frequency / wavenumber
-    group_velocity = intrinsic_group_velocity(wavenumber, depth)
+    group_velocity = intrinsic_group_speed(wavenumber, depth)
     saturation_spectrum = frequency_spectrum * group_velocity * wavenumber**3 / 2 / pi
 
     peak_index = argmax(frequency_spectrum)

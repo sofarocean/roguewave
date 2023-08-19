@@ -80,11 +80,12 @@ def estimate_u10_from_spectrum(
     fmax=0.5,
     power=4,
     directional_spreading_constant=2.5,
-    phillips_constant_beta=0.012,
+    phillips_constant_beta=0.0133,
     vonkarman_constant=0.4,
     grav=9.81,
     number_of_bins=20,
     direction_convention: _direction_convention = "going_to_counter_clockwise_east",
+    charnock_constant = 0.02,
     **kwargs,
 ) -> Dataset:
     #
@@ -139,7 +140,7 @@ def estimate_u10_from_spectrum(
     )
 
     # Find z0 from Charnock Relation
-    z0 = charnock_roughness_length(dataset.friction_velocity, **kwargs)
+    z0 = charnock_roughness_length(dataset.friction_velocity, charnock_constant,**kwargs)
 
     if direction_convention == "coming_from_clockwise_north":
         dataset["direction"] = (270.0 - dataset["direction"]) % 360
@@ -172,7 +173,8 @@ def equilibrium_range_values(
     """
 
     if method == "peak":
-        scaled_spec = spectrum.variance_density * spectrum.frequency**power
+        spec = spectrum.bandpass(fmax=fmax+1e-6)
+        scaled_spec = spec.variance_density * spectrum.frequency**power
         scaled_spec = scaled_spec.fillna(0)
         indices = scaled_spec.argmax(dim="frequency")
         a1 = spectrum.a1.isel({"frequency": indices}).values

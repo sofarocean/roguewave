@@ -1,6 +1,6 @@
 _nopython = True
-_nogil = False
-_cache = False
+_nogil = True
+_cache = True
 _forceobj = False
 _parallel = False
 _error_model = "python"

@@ -26,9 +26,9 @@ import numpy
 from numpy.typing import ArrayLike, NDArray
 from roguewave.wavewatch3.resources import Resource
 from roguewave.wavewatch3.grid_tools import Grid
-from roguewave.wavetheory.lineardispersion import (
+from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
-    jacobian_wavenumber_to_radial_frequency,
+    intrinsic_group_speed,
 )
 from roguewave.wavewatch3.restart_file_metadata import MetaData
 from typing import Sequence, Union, Tuple
@@ -469,7 +469,7 @@ class RestartFile(Sequence):
         k = inverse_intrinsic_dispersion_relation(w, depth)
 
         # Calculate the various (Jacobian) factors
-        jac_k_to_w = jacobian_wavenumber_to_radial_frequency(k, depth)
+        jac_k_to_w = 1.0 / intrinsic_group_speed(k, depth)
         jac_omega_f = 2 * numpy.pi
         jac_rad_to_deg = numpy.pi / 180
         action_to_energy = w

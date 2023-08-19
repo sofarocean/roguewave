@@ -31,11 +31,10 @@ def drag_coefficient_charnock(
     return (air.vonkarman_constant / log(elevation / roughness)) ** 2
 
 
-def charnock_roughness_length(friction_velocity: DataArray, **kwargs) -> DataArray:
+def charnock_roughness_length(friction_velocity: DataArray, charnock_constant=0.012, **kwargs) -> DataArray:
     if not isinstance(friction_velocity, DataArray):
         friction_velocity = DataArray(data=friction_velocity)
 
-    charnock_constant = kwargs.get("charnock_constant", 0.012)
     gravitational_acceleration = kwargs.get(
         "gravitational_acceleration", GRAVITATIONAL_ACCELERATION
     )

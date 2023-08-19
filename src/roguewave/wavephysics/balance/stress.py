@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 
 from roguewave.wavephysics.balance.wam_tail_stress import _charnock_relation_point
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
-from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
+from linearwavetheory import inverse_intrinsic_dispersion_relation
 from roguewave.wavephysics.balance._numba_settings import numba_nocache
 
 

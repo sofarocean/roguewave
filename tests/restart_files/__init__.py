@@ -5,7 +5,7 @@ import os
 import boto3
 
 REMOTE_HASH = "811449d693c24cca014fbe212a9db011"
-REASSEMBLED_HASH = "92c217e78384fd387bdbbd1bcc8ba4d4"
+REASSEMBLED_HASH = "1e6f88d809a8b3d096c614df60694dd3" #"92c217e78384fd387bdbbd1bcc8ba4d4"
 REMOTE_RESTART_FILE = "s3://sofar-wx-data-dev-os1/roguewave/restart001.ww3"
 REMOTE_MOD_DEF = "s3://sofar-wx-data-dev-os1/roguewave/mod_def.ww3"
 TEST_DIR = "."

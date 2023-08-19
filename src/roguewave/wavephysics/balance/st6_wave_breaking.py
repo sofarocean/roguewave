@@ -2,9 +2,9 @@ from numpy import pi, empty
 from typing import TypedDict
 from roguewave.wavephysics.balance import Dissipation
 from roguewave.wavespectra.operations import numba_directionally_integrate_spectral_data
-from roguewave.wavetheory.lineardispersion import (
+from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
-    intrinsic_group_velocity,
+    intrinsic_group_speed,
 )
 from numba import njit
 
@@ -42,7 +42,7 @@ def st6_dissipation(variance_density, depth, spectral_grid, parameters):
         variance_density, spectral_grid
     )
     wavenumber = inverse_intrinsic_dispersion_relation(radian_frequency, depth)
-    group_velocity = intrinsic_group_velocity(wavenumber, depth)
+    group_velocity = intrinsic_group_speed(wavenumber, depth)
     saturation_spectrum = frequency_spectrum * group_velocity * wavenumber**3 / 2 / pi
 
     relative_saturation_exceedence = empty(number_of_frequencies)

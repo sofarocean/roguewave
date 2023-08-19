@@ -7,7 +7,6 @@ from roguewave import (
     concatenate_spectra,
 )
 from roguewave.wavespectra.parametric import create_parametric_spectrum
-from roguewave.wavetheory.lineardispersion import GRAV
 from roguewave.tools.time import to_datetime64
 from numpy import linspace, inf, ndarray, pi, array, ones, nan, sqrt
 from numpy.testing import assert_allclose
@@ -16,7 +15,7 @@ from typing import List, Tuple
 from xarray import DataArray
 import os
 
-
+GRAV = 9.80665
 def helper_create_spectrum() -> FrequencyDirectionSpectrum:
     angles = helper_angles()
     frequency = helper_frequency()

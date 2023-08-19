@@ -8,7 +8,7 @@ from roguewave.wavephysics.balance import WindGeneration
 from roguewave.wavephysics.balance._numba_settings import numba_default
 from numpy import cos, pi, log, exp, empty, inf
 from numba import jit
-from roguewave.wavetheory import inverse_intrinsic_dispersion_relation
+from linearwavetheory import inverse_intrinsic_dispersion_relation
 from typing import TypedDict
 from roguewave.wavephysics.balance.wam_tail_stress import (
     tail_stress_parametrization_wam,

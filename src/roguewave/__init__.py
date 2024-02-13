@@ -1,6 +1,7 @@
 # Logging
 from roguewave.log import logger
 from roguewave.tools.time import to_datetime_utc, to_datetime64
+import roguewavespectrum as wavespectra
 
 # model time
 from roguewave.modeldata import (
@@ -28,7 +29,7 @@ from roguewave.interpolate import (
 )
 
 # Wave spectrum
-from roguewave.wavespectra import (
+wavespectra import (
     FrequencySpectrum,
     FrequencyDirectionSpectrum,
     create_1d_spectrum,

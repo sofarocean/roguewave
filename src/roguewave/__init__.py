@@ -1,7 +1,10 @@
 # Logging
 from roguewave.log import logger
 from roguewave.tools.time import to_datetime_utc, to_datetime64
-import roguewavespectrum as wavespectra
+from roguewavespectrum import (
+    Spectrum,
+    BuoySpectrum,
+)
 
 # model time
 from roguewave.modeldata import (
@@ -28,20 +31,6 @@ from roguewave.interpolate import (
     Cluster,
 )
 
-# Wave spectrum
-wavespectra import (
-    FrequencySpectrum,
-    FrequencyDirectionSpectrum,
-    create_1d_spectrum,
-    create_2d_spectrum,
-    concatenate_spectra,
-    load_spectrum_from_netcdf,
-    WaveSpectrum,
-    integrate_spectral_data,
-    SPECTRAL_DIMS,
-    NAME_F,
-    NAME_D,
-)
 
 # IO
 from .io.io import save, load
@@ -65,4 +54,4 @@ from roguewave.colocate import (
 from roguewave.spotterapi import get_spotter_data, get_spectrum
 from roguewave.spotter import spotter_frequency_response_correction
 from roguewave.observations import get_satellite_data, get_satellite_available
-from roguewave.wavespectra.estimators import estimate_directional_spectrum_from_moments
+

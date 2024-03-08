@@ -16,6 +16,7 @@ from roguewave.spotterapi.spotterapi import (
     get_spectrum,
 )
 from datetime import datetime, timedelta
+from roguewavespectrum import BuoySpectrum
 from roguewave import to_datetime_utc, FrequencySpectrum
 
 # Smartmooring unit on the eng account.

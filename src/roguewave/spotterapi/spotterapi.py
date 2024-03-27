@@ -31,11 +31,8 @@ from roguewave.tools.time import (
     datetime_to_iso_time_string,
     to_datetime_utc,
 )
-from roguewave.wavespectra import (
-    FrequencySpectrum,
-    concatenate_spectra,
-)
-from roguewave.spotter.analysis import spotter_api_spectra_post_processing
+from roguewavespectrum import Spectrum, concatenate_spectra
+from roguewavespectrum.spotter._spotter_post_processing import post_process_api_spectrum
 
 from typing import Dict, List, Union, Sequence, Literal, Any
 from pandas import DataFrame, concat
@@ -82,7 +79,7 @@ def get_spectrum(
     start_date: Union[datetime, int, float, str] = None,
     end_date: Union[datetime, int, float, str] = None,
     **kwargs,
-) -> Dict[str, FrequencySpectrum]:
+) -> Dict[str, Spectrum]:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
     interval.
@@ -144,7 +141,7 @@ def get_data(
     include_barometer_data=False,
     include_surface_temp_data=False,
     **kwargs,
-) -> Dict[str, Dict[str, Union[FrequencySpectrum, DataFrame]]]:
+) -> Dict[str, Dict[str, Union[Spectrum, DataFrame]]]:
     """
     DEPRICATED USE get_spotter_data instead
     """
@@ -193,7 +190,7 @@ def get_spotter_data(
     parallel_download=True,
     cache=True,
     post_process_spectra=True,
-) -> Union[DataFrame, Dict[str, FrequencySpectrum]]:
+) -> Union[DataFrame, Dict[str, Spectrum]]:
     """
     Gets the requested data for the spotter(s) in the given interval as either a dataframe containing
     all the data for the combined spotters in a single table (all datatypes except frequencyData) or
@@ -282,7 +279,7 @@ def get_spotter_data(
             # Did we get any data for this spotter
             if spotter_data is not None:
                 if post_process_spectra:
-                    spotter_data = spotter_api_spectra_post_processing(spotter_data)
+                    spotter_data = post_process_api_spectrum(spotter_data)
                 data[spotter_id] = spotter_data
     else:
         values, _id = [], []
@@ -300,7 +297,7 @@ def get_spotter_data(
     return data
 
 
-def _download_data(**kwargs) -> Union[FrequencySpectrum, DataFrame]:
+def _download_data(**kwargs) -> Union[Spectrum, DataFrame]:
     """ """
     data = list(_unpaginate(**kwargs))
 
@@ -349,7 +346,7 @@ def _unpaginate(
     end_date: datetime,
     spotter_id: str,
     session: SofarApi,
-) -> Union[FrequencySpectrum, Dict[str, Any]]:
+) -> Union[Spectrum, Dict[str, Any]]:
     """
     Generator function to unpaginate data from the api.
 
@@ -427,8 +424,8 @@ def _unpaginate(
 
         objects = []
         for _object in [_get_class(var_name, data) for data in json_data[var_name]]:
-            if isinstance(_object, FrequencySpectrum):
-                date = to_datetime_utc(_object.time.values)
+            if isinstance(_object, Spectrum):
+                date = to_datetime_utc(_object.time.values[0])
             else:
                 date = _object["time"]
 
@@ -445,7 +442,7 @@ def _unpaginate(
             last_object = _object
             yield _object
 
-        if isinstance(last_object, FrequencySpectrum):
-            start_date = to_datetime_utc(last_object.time.values) + timedelta(seconds=1)
+        if isinstance(last_object, Spectrum):
+            start_date = to_datetime_utc(last_object.time.values[0]) + timedelta(seconds=1)
         else:
             start_date = last_object["time"] + timedelta(seconds=1)

@@ -20,16 +20,16 @@ from roguewave.wavephysics.balance.solvers import numba_newton_raphson
 from roguewave.wavespectra.operations import numba_integrate_spectral_data
 from roguewave.wavephysics.balance.balance import SourceTermBalance
 from xarray import DataArray, Dataset
-from roguewave import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 
 
 def windspeed_and_direction_from_spectra(
     balance: SourceTermBalance,
     guess_u10: DataArray,
-    spectrum: FrequencyDirectionSpectrum,
+    spectrum: Spectrum,
     jacobian=False,
     jacobian_parameters=None,
-    time_derivative_spectrum: FrequencyDirectionSpectrum = None,
+    time_derivative_spectrum: Spectrum = None,
     direction_iteration=False,
 ) -> Dataset:
     """

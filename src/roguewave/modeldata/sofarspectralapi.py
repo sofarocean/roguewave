@@ -13,7 +13,7 @@ from pysofar import SofarConnection
 from pysofar.wavefleet_exceptions import QueryError
 from functools import cached_property
 from roguewave.wavespectra import (
-    FrequencyDirectionSpectrum,
+    Spectrum,
     create_2d_spectrum,
     concatenate_spectra,
 )
@@ -101,19 +101,19 @@ class SofarSpectralAPI(SofarConnection):
 
 
 @overload
-def load_sofar_spectral_file(filename: str) -> FrequencyDirectionSpectrum:
+def load_sofar_spectral_file(filename: str) -> Spectrum:
     ...
 
 
 @overload
-def load_sofar_spectral_file(filename: List[str]) -> List[FrequencyDirectionSpectrum]:
+def load_sofar_spectral_file(filename: List[str]) -> List[Spectrum]:
     ...
 
 
 @overload
 def load_sofar_spectral_file(
     filename: Dict[str, str]
-) -> Dict[str, FrequencyDirectionSpectrum]:
+) -> Dict[str, Spectrum]:
     ...
 
 

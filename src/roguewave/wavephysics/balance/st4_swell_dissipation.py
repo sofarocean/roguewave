@@ -4,7 +4,7 @@ from roguewave.wavephysics.fluidproperties import (
     FluidProperties,
     GRAVITATIONAL_ACCELERATION,
 )
-from roguewave import FrequencyDirectionSpectrum, SPECTRAL_DIMS
+from roguewavespectrum import Spectrum, SPECTRAL_DIMS
 from roguewave.wavephysics.generation import WindGeneration, TWindInputType
 from numpy import cos, pi, log, tanh, sqrt
 from xarray import DataArray, where
@@ -37,7 +37,7 @@ class SwellDissipation(WindGeneration):
         self,
         speed: DataArray,
         direction: DataArray,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         roughness_length: DataArray = None,
         wind_speed_input_type: TWindInputType = "u10",
         air: FluidProperties = AIR,
@@ -65,7 +65,7 @@ class SwellDissipation(WindGeneration):
         self,
         speed: DataArray,
         direction: DataArray,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         roughness_length: DataArray = None,
         air: FluidProperties = AIR,
         water: FluidProperties = WATER,
@@ -87,7 +87,7 @@ class SwellDissipation(WindGeneration):
         self,
         speed: DataArray,
         direction: DataArray,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         roughness_length: DataArray = None,
         air: FluidProperties = AIR,
         water: FluidProperties = WATER,

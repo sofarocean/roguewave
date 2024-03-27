@@ -9,7 +9,7 @@ Authors: Pieter Bart Smit
 import typing
 import numpy
 from typing import Literal
-from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectrum
+from roguewavespectrum import Spectrum, Spectrum, WaveSpectrum
 from roguewave.wavephysics.balance import SourceTermBalance
 from xarray import Dataset
 from roguewave.wavephysics.roughness import charnock_roughness_length
@@ -26,7 +26,7 @@ _direction_convention = Literal[
 
 
 def friction_velocity(
-    spectrum: FrequencySpectrum,
+    spectrum: Spectrum,
     method: _methods = "peak",
     fmax=0.5,
     power=4,
@@ -122,7 +122,7 @@ def estimate_u10_from_spectrum(
     # 3) Use Emean to estimate Wind speed (using Charnock and LogLaw)
     # 4) Calculate mean direction over equilibrium range
 
-    if isinstance(spectrum, FrequencyDirectionSpectrum):
+    if isinstance(spectrum, Spectrum):
         spectrum_1d = spectrum.as_frequency_spectrum()
     else:
         spectrum_1d = spectrum
@@ -156,7 +156,7 @@ def estimate_u10_from_spectrum(
 
 
 def equilibrium_range_values(
-    spectrum: FrequencySpectrum,
+    spectrum: Spectrum,
     method: _methods,
     fmax=1.25,
     power=4,
@@ -243,7 +243,7 @@ def equilibrium_range_values(
 
 
 def estimate_u10_from_source_terms(
-    spectrum: FrequencyDirectionSpectrum,
+    spectrum: Spectrum,
     balance: SourceTermBalance,
     time_derivative_spectrum=None,
     direction_iteration=False,

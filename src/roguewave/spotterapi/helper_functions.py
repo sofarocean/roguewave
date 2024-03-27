@@ -2,9 +2,8 @@ from pysofar.sofar import SofarApi
 from typing import List, Dict, MutableMapping, Union, Any
 from pandas import DataFrame
 from numpy import unique, inf, array
+from roguewavespectrum import create_spectrum1d, Spectrum
 from roguewave import (
-    FrequencySpectrum,
-    create_1d_spectrum,
     to_datetime64,
     to_datetime_utc,
 )
@@ -60,8 +59,8 @@ def _unique_filter(data):
         return data
 
     # Get time
-    if isinstance(data[0], FrequencySpectrum):
-        time = array([to_datetime_utc(x.time.values).timestamp() for x in data])
+    if isinstance(data[0], Spectrum):
+        time = array([to_datetime_utc(x.time.values[0]).timestamp() for x in data])
     else:
         time = array([x["time"].timestamp() for x in data])
 
@@ -94,7 +93,7 @@ def _none_filter(data: Dict):
 # -----------------------------------------------------------------------------
 
 
-def _get_class(key, data) -> Union[MutableMapping, FrequencySpectrum]:
+def _get_class(key, data) -> Union[MutableMapping, Spectrum]:
     MAP_API_TO_MODEL_NAMES = {
         "waves": {"timestamp": "time"},
         "surfaceTemp": {
@@ -114,17 +113,16 @@ def _get_class(key, data) -> Union[MutableMapping, FrequencySpectrum]:
     }
 
     if key == "frequencyData":
-        return create_1d_spectrum(
-            frequency=array(data["frequency"]),
-            variance_density=array(data["varianceDensity"]),
-            time=to_datetime64(data["timestamp"]),
-            latitude=array(data["latitude"]),
-            longitude=array(data["longitude"]),
-            a1=array(data["a1"]),
-            b1=array(data["b1"]),
-            a2=array(data["a2"]),
-            b2=array(data["b2"]),
-            dims=("frequency",),
+        return create_spectrum1d(
+            coordinates=[
+                ("time", array(to_datetime64([data["timestamp"]]))),
+                ("frequency", array(data["frequency"])),
+            ],
+            variance_density=array(data["varianceDensity"])[None,:],
+            a1=array(data["a1"])[None,:],
+            b1=array(data["b1"])[None,:],
+            a2=array(data["a2"])[None,:],
+            b2=array(data["b2"])[None,:],
             depth=inf,
         )
     else:

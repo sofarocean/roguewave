@@ -41,7 +41,7 @@ from roguewave.spotter.parser import (
 )
 from roguewave.timeseries_analysis.filtering import sos_filter
 from xarray import Dataset
-from roguewave import FrequencySpectrum
+from roguewavespectrum import Spectrum
 from roguewave.tools.time import datetime64_to_timestamp
 from datetime import datetime
 from numpy import linspace, errstate, sqrt, interp, full_like, inf, cos, sin, pi, nan
@@ -393,7 +393,7 @@ def read_spectra(
     end_date: datetime = None,
     depth: float = inf,
     cache_as_netcdf=False,
-) -> FrequencySpectrum:
+) -> Spectrum:
     """
     Read spectral data from csv files. The raw spectral data is transformed into
     a roguewave Spectral 1D spectrum object (which includes all directional moments a1,b1,a2,b2 as well as energy for
@@ -418,7 +418,7 @@ def read_spectra(
                   Not required, but is set on the returned spectral object
                   (and factors in transformations thereof, e.g. to get wavenumbers).
 
-    :return: frequency spectra as a FrequencySpectrum object.
+    :return: frequency spectra as a Spectrum object.
     """
 
     data = read_raw_spectra(
@@ -489,7 +489,7 @@ def read_spectra(
         },
         coords={"time": to_datetime(time), "frequency": frequencies},
     )
-    return FrequencySpectrum(dataset)
+    return Spectrum(dataset)
 
 
 def read_raw_spectra(

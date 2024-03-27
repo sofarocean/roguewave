@@ -5,7 +5,7 @@ from roguewave.modeldata.open_remote_restart_files import \
 from roguewave.modeldata.timebase import TimeSlice
 from roguewave.interpolate.geometry import TrackSet
 from roguewave.tools.time import to_datetime64
-from roguewave import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 from xarray import Dataset, concat
 
 
@@ -21,9 +21,9 @@ def colocate_model_spotter_spectra(
         spectral_domain: str = 'model',
         timebase: str = 'model',
         return_as_dataset = True
-) -> Union[ Tuple[FrequencyDirectionSpectrum,FrequencyDirectionSpectrum]
-           ,Tuple[Dict[str,FrequencyDirectionSpectrum],
-                  Dict[str,FrequencyDirectionSpectrum]]]:
+) -> Union[ Tuple[Spectrum,Spectrum]
+           ,Tuple[Dict[str,Spectrum],
+                  Dict[str,Spectrum]]]:
 
     if return_as_dataset:
         if (not timebase == 'model') and (len(spotter_ids) > 1):
@@ -71,10 +71,10 @@ def colocate_model_spotter_spectra(
     if return_as_dataset:
         m = concat( [x.dataset for x in model.values()],'spotter_id')
         model = m.assign_coords(spotter_id=spotter_ids)
-        model = FrequencyDirectionSpectrum(model)
+        model = Spectrum(model)
 
         s = concat( [x.dataset for x in spotters.values()],'spotter_id')
         spotters = s.assign_coords(spotter_id=spotter_ids)
-        spotters = FrequencyDirectionSpectrum(spotters)
+        spotters = Spectrum(spotters)
 
     return model, spotters

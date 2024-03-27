@@ -1,5 +1,5 @@
 from roguewave import (
-    FrequencyDirectionSpectrum,
+    Spectrum,
 )
 from roguewave.wavephysics.balance.stress import (
     _roughness_estimate,
@@ -39,7 +39,7 @@ class WindGeneration(SourceTerm):
 
     def rate(
         self,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         speed: DataArray,
         direction: DataArray,
         roughness_length: DataArray = None,
@@ -65,7 +65,7 @@ class WindGeneration(SourceTerm):
 
     def bulk_rate(
         self,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         speed: DataArray,
         direction: DataArray,
         roughness_length: DataArray = None,
@@ -97,7 +97,7 @@ class WindGeneration(SourceTerm):
         self,
         speed: DataArray,
         direction: DataArray,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         roughness_length_guess: DataArray = None,
         wind_speed_input_type: TWindInputType = "u10",
     ) -> DataArray:
@@ -124,7 +124,7 @@ class WindGeneration(SourceTerm):
 
     def stress(
         self,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         speed: DataArray,
         direction: DataArray,
         roughness_length: DataArray = None,
@@ -159,7 +159,7 @@ class WindGeneration(SourceTerm):
 
     def friction_velocity(
         self,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         u10: DataArray,
         direction: DataArray,
         roughness_length: DataArray = None,
@@ -169,7 +169,7 @@ class WindGeneration(SourceTerm):
 
     def drag(
         self,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         speed: DataArray,
         direction: DataArray,
         roughness_length: DataArray = None,
@@ -191,7 +191,7 @@ class WindGeneration(SourceTerm):
 
     def tail_stress(
         self,
-        spectrum: FrequencyDirectionSpectrum,
+        spectrum: Spectrum,
         speed: DataArray,
         direction: DataArray,
         roughness_length: DataArray = None,

@@ -1,7 +1,7 @@
 import numpy
 from typing import List
 from numpy import isnan, ones, abs, sign, median, squeeze, where, isfinite
-from roguewave import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectrum
+from roguewavespectrum import Spectrum
 from xarray import DataArray
 from roguewave.wavephysics.balance import SourceTermBalance
 from roguewave.wavephysics.windestimate import estimate_u10_from_spectrum
@@ -83,7 +83,7 @@ def huber(target, actual, jacobian_actual=None, weights=None):
 def calibrate_wind_estimate_from_spectrum(
     method,
     target_u10: DataArray,
-    spectrum: FrequencySpectrum,
+    spectrum: Spectrum,
     parameter_names: List[str] = None,
     loss_function=None,
     velocity_scale=None,
@@ -154,11 +154,11 @@ def calibrate_wind_estimate_from_balance(
     balance: SourceTermBalance,
     parameter_names: List[str],
     target_u10: DataArray,
-    spectrum: FrequencyDirectionSpectrum,
+    spectrum: Spectrum,
     loss_function=None,
     velocity_scale=None,
     params=None,
-    time_derivative_spectrum: FrequencyDirectionSpectrum = None,
+    time_derivative_spectrum: Spectrum = None,
     direction_iteration=False,
 ):
     dissipation = balance.dissipation
@@ -241,7 +241,7 @@ def calibrate_wind_estimate_from_balance(
 
 
 def prep_data(
-    spectrum: WaveSpectrum, target_u10: DataArray, threshold=(-numpy.inf, numpy.inf)
+    spectrum: Spectrum, target_u10: DataArray, threshold=(-numpy.inf, numpy.inf)
 ):
     mask = (
         (spectrum.is_valid())

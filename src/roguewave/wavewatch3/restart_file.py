@@ -37,7 +37,7 @@ from datetime import datetime
 from functools import cache
 from roguewave.tools.time import to_datetime64
 from xarray import Dataset, DataArray
-from roguewave.wavespectra import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 
 MAXIMUM_NUMBER_OF_WORKERS = 10
 
@@ -213,7 +213,7 @@ class RestartFile(Sequence):
 
     def __getitem__(
         self, s: Union[slice, ArrayLike, int]
-    ) -> FrequencyDirectionSpectrum:
+    ) -> Spectrum:
         """
         Dunder method for the Sequence protocol. If obj is an instance of
         RestartFile, this allows us to use `obj[10:13]` to get spectra with
@@ -244,10 +244,10 @@ class RestartFile(Sequence):
             s = [s]
 
         coords = self.coordinates(s)
-        return FrequencyDirectionSpectrum(
+        return Spectrum(
             Dataset(
                 data_vars={
-                    "variance_density": (
+                    "directional_variance_density": (
                         ("linear_index", "frequency", "direction"),
                         data,
                     ),
@@ -310,7 +310,7 @@ class RestartFile(Sequence):
         self,
         latitude: Union[ArrayLike, float],
         longitude: Union[ArrayLike, float],
-    ) -> FrequencyDirectionSpectrum:
+    ) -> Spectrum:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -342,7 +342,7 @@ class RestartFile(Sequence):
                 (len(index), self.number_of_frequencies, self.number_of_directions)
             )
             mask = index >= 0
-            output[mask, :, :] = self.__getitem__(index[mask]).variance_density.values
+            output[mask, :, :] = self.__getitem__(index[mask]).directional_variance_density.values
             output[~mask, :, :] = numpy.nan
             return output
 
@@ -393,10 +393,10 @@ class RestartFile(Sequence):
             data_discont=None,
         )
 
-        return FrequencyDirectionSpectrum(
+        return Spectrum(
             Dataset(
                 data_vars={
-                    "variance_density": (
+                    "directional_variance_density": (
                         ("points", "frequency", "direction"),
                         interpolator.interpolate(points),
                     ),

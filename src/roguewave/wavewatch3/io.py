@@ -39,7 +39,7 @@ from roguewave.wavewatch3.resources import create_resource
 from roguewave.wavewatch3.restart_file import RestartFile
 from roguewave.wavewatch3 import RestartFileTimeStack
 from roguewave.wavewatch3.restart_file_metadata import read_header
-from roguewave import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 from typing import Union
@@ -132,7 +132,7 @@ def reassemble_restart_file_from_parts(target_file, locations, source_restart_fi
 
 
 def write_restart_file(
-    spectra: Union[Dataset, numpy.ndarray, DataArray, FrequencyDirectionSpectrum],
+    spectra: Union[Dataset, numpy.ndarray, DataArray, Spectrum],
     target_file: str,
     parent_restart_file: RestartFile,
     spectra_are_frequence_energy_density=True,
@@ -153,7 +153,7 @@ def write_restart_file(
         and no transformation is applied.
     :return: None
     """
-    if isinstance(spectra, (Dataset, FrequencyDirectionSpectrum)):
+    if isinstance(spectra, (Dataset, Spectrum)):
         spectra = spectra.variance_density.values
     elif isinstance(spectra, DataArray):
         spectra = spectra.values
@@ -199,7 +199,7 @@ def write_restart_file(
 
 
 def write_partial_restart_file(
-    spectra: Union[FrequencyDirectionSpectrum, Dataset, numpy.ndarray, DataArray],
+    spectra: Union[Spectrum, Dataset, numpy.ndarray, DataArray],
     target_file: str,
     parent_restart_file: RestartFile,
     s: slice,
@@ -229,8 +229,8 @@ def write_partial_restart_file(
         and no transformation is applied.
     :return:
     """
-    if isinstance(spectra, (Dataset, FrequencyDirectionSpectrum)):
-        spectra = spectra.variance_density.values
+    if isinstance(spectra, (Dataset, Spectrum)):
+        spectra = spectra.directional_variance_density.values
     elif isinstance(spectra, DataArray):
         spectra = spectra.values
 

@@ -1,6 +1,6 @@
 from roguewave.wavephysics.balance import WindGeneration, Dissipation
 from typing import Mapping, Dict
-from roguewave import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 from xarray import DataArray
 
 
@@ -13,8 +13,8 @@ class SourceTermBalance:
         self,
         wind_speed: DataArray,
         wind_direction: DataArray,
-        spectrum: FrequencyDirectionSpectrum,
-        time_derivative_spectrum: FrequencyDirectionSpectrum = None,
+        spectrum: Spectrum,
+        time_derivative_spectrum: Spectrum = None,
     ) -> DataArray:
 
         if time_derivative_spectrum is None:
@@ -36,8 +36,8 @@ class SourceTermBalance:
         self,
         wind_speed: DataArray,
         wind_direction: DataArray,
-        spectrum: FrequencyDirectionSpectrum,
-        time_derivative_spectrum: FrequencyDirectionSpectrum = None,
+        spectrum: Spectrum,
+        time_derivative_spectrum: Spectrum = None,
     ) -> DataArray:
 
         if time_derivative_spectrum is None:

@@ -1,4 +1,4 @@
-from roguewave import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 from xarray import DataArray
 from numpy import pi, cos, sin, arctan2, empty
 from numpy.typing import NDArray
@@ -25,7 +25,7 @@ class Dissipation(SourceTerm):
             if key in self._parameters:
                 self._parameters[key] = parameters[key]
 
-    def rate(self, spectrum: FrequencyDirectionSpectrum) -> DataArray:
+    def rate(self, spectrum: Spectrum) -> DataArray:
         data = _dissipation(
             spectrum.variance_density.values,
             spectrum.depth.values,
@@ -35,7 +35,7 @@ class Dissipation(SourceTerm):
         )
         return DataArray(data=data, coords=spectrum.coords(), dims=spectrum.dims)
 
-    def bulk_rate(self, spectrum: FrequencyDirectionSpectrum) -> DataArray:
+    def bulk_rate(self, spectrum: Spectrum) -> DataArray:
 
         data = _bulk_dissipation(
             spectrum.variance_density.values,
@@ -48,7 +48,7 @@ class Dissipation(SourceTerm):
             data=data, coords=spectrum.coords_space_time, dims=spectrum.dims_space_time
         )
 
-    def mean_direction_degrees(self, spectrum: FrequencyDirectionSpectrum):
+    def mean_direction_degrees(self, spectrum: Spectrum):
         data, _ = _bulk_dissipation_direction(
             spectrum.variance_density.values,
             spectrum.depth.values,

@@ -5,7 +5,7 @@ import numpy
 from xarray import DataArray, Dataset
 
 from roguewave.tools.math import wrapped_difference
-from roguewave import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 from roguewave.tools.time import to_datetime64
 
 
@@ -218,7 +218,7 @@ def _unpack_data_array(data: DataArray, grid: Grid, exception_value) -> DataArra
     return DataArray(data=output, dims=dims, coords=coords)
 
 
-_T = TypeVar("_T", DataArray, numpy.ndarray, FrequencyDirectionSpectrum)
+_T = TypeVar("_T", DataArray, numpy.ndarray, Spectrum)
 
 
 def unpack_ww3_data(data: _T, grid: Grid, exception_value=numpy.nan) -> _T:
@@ -238,7 +238,7 @@ def unpack_ww3_data(data: _T, grid: Grid, exception_value=numpy.nan) -> _T:
     elif isinstance(data, numpy.ndarray):
         return _unpack_ndarray(data, grid, exception_value)
 
-    elif isinstance(data, FrequencyDirectionSpectrum):
+    elif isinstance(data, Spectrum):
         # For the spectral object we need to unpack the variance density, and the depth together.
         variance_density = _unpack_data_array(
             data.variance_density, grid, exception_value
@@ -252,4 +252,4 @@ def unpack_ww3_data(data: _T, grid: Grid, exception_value=numpy.nan) -> _T:
         )
         if "time" not in dataset:
             dataset["time"] = to_datetime64(data.time.values)
-        return FrequencyDirectionSpectrum(dataset)
+        return Spectrum(dataset)

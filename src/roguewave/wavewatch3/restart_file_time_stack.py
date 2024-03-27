@@ -4,7 +4,8 @@ from multiprocessing.pool import ThreadPool
 from typing import Sequence, Union, Tuple, Dict
 from tqdm import tqdm
 from xarray import Dataset, concat
-from roguewave import FrequencyDirectionSpectrum, TrackSet
+from roguewavespectrum import Spectrum
+from roguewave import TrackSet
 from roguewave.interpolate.nd_interp import NdInterpolator
 from roguewave.tools.time import to_datetime_utc, to_datetime64
 from roguewave.wavewatch3.restart_file import RestartFile, MAXIMUM_NUMBER_OF_WORKERS
@@ -114,7 +115,7 @@ class RestartFileTimeStack:
     def __len__(self):
         return len(self._restart_files)
 
-    def __getitem__(self, nargs) -> FrequencyDirectionSpectrum:
+    def __getitem__(self, nargs) -> Spectrum:
         if len(nargs) == 2:
             time_index, linear_index = nargs
         elif len(nargs) == 3:
@@ -165,7 +166,7 @@ class RestartFileTimeStack:
 
         data = concat(data, dim="time")
         data.coords["time"] = to_datetime64([self.time[it] for it in time_index])
-        return FrequencyDirectionSpectrum(data)
+        return Spectrum(data)
 
     def _init_progress_bar(self, total):
         if self._progres["total"] is None:
@@ -190,7 +191,7 @@ class RestartFileTimeStack:
         latitude: Union[numpy.ndarray, float],
         longitude: Union[numpy.ndarray, float],
         time: Union[numpy.ndarray, numpy.datetime64, datetime],
-    ) -> FrequencyDirectionSpectrum:
+    ) -> Spectrum:
         """
         Extract interpolated spectra at given latitudes and longitudes.
         Input can be either a single latitude and longitude pair, or a
@@ -288,7 +289,7 @@ class RestartFileTimeStack:
             data_discont=None,
         )
 
-        return FrequencyDirectionSpectrum(
+        return Spectrum(
             Dataset(
                 data_vars={
                     "variance_density": (("time", "frequency", "direction"), dataset),
@@ -306,7 +307,7 @@ class RestartFileTimeStack:
 
     def interpolate_tracks(
         self, tracks: TrackSet
-    ) -> Dict[str, FrequencyDirectionSpectrum]:
+    ) -> Dict[str, Spectrum]:
         return {
             _id: self.interpolate(x.latitude, x.longitude, x.time)
             for _id, x in tracks.tracks.items()

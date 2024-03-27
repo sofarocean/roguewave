@@ -23,7 +23,7 @@ from numba.typed import Dict
 import numpy
 from numpy.fft import fft
 from numpy.typing import NDArray
-from roguewave import FrequencySpectrum
+from roguewavespectrum import Spectrum
 from scipy.signal.windows import get_window
 from typing import List, Tuple, Mapping
 from xarray import Dataset
@@ -42,7 +42,7 @@ def estimate_frequency_spectrum(
     response_functions=None,
     fft_length=None,
     **kwargs
-) -> FrequencySpectrum:
+) -> Spectrum:
     """
 
     :param epoch_time:
@@ -100,7 +100,7 @@ def estimate_frequency_spectrum(
         },
         coords={"time": to_datetime64(spectral_time), "frequency": frequencies},
     )
-    return FrequencySpectrum(dataset)
+    return Spectrum(dataset)
 
 
 @njit(cache=True)

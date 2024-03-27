@@ -16,8 +16,8 @@ from roguewave.spotterapi.spotterapi import (
     get_spectrum,
 )
 from datetime import datetime, timedelta
-from roguewavespectrum import BuoySpectrum
-from roguewave import to_datetime_utc, FrequencySpectrum
+from roguewavespectrum import Spectrum
+from roguewave import to_datetime_utc
 
 # Smartmooring unit on the eng account.
 SMARTMOORING_TEST_SPOTTER_ID = "SPOT-30083D"
@@ -279,9 +279,9 @@ def test_multi_page():
         cache=False,
     )
     data = data[TEST_SPOTTER_ID]
-    assert isinstance(data, FrequencySpectrum)
-    assert len(data) == 766
-    assert abs(data.significant_waveheight[600] - 6.73) < 0.01
+    assert isinstance(data, Spectrum)
+    assert data.number_of_spectra == 766
+    assert (data.hm0()[600] - 6.73) < 0.01
     assert to_datetime_utc(END_DATE) - to_datetime_utc(data.time)[-1] < timedelta(
         hours=1
     )

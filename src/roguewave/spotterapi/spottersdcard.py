@@ -1,5 +1,5 @@
 from roguewave.wavespectra import (
-    FrequencySpectrum,
+    Spectrum,
     create_1d_spectrum,
     concatenate_spectra,
 )
@@ -9,7 +9,7 @@ import numpy
 import os
 
 
-def get_spectrum_from_parser_output(path: str) -> FrequencySpectrum:
+def get_spectrum_from_parser_output(path: str) -> Spectrum:
     """
 
     :param path: Path that contains the output from the spotter parser.

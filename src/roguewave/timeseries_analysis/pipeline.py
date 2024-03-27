@@ -6,7 +6,7 @@ from roguewave.timeseries_analysis.filtering import (
     cumulative_filter,
     cumsum,
 )
-from roguewave import FrequencySpectrum
+from roguewavespectrum import Spectrum
 from roguewave.tools.time_integration import (
     integrate,
     complex_response,
@@ -93,7 +93,7 @@ def spectral_pipeline(
     sampling_frequency=2.5,
     spectral_window=None,
     response_correction=False,
-) -> FrequencySpectrum:
+) -> Spectrum:
 
     """
     Calculate the 1d frequency wave-spectrum including directional moments a1,b1,a2,b2 based on

@@ -1,4 +1,4 @@
-from roguewave import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 from roguewave.wavephysics.fluidproperties import (
     AIR,
     FluidProperties,
@@ -72,7 +72,7 @@ def charnock_roughness_length_from_u10(speed, **kwargs) -> DataArray:
 
 def janssen_roughness_length(
     friction_velocity: DataArray,
-    spectrum: FrequencyDirectionSpectrum,
+    spectrum: Spectrum,
     balance: SourceTermBalance,
     wind_direction: DataArray = None,
 ):
@@ -89,7 +89,7 @@ def janssen_roughness_length(
 
 def janssen_roughness_length_from_u10(
     friction_velocity: DataArray,
-    spectrum: FrequencyDirectionSpectrum,
+    spectrum: Spectrum,
     balance: SourceTermBalance,
     wind_direction: DataArray = None,
     **kwargs

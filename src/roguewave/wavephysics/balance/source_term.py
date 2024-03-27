@@ -1,4 +1,4 @@
-from roguewave import FrequencyDirectionSpectrum
+from roguewavespectrum import Spectrum
 from abc import ABC
 from numba import njit, types
 from numba.typed import Dict as NumbaDict
@@ -15,7 +15,7 @@ class SourceTerm(ABC):
     def parameters(self) -> NumbaDict:
         return _numba_parameters(**self._parameters)
 
-    def spectral_grid(self, spectrum: FrequencyDirectionSpectrum):
+    def spectral_grid(self, spectrum: Spectrum):
         return _spectral_grid(
             spectrum.radian_frequency.values,
             spectrum.radian_direction.values,

@@ -16,9 +16,8 @@ How To Use This Module
 (See the individual functions for details.)
 
 """
-from roguewave.wavespectra import (
-    FrequencySpectrum,
-    FrequencyDirectionSpectrum,
+from roguewavespectrum import (
+    Spectrum,
 )
 from pandas import DataFrame
 from typing import Union, Dict, List
@@ -39,12 +38,11 @@ from roguewave.tools.time import to_datetime64
 
 
 _UNION = Union[
-    FrequencySpectrum,
-    FrequencyDirectionSpectrum,
-    List[FrequencySpectrum],
-    Dict[str, List[FrequencyDirectionSpectrum]],
-    Dict[str, List[FrequencySpectrum]],
-    List[List[FrequencyDirectionSpectrum]],
+    Spectrum,
+    List[Spectrum],
+    Dict[str, List[Spectrum]],
+    Dict[str, List[Spectrum]],
+    List[List[Spectrum]],
     List[List[DataFrame]],
     Dict[int, List[DataFrame]],
     Dict[str, DataFrame],
@@ -126,11 +124,8 @@ class DataEncoder(json.JSONEncoder):
         elif isinstance(obj, DataArray):
             return _b64_encode_dataarray(obj, "DataArray")
 
-        elif isinstance(obj, FrequencySpectrum):
-            return _b64_encode_dataset(obj.dataset, "FrequencySpectrum")
-
-        elif isinstance(obj, FrequencyDirectionSpectrum):
-            return _b64_encode_dataset(obj.dataset, "FrequencyDirectionSpectrum")
+        elif isinstance(obj, Spectrum):
+            return _b64_encode_dataset(obj.dataset, "Spectrum")
 
         elif isinstance(obj, datetime):
             return {"__class__": "datetime", "data": datetime.isoformat(obj)}
@@ -152,10 +147,8 @@ def object_hook(dictionary: dict):
             return _b64_decode_dataset(dictionary["data"])
         elif dictionary["__class__"] == "DataArray":
             return _b64_decode_dataarray(dictionary["data"])
-        elif dictionary["__class__"] == "FrequencySpectrum":
-            return FrequencySpectrum(_b64_decode_dataset(dictionary["data"]))
-        elif dictionary["__class__"] == "FrequencyDirectionSpectrum":
-            return FrequencyDirectionSpectrum(_b64_decode_dataset(dictionary["data"]))
+        elif dictionary["__class__"] == "Spectrum":
+            return Spectrum(_b64_decode_dataset(dictionary["data"]))
         elif dictionary["__class__"] == "ndarray":
             return _b64_decode_numpy(dictionary["data"])
         elif dictionary["__class__"] == "datetime":

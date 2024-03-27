@@ -20,7 +20,7 @@ Functions:
 from datetime import datetime
 from pysofar.spotter import SofarApi
 from roguewave.tools.time import datetime_to_iso_time_string
-from roguewave.wavespectra import concatenate_spectra
+from roguewavespectrum import concatenate_spectra
 
 from typing import (
     Union,

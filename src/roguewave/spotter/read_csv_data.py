@@ -21,15 +21,22 @@ Public Functions:
 - `read_location`, read ????_LOC.csv files that containt the location if the instrument.
 - `read_raw_spectra`, read ????_SPC.csv files that contain raw spectral data.
 - `read_spectra`, read ????_SPC.csv files and return a spectral object.
+- `read_rbrdt`, read ????_smd.csv files and return a dataframe.
+
 
 """
+import typing
 
+import pandas as pd
 from pandas import DataFrame, concat, to_datetime
 
 from roguewave.spotter.parser import (
     read_and_concatenate_spotter_csv,
     get_csv_file_format,
     apply_to_group,
+    _mark_continuous_groups,
+    save_as_netcdf,
+    _netcdf_filename
 )
 from roguewave.timeseries_analysis.filtering import sos_filter
 from xarray import Dataset
@@ -37,7 +44,9 @@ from roguewave import FrequencySpectrum
 from roguewave.tools.time import datetime64_to_timestamp
 from datetime import datetime
 from numpy import linspace, errstate, sqrt, interp, full_like, inf, cos, sin, pi, nan
-
+import xarray
+import os
+import typing
 
 # Main Functions
 # ---------------------------------
@@ -541,3 +550,87 @@ def read_raw_spectra(
     data.reset_index(inplace=True)
     data.drop(columns="source_index", inplace=True)
     return data
+
+def read_rbr(
+    path: str,
+    start_date: datetime = None,
+    end_date: datetime = None,
+    postprocess: bool = True,
+    sampling_interval_seconds: float = 0.5,
+    sensor_type:typing.Literal['RBRD','RBRDT'] = 'RBRD',
+    cache_as_netcdf=False,
+) -> DataFrame:
+    """
+    Read RBR data from csv files and return a dataframe containing the data.
+
+    :param path: Path containing Spotter CSV files
+
+    :param start_date: If only a subset of the data is needed we can avoid
+                       loading all data, this denotes the start date of the
+                       desired interval. If given, only data after the
+                       start_date is loaded (if available).
+                       NOTE: this requires that LOC files are present.
+
+    :param end_date: If only a subset of the data is needed we can avoid
+                     loading all data, this denotes the end date of the
+                     desired interval. If given, only data before the
+                     end_date is loaded (if available).
+                     NOTE: this requires that LOC files are present.
+
+    :param postprocess: whether to remove data points with no GPS fix, and to convert from microbar to pascal.
+
+    :param sampling_interval_seconds: The sampling interval of the data in seconds. This is used to determine whether
+                                      data points are continuous or not.
+
+    :param sensor_type: The type of sensor to read. Must be either "RBRD" or "RBRDT".
+        "RBRD" is the standard RBR sensor, which only measures pressure.
+        "RBRDT" is the RBR sensor with a temperature sensor, which measures pressure and temperature.
+
+    :param cache_as_netcdf: If True, the data is saved as a netcdf file in the same directory as the csv files. If the
+                            netcdf file already exists, the data is read from the netcdf file instead of the csv files.
+
+    :return: Pandas Dataframe. Returns dataframe with columns
+
+             "time": epoch time (UTC, epoch of 1970-1-1, i.e. Unix Epoch).
+             "pressure (pascal)": Pressure in pascal
+             "group id": Identifier that indicates continuous data groups (data without gaps).
+
+    """
+    if not sensor_type in ['RBRD','RBRDT']:
+        raise ValueError('Invalid type, must be either "RBRD" or "RBRDT"')
+
+    if cache_as_netcdf and os.path.exists(_netcdf_filename(path, sensor_type)):
+        raw_data = xarray.open_dataset(_netcdf_filename(path, sensor_type)).to_dataframe()
+    else:
+        raw_data = read_and_concatenate_spotter_csv(
+            path,
+            sensor_type,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    # Only keep the data from the smartmooring file for the sensor type of interest
+    raw_data = raw_data[
+        raw_data['sensor'] == sensor_type
+    ]
+
+    # save as netcdf if requested
+    if cache_as_netcdf:
+        save_as_netcdf(raw_data, path, sensor_type)
+
+    if not postprocess:
+        return raw_data
+
+    # If the gps does not yet have a fix, the time is set to 1970-01-01. We remove these data points. The filter date
+    # is arbitrary- but since no smartmoorings existed before 2020, we can safely remove all data before 2020.
+    raw_data = raw_data[
+        raw_data['time'] > pd.Timestamp('1990-01-01')
+    ]
+
+    # Output processed data in a dataframe.
+    dataframe = DataFrame()
+    dataframe["time"] = raw_data["time"]
+    dataframe["pressure (pascal)"] = raw_data["pressure (microbar)"] / 10
+    dataframe = _mark_continuous_groups(dataframe, sampling_interval_seconds)
+
+    return dataframe

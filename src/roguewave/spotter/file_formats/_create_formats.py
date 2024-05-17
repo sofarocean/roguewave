@@ -379,6 +379,78 @@ _formats = {
             },
         ],
     },
+    "RBRDT": {
+        "sampling_interval_seconds": 0.5,
+        "time_column": "timestamp (ticks UTC)",
+        "pattern": "????_SMD.csv",
+        "ragged": False,
+        "dropna": True,
+        "drop": [],
+        "columns": [
+            {
+                "name": "timestamp (ticks UTC)",
+                "dtype": "float64",
+            },
+            {
+                "name": "link",
+                "dtype": "float64",
+            },
+            {
+                "name": "log",
+                "dtype": "str",
+            },
+            {
+                "name": "sensor",
+                "dtype": "str",
+            },
+            {
+                "name": "time (milis)",
+                "dtype": "float64",
+            },
+            {
+                "name": "pressure (microbar)",
+                "dtype": "float64",
+            },
+            {
+                "name": "temperature (microC)",
+                "dtype": "float64",
+            },
+        ],
+    },
+    "RBRD": {
+        "sampling_interval_seconds": 0.5,
+        "time_column": "timestamp (ticks UTC)",
+        "pattern": "????_SMD.csv",
+        "ragged": False,
+        "dropna": True,
+        "drop": [],
+        "columns": [
+            {
+                "name": "timestamp (ticks UTC)",
+                "dtype": "float64",
+            },
+            {
+                "name": "link",
+                "dtype": "float64",
+            },
+            {
+                "name": "log",
+                "dtype": "str",
+            },
+            {
+                "name": "sensor",
+                "dtype": "str",
+            },
+            {
+                "name": "time (milis)",
+                "dtype": "float64",
+            },
+            {
+                "name": "pressure (microbar)",
+                "dtype": "float64",
+            },
+        ],
+    },
 }
 
 if __name__ == "__main__":

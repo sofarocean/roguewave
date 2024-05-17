@@ -13,7 +13,7 @@ from roguewave.tools.time import to_datetime64
 import xarray
 
 CSV_TYPES = Literal[
-    "FLT", "SPC", "GPS", "GMT", "LOC", "BARO", "BARO_RAW", "SST", "RAINDB"
+    "FLT", "SPC", "GPS", "GMT", "LOC", "BARO", "BARO_RAW", "SST", "RAINDB", "RBRD", "RBRDT"
 ]
 
 
@@ -210,14 +210,6 @@ def _process_file(file, csv_format, nrows=None):
             nrows=nrows,
         )
 
-    # Assign the designated time column.
-    df["time"] = df[csv_format["time_column"]]
-
-    # If the time is in millis (milliseconds since system start) convert to unix epoch time in seconds (still float type
-    # here)
-    if csv_format["time_column"] == "millis":
-        df["time"] = _milis_to_epoch(df["time"], file)
-
     # Convert the columns into the correct type. Coerce bad values to NaN values for numeric types.
     # (to note this is the reason we want to define numerics as floats, since integer do not contain a natural missing
     # value type)
@@ -233,11 +225,20 @@ def _process_file(file, csv_format, nrows=None):
             # TODO: what to do with malformed data in integer columns???
             df[name] = pandas.to_numeric(df[name], errors="coerce")
 
+    # Assign the designated time column.
+    df["time"] = df[csv_format["time_column"]]
+
+    # If the time is in millis (milliseconds since system start) convert to unix epoch time in seconds (still float type
+    # here)
+    if csv_format["time_column"] == "millis":
+        df["time"] = _milis_to_epoch(df["time"], file)
+
+    # Convert time to proper pandas datetime format
+    df["time"] = pandas.to_datetime(df["time"], unit="s",errors = 'coerce')
+
     # Drop NaN rows and remove any instances where we go back in time (only needed for raw GPS files).
     df = _quality_control(df, csv_format.get("dropna", True))
 
-    # Convert time to proper pandas datetime format
-    df["time"] = pandas.to_datetime(df["time"], unit="s")
 
     columns_to_drop = csv_format.get("drop", [])
     if columns_to_drop:
@@ -274,7 +275,7 @@ def _quality_control(dataframe: pandas.DataFrame, dropna) -> pandas.DataFrame:
         return dataframe
 
     while True:
-        positive_time = dataframe["time"].diff() > 0.0
+        positive_time = dataframe["time"].diff() > pandas.Timedelta(0.0, "s")
         positive_time[0] = True
         if all(positive_time.values[1:]):
             break
@@ -302,7 +303,7 @@ def _mark_continuous_groups(df: pandas.DataFrame, sampling_interval_seconds):
             int(sampling_interval_seconds * 1e9), "ns"
         )
         df["group id"] = (
-            df["time"].diff() > sampling_interval_seconds + timedelta64(100, "ms")
+            df["time"].diff() > 100*sampling_interval_seconds
         ).cumsum()
     else:
         df["group id"] = zeros(df.shape[0], dtype="int64")

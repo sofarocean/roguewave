@@ -197,7 +197,14 @@ def calculate_co_spectra(
 
     nyquist_index = fft_length // 2
     nsig = len(signals)
-    nt = len(signals[0])
+
+    # Scale the time so that it runs as [0,1,...]. Note, while we may have some jitter (not exactly integeres) here
+    # it is assumed there are no gaps in the signal.
+    time_base = (time_seconds - time_seconds[0]) * sampling_frequency
+
+    # Interpolate the time base to integer values
+    interpolated_time_base = numpy.arange(numpy.floor(time_base[-1])+1)
+    nt = len(interpolated_time_base)
 
     # Initialize output and work arrays
     output = numpy.zeros((nsig, nsig, nyquist_index), dtype="complex_")
@@ -206,12 +213,9 @@ def calculate_co_spectra(
 
     # Correct the signals for mean contribution (detrend)
     for index, signal in enumerate(signals):
-        zero_mean_signals[index, :] = signal - numpy.nanmean(signal)
+        interpolated_signal = numpy.interp(interpolated_time_base, time_base, signal)
+        zero_mean_signals[index, :] = interpolated_signal - numpy.nanmean(signal)
 
-    # Scale the time so that it runs as [0,1,...]. Note, while we may have some jitter (not exactly integeres) here
-    # it is assumed there are no gaps in the signal.
-    time_base = (time_seconds - time_seconds[0]) * sampling_frequency
-    time_delta = numpy.diff(time_base)
 
     # initialize counters
     number_of_realizations = 0  # Number of valid realizations that fit in the signal
@@ -239,8 +243,9 @@ def calculate_co_spectra(
 
         # If there are any time delta's larger than the sample time step we reject the realization
         if (
-            numpy.any(time_delta[istart:iend] > 1 + timebase_jitter_fraction)
-            or nan_in_signal
+            #numpy.any(time_delta[istart:iend] > 1 + timebase_jitter_fraction)
+            #or nan_in_signal
+            nan_in_signal
         ):
             istart = istart + len(window) - overlap
             continue

@@ -11,18 +11,14 @@ from roguewave.timeseries_analysis import (
 )
 from roguewave.tools.time_integration import (
     cumulative_distance,
-    complex_response,
 )
-from roguewavespectrum.spotter._spotter_post_processing import fill_zeros_or_nan_in_tail
-from roguewave.wavespectra import concatenate_spectra
 from roguewave.timeseries_analysis import estimate_frequency_spectrum
 from roguewave.tools.time import datetime64_to_timestamp
 from pandas import DataFrame, concat
 from roguewavespectrum import Spectrum
 from .read_csv_data import read_displacement, read_gps, read_rbr, read_baro
 from .parser import apply_to_group
-from numpy import real, conjugate, linspace
-from roguewavespectrum.spotter._spotter_post_processing import spotter_frequency_response_correction, post_process_api_spectrum
+from roguewavespectrum.spotter._spotter_post_processing import spotter_frequency_response_correction
 from roguewave.spotter._pressure_analysis import surface_elevation_from_pressure, sample_irregular_signal, frequency_scale
 from roguewave.wavephysics.fluidproperties import WATER_DENSITY, GRAVITATIONAL_ACCELERATION
 from scipy.signal import butter
@@ -147,78 +143,6 @@ def spectra_from_displacement(path, **kwargs) -> Spectrum:
     return spectrum
 
 
-def spotter_frequency_response_correction(
-    spectrum: FrequencySpectrum, order=4, n=1, sampling_frequency=2.5
-) -> FrequencySpectrum:
-    """
-    Correct for the spectral dampening/amplification caused by numerical integration of velocities.
-    :param spectrum:
-    :param order:
-    :param n:
-    :return:
-    """
-    amplification_factor = complex_response(
-        spectrum.frequency.values / sampling_frequency, order, n
-    )
-    R = real(amplification_factor * conjugate(amplification_factor))
-    return spectrum.multiply(1 / R, ["frequency"])
-
-
-def spotter_api_spectra_post_processing(
-    spectrum: FrequencySpectrum, maximum_frequency=LAST_BIN_FREQUENCY_END
-):
-    """
-    Post processing to spectra obtained from the API.
-
-    :param spectrum: input spectra.
-    :param maximum_frequency: maximum frequency to extrapolate to.
-    :return:
-    """
-    maximum_index = int(maximum_frequency / SPOTTER_FREQUENCY_RESOLUTION)
-    new_frequencies = (
-        linspace(3, maximum_index, maximum_index - 2, endpoint=True)
-        * SPOTTER_FREQUENCY_RESOLUTION
-    )
-
-    if len(spectrum.frequency) == 39:
-        new_frequencies[0] = spectrum.frequency[0]
-
-        last_bin_energy = spectrum.variance_density.values[..., -1] * LAST_BIN_WIDTH
-        last_bin_moments = {
-            "a1": spectrum.a1[..., -1],
-            "b1": spectrum.b1[..., -1],
-            "a2": spectrum.a2[..., -1],
-            "b2": spectrum.b2[..., -1],
-        }
-
-        spectrum = spectrum.interpolate_frequency(new_frequencies)
-        spectrum = spectrum.bandpass(fmax=LAST_BIN_FREQUENCY_START)
-
-        # Correct for integration errors in the tail
-        spectrum = spotter_frequency_response_correction(spectrum)
-
-        # Extrapolate tail given the known energy in last bin. Also correct for potential underflow in the tail
-        spectrum = spectrum.extrapolate_tail(
-            maximum_frequency,
-            tail_energy=last_bin_energy,
-            tail_bounds=(LAST_BIN_FREQUENCY_START, LAST_BIN_FREQUENCY_END),
-            tail_moments=last_bin_moments,
-            tail_frequency=new_frequencies[new_frequencies > LAST_BIN_FREQUENCY_START],
-        )
-    else:
-        # Chop to desired max freq
-        spectrum = spectrum.bandpass(fmax=maximum_frequency)
-
-        # Correct for integration errors in the tail
-        spectrum = spotter_frequency_response_correction(spectrum)
-
-        # Correct for potential underflow in the tail
-        spectrum = fill_zeros_or_nan_in_tail(spectrum)
-
-        spectrum = spectrum.interpolate_frequency(new_frequencies)
-
-    return spectrum
-
 def surface_elevation_from_rbr(
         path,
         sensor_type,
@@ -332,7 +256,7 @@ def spectra_from_rbr_and_spotter(
         sampling_frequency_rbr=2,
         bandpass=False,
         cache_as_netcdf=True,
-        **kwargs) -> typing.Tuple[FrequencySpectrum,FrequencySpectrum]:
+        **kwargs) -> typing.Tuple[Spectrum,Spectrum]:
 
     data = surface_elevation_from_rbr_and_spotter(
         path,

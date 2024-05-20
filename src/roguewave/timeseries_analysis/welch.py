@@ -63,6 +63,12 @@ def estimate_frequency_spectrum(
 
     options = _to_numba_dict(options)
 
+    if x is None:
+        x = numpy.zeros_like(z)
+
+    if y is None:
+        y = numpy.zeros_like(z)
+
     spectral_time, frequencies, co_spectra = estimate_co_spectra(
         epoch_time,
         (x, y, z),

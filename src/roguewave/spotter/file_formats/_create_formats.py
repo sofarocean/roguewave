@@ -305,14 +305,14 @@ _formats = {
     },
     "BARO_RAW": {
         "sampling_interval_seconds": 0.2,
-        "time_column": "timestamp (ticks/UTC)",
+        "time_column": "timestamp (ticks UTC)",
         "pattern": "????_BARO_RAW.csv",
         "ragged": False,
         "dropna": True,
         "drop": [],
         "columns": [
             {
-                "name": "timestamp (ticks/UTC)",
+                "name": "timestamp (ticks UTC)",
                 "dtype": "float64",
             },
             {
@@ -327,14 +327,14 @@ _formats = {
     },
     "BARO": {
         "sampling_interval_seconds": 60,
-        "time_column": "timestamp (ticks/UTC)",
+        "time_column": "timestamp (ticks UTC)",
         "pattern": "????_BARO.csv",
         "ragged": False,
         "dropna": True,
         "drop": [],
         "columns": [
             {
-                "name": "timestamp (ticks/UTC)",
+                "name": "timestamp (ticks UTC)",
                 "dtype": "float64",
             },
             {
@@ -345,14 +345,14 @@ _formats = {
     },
     "SST": {
         "sampling_interval_seconds": 60,
-        "time_column": "timestamp (ticks/UTC)",
+        "time_column": "timestamp (ticks UTC)",
         "pattern": "????_SST.csv",
         "ragged": False,
         "dropna": True,
         "drop": [],
         "columns": [
             {
-                "name": "timestamp (ticks/UTC)",
+                "name": "timestamp (ticks UTC)",
                 "dtype": "float64",
             },
             {
@@ -363,14 +363,14 @@ _formats = {
     },
     "RAINDB": {
         "sampling_interval_seconds": 300,
-        "time_column": "timestamp (ticks/UTC)",
+        "time_column": "timestamp (ticks UTC)",
         "pattern": "????_SST.csv",
         "ragged": False,
         "dropna": True,
         "drop": [],
         "columns": [
             {
-                "name": "timestamp (ticks/UTC)",
+                "name": "timestamp (ticks UTC)",
                 "dtype": "float64",
             },
             {

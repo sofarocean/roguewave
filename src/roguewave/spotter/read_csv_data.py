@@ -27,6 +27,7 @@ Public Functions:
 """
 import typing
 
+import numpy
 import pandas as pd
 from pandas import DataFrame, concat, to_datetime
 
@@ -195,6 +196,7 @@ def read_baro(
     path: str,
     start_date: datetime = None,
     end_date: datetime = None,
+    postprocess: bool = False,
 ):
     """
     Read filtered barometer files.
@@ -213,13 +215,22 @@ def read_baro(
                      end_date is loaded (if available).
                      NOTE: this requires that LOC files are present.
     """
-    return read_and_concatenate_spotter_csv(path, "BARO", start_date, end_date)
+    raw_data = read_and_concatenate_spotter_csv(path, "BARO", start_date, end_date)
+    if not postprocess:
+        return raw_data
+
+    data = DataFrame()
+    data["time"] = raw_data["time"]
+    data["pressure (pascal)"] = raw_data["pressure (mbar)"] * 100
+    return data
+
 
 
 def read_baro_raw(
     path: str,
     start_date: datetime = None,
     end_date: datetime = None,
+    postprocess: bool = True,
 ):
     """
     Read raw barometer files (no filtering)
@@ -238,7 +249,14 @@ def read_baro_raw(
                      end_date is loaded (if available).
                      NOTE: this requires that LOC files are present.
     """
-    return read_and_concatenate_spotter_csv(path, "BARO_RAW", start_date, end_date)
+    raw_data = read_and_concatenate_spotter_csv(path, "BARO_RAW", start_date, end_date)
+    if not postprocess:
+        return raw_data
+
+    data = DataFrame()
+    data["time"] = raw_data["time"]
+    data["pressure (pascal)"] = raw_data["pressure (mbar)"] * 100
+    return data
 
 
 def read_sst(
@@ -559,6 +577,7 @@ def read_rbr(
     sampling_interval_seconds: float = 0.5,
     sensor_type:typing.Literal['RBRD','RBRDT'] = 'RBRD',
     cache_as_netcdf=False,
+    **kwargs
 ) -> DataFrame:
     """
     Read RBR data from csv files and return a dataframe containing the data.
@@ -596,6 +615,13 @@ def read_rbr(
              "group id": Identifier that indicates continuous data groups (data without gaps).
 
     """
+
+
+
+    correct_for_atmospheric_pressure = kwargs.get("correct_for_atmospheric_pressure", True)
+    mean_pressure_pa = kwargs.get("mean_pressure_pa", 101325)
+    use_barometer = kwargs.get("use_barometer", True)
+
     if not sensor_type in ['RBRD','RBRDT']:
         raise ValueError('Invalid type, must be either "RBRD" or "RBRDT"')
 
@@ -632,5 +658,18 @@ def read_rbr(
     dataframe["time"] = raw_data["time"]
     dataframe["pressure (pascal)"] = raw_data["pressure (microbar)"] / 10
     dataframe = _mark_continuous_groups(dataframe, sampling_interval_seconds)
+
+    if correct_for_atmospheric_pressure:
+        interpolated_pressure = mean_pressure_pa
+        if use_barometer:
+            baro = read_baro(path,postprocess=True)
+            baro_pressure = baro["pressure (pascal)"].values.astype(float)
+            baro_time = baro["time"].values.astype(float)
+            rbr_time = dataframe["time"].values.astype(float)
+            interpolated_pressure = interp(rbr_time, baro_time, baro_pressure)
+        else:
+            pass
+
+        dataframe["pressure (pascal)"] = dataframe["pressure (pascal)"] - interpolated_pressure
 
     return dataframe

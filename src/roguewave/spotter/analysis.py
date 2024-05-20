@@ -1,3 +1,9 @@
+import typing
+
+import numpy as np
+import pandas
+import pandas as pd
+
 from roguewave.timeseries_analysis import (
     pipeline,
     DEFAULT_SPOTTER_PIPELINE,
@@ -8,13 +14,21 @@ from roguewave.tools.time_integration import (
     complex_response,
 )
 from roguewave.wavespectra.spectrum import fill_zeros_or_nan_in_tail
+from roguewave.wavespectra import concatenate_spectra
 from roguewave.timeseries_analysis import estimate_frequency_spectrum
 from roguewave.tools.time import datetime64_to_timestamp
-from pandas import DataFrame
+from pandas import DataFrame, concat
 from roguewave import FrequencySpectrum
-from .read_csv_data import read_displacement, read_gps
+from .read_csv_data import read_displacement, read_gps, read_rbr, read_baro
 from .parser import apply_to_group
 from numpy import real, conjugate, linspace
+from roguewave.spotter._pressure_analysis import surface_elevation_from_pressure, sample_irregular_signal, frequency_scale
+from roguewave.wavephysics.fluidproperties import WATER_DENSITY, GRAVITATIONAL_ACCELERATION
+from scipy.signal import butter
+import os
+from roguewave.timeseries_analysis.filtering import sos_filter
+from roguewave.spotter.parser import _netcdf_filename, save_as_netcdf
+import xarray as xr
 
 LAST_BIN_WIDTH = 0.3
 LAST_BIN_FREQUENCY_START = 0.5
@@ -203,3 +217,159 @@ def spotter_api_spectra_post_processing(
         spectrum = spectrum.interpolate_frequency(new_frequencies)
 
     return spectrum
+
+def surface_elevation_from_rbr(
+        path,
+        sensor_type,
+        sensor_height=0,
+        sampling_frequency=2,
+        cache_as_netcdf=True,
+        **kwargs):
+
+    data = read_rbr(path, sensor_type=sensor_type, cache_as_netcdf=cache_as_netcdf, **kwargs)
+    water_density = kwargs.get("density", WATER_DENSITY)
+    gravitational_acceleration = kwargs.get("gravitational_acceleration", GRAVITATIONAL_ACCELERATION)
+
+    dataframes = []
+    for group in data['group id'].unique():
+        data_group = data[ data['group id'] == group]
+        pressure_head_meter = data_group['pressure (pascal)'].values / water_density / gravitational_acceleration
+        irregular_time_in_seconds =data_group['time'].values.astype(float)/1e9
+
+        if np.nanmean(data_group['pressure (pascal)'].values) < 0:
+            continue
+
+        time_in_seconds,p = sample_irregular_signal(
+            irregular_time_in_seconds,
+            pressure_head_meter,
+            sampling_frequency
+        )
+
+        dataframe = surface_elevation_from_pressure(p,sampling_frequency,sensor_height=sensor_height,**kwargs)
+
+        dataframe['time'] = pandas.to_datetime(time_in_seconds,unit='s')
+        dataframe['group id'] = group
+        dataframes.append(dataframe)
+
+    return pd.concat(dataframes)
+
+
+def surface_elevation_from_rbr_and_spotter(
+        path,
+        sensor_type,
+        sensor_height=0,
+        sampling_frequency_rbr=2,
+        bandpass=True,
+        cache_as_netcdf=True,
+        **kwargs
+):
+    _str = f'_{sensor_type}_{sensor_height}_{sampling_frequency_rbr}_{bandpass}'
+    for key in kwargs:
+        _str += f'_{key}={kwargs[key]}'
+
+    filename = f'{sensor_type}_and_spotter'+_str
+    filepath = _netcdf_filename(path,filename  )
+    if cache_as_netcdf and os.path.exists(filepath):
+        return xr.open_dataset(filepath).to_dataframe()
+
+    rbr = surface_elevation_from_rbr(path, sensor_type, sensor_height,sampling_frequency=sampling_frequency_rbr,
+                                     cache_as_netcdf=cache_as_netcdf, **kwargs)
+
+    spotter = read_displacement(path, cache_as_netcdf=cache_as_netcdf, postprocess=True)
+
+    data = DataFrame()
+
+    spotter_values = spotter['z'].values
+    spotter_time = spotter['time'].values.astype(float) / 1e9
+
+    rbr_time = rbr['time'].values.astype(float) / 1e9
+
+    data['time'] = rbr['time']
+    data['rbr surface elevation (meter)'] = rbr['surface elevation (meter)']
+    data['spotter surface elevation (meter)'] = np.interp(rbr_time, spotter_time, spotter_values)
+    data['depth (meter)'] = rbr['depth (meter)']
+    data['group id'] = rbr['group id']
+
+    if bandpass:
+        data = _band_pass_filter(data, sampling_frequency_rbr, **kwargs)
+
+    if cache_as_netcdf:
+        save_as_netcdf(data, path, filename)
+    return data
+
+
+def _band_pass_filter(data, sampling_frequency, **kwargs):
+    def func(data):
+        df = pd.DataFrame()
+        df['time'] = data['time']
+
+
+        keys = ['rbr surface elevation (meter)', 'spotter surface elevation (meter)']
+        df['depth (meter)'] = data['depth (meter)']
+        depth = data['depth (meter)'].values[0]
+        freq = 2.*frequency_scale(depth)
+
+        if freq < sampling_frequency/2:
+            sos = butter(4, [0.033,freq], btype='bandpass', fs=sampling_frequency, output='sos')
+        else:
+            sos = butter(4, 0.033, btype='highpass', fs=sampling_frequency, output='sos')
+        for key in keys:
+            if len(data[key].values) < 100:
+                df[key] = data[key]
+            else:
+                df[key] = sos_filter(data[key].values, 'filtfilt', sos=sos)
+        return df
+
+    return apply_to_group(func, data)
+
+
+def spectra_from_rbr_and_spotter(
+        path,
+        sensor_type,
+        window_length,
+        sensor_height=0,
+        sampling_frequency_rbr=2,
+        bandpass=False,
+        cache_as_netcdf=True,
+        **kwargs) -> typing.Tuple[FrequencySpectrum,FrequencySpectrum]:
+
+    data = surface_elevation_from_rbr_and_spotter(
+        path,
+        sensor_type,
+        sensor_height,
+        sampling_frequency_rbr,
+        bandpass=bandpass,
+        cache_as_netcdf=cache_as_netcdf,
+        **kwargs
+    )
+
+    time = data['time'].values.astype(float) / 1e9
+    rbr = data['rbr surface elevation (meter)'].values
+    spot = data['spotter surface elevation (meter)'].values
+
+    x = np.zeros_like(rbr)
+    y = np.zeros_like(rbr)
+
+    spot_spectrum = estimate_frequency_spectrum(
+        time,
+        x,
+        y,
+        spot,
+        segment_length_seconds=window_length,
+        sampling_frequency=sampling_frequency_rbr,
+        **kwargs
+    )
+
+
+    rbr_spectrum = estimate_frequency_spectrum(
+        time,
+        x,
+        y,
+        rbr,
+        segment_length_seconds=window_length,
+        sampling_frequency=sampling_frequency_rbr,
+        **kwargs
+    )
+
+
+    return rbr_spectrum, spot_spectrum

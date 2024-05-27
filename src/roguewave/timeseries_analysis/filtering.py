@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 from typing import Literal
 from numpy import interp
 from scipy.signal import sosfilt, sosfiltfilt, butter
-
+from numpy.fft import rfft, irfft, rfftfreq
 
 @njit(cache=True)
 def exponential_filter(time_seconds, signal, options: dict = None):
@@ -313,6 +313,15 @@ def sos_filter(
         raise ValueError(f"Unknown direction {direction}")
     output[mask] = nan
     return output
+
+def fft_filter(signal: NDArray, sampling_frequency, passband, **kwargs) -> NDArray:
+    nt = len(signal)
+    f = rfftfreq(nt, 1 / sampling_frequency)
+
+    amplitudes = rfft(signal,nt)
+    mask = (f >= passband[0]) & (f <= passband[1])
+    amplitudes[~mask] = 0
+    return irfft(amplitudes,nt)
 
 
 @njit(cache=True)

@@ -204,14 +204,19 @@ def surface_elevation_from_rbr_and_spotter(
 
     data = DataFrame()
 
-    spotter_values = spotter['z'].values
+
+    spotter_values_z = spotter['z'].values
+    spotter_values_x = spotter['x'].values
+    spotter_values_y = spotter['y'].values
     spotter_time = spotter['time'].values.astype(float) / 1e9
 
     rbr_time = rbr['time'].values.astype(float) / 1e9
 
     data['time'] = rbr['time']
     data['rbr surface elevation (meter)'] = rbr['surface elevation (meter)']
-    data['spotter surface elevation (meter)'] = np.interp(rbr_time, spotter_time, spotter_values)
+    data['spotter surface elevation (meter)'] = np.interp(rbr_time, spotter_time, spotter_values_z)
+    data['spotter eastward displacement (meter)'] = np.interp(rbr_time, spotter_time, spotter_values_x)
+    data['spotter northward displacement (meter)'] = np.interp(rbr_time, spotter_time, spotter_values_y)
     data['depth (meter)'] = rbr['depth (meter)']
     data['group id'] = rbr['group id']
 
@@ -229,7 +234,8 @@ def _band_pass_filter(data, sampling_frequency, **kwargs):
         df['time'] = data['time']
 
 
-        keys = ['rbr surface elevation (meter)', 'spotter surface elevation (meter)']
+        keys = ['rbr surface elevation (meter)', 'spotter surface elevation (meter)',
+                'spotter eastward displacement (meter)', 'spotter northward displacement (meter)']
         df['depth (meter)'] = data['depth (meter)']
         depth = data['depth (meter)'].values[0]
         freq = 2.*frequency_scale(depth)

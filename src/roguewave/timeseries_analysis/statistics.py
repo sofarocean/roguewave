@@ -1,11 +1,17 @@
 import numpy as np
 from scipy.signal import hilbert
 import pandas as pd
+
 def zero_mean(signal):
     return signal - np.nanmean(signal)
 def third_order_moment(signal):
     z = hilbert(zero_mean(signal))
     return np.nanmean(z*z*np.conj(z))*3/4
+
+def fourth_order_moment(signal):
+    z = hilbert(zero_mean(signal))
+    return 3*np.nanmean(z*z*np.conj(z)*np.conj(z))/8 + 4*np.nanmean(z*z*z*np.conj(z))/8
+
 def normalized_third_order_moment(signal):
     moment = third_order_moment(signal)
     norm = variance(signal)**(3/2)
@@ -14,6 +20,9 @@ def skewness(signal):
     return np.real(third_order_moment(signal))
 def asymmetry(signal):
     return np.imag(third_order_moment(signal))
+
+def kurtosis(signal):
+    return np.real(third_order_moment(signal))
 
 def normalized_skewness(signal):
     return np.real(normalized_third_order_moment(signal))
@@ -34,6 +43,7 @@ def bulk_properties(signal) -> pd.DataFrame:
         ],
         index=[0],
     )
+
     df['mean'] = np.nanmean(signal)
     df["variance"] = variance(signal)
     df["hs"] = 4*np.sqrt(variance(signal))

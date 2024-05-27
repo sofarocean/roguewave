@@ -9,7 +9,7 @@ from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
     intrinsic_group_speed,
 )
-from linearwavetheory.settings import PhysicsOptions
+from linearwavetheory.settings import physics_options
 from roguewave.wavespectra.estimators import (
     estimate_directional_distribution,
     Estimators,
@@ -869,10 +869,10 @@ class WaveSpectrum(DatasetWrapper):
         coords = {}
         for dim in return_dimensions:
             coords[dim] = self.dataset[dim].values
-        physics_options = PhysicsOptions(wave_type='gravity')
+        _physics_options = physics_options(wave_type='gravity')
         return DataArray(
             data=inverse_intrinsic_dispersion_relation(radian_frequency, depth,
-                                                       physics_options=physics_options),
+                                                       physics_options=_physics_options),
             dims=return_dimensions,
             coords=coords,
         )

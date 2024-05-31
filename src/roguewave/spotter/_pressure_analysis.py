@@ -222,8 +222,9 @@ def surface_elevation_from_pressure(
 
     # Nonlinear estimate
     # ------------------
+    nonlinear_sign = kwargs.get("non_linear_sign", 1)
     if kwargs.get("nonlinear_contribution", False):
-        dataframe['surface elevation (meter)'] += (
+        dataframe['surface elevation (meter)'] += nonlinear_sign*(
                 _non_linear_contribution(pressure_head_meter, sampling_frequency, sensor_height) * window)
 
     return dataframe

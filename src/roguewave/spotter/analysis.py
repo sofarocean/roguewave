@@ -123,7 +123,7 @@ def spectra_from_raw_gps(
 
 
 def spectra_from_displacement(path, **kwargs) -> Spectrum:
-    displacement = read_displacement(path)
+    displacement = read_displacement(path,cache_as_netcdf=True)
     time = datetime64_to_timestamp(displacement["time"].values)
 
     kwargs = kwargs.copy()
@@ -283,8 +283,8 @@ def spectra_from_rbr_and_spotter(
 
     spot_spectrum = estimate_frequency_spectrum(
         time,
-        x,
-        y,
+        data['spotter eastward displacement (meter)'].values,
+        data['spotter northward displacement (meter)'].values,
         spot,
         segment_length_seconds=window_length,
         sampling_frequency=sampling_frequency_rbr,

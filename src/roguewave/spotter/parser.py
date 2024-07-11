@@ -58,7 +58,7 @@ def read_and_concatenate_spotter_csv(
     )
 
     if len(source_files) == 0:
-        raise FileNotFoundError("No files to parse")
+        raise FileNotFoundError(f"No files to parse in {path}")
 
     data_frames = [
         _process_file(source_file, csv_format) for source_file in source_files

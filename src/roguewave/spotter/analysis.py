@@ -24,6 +24,7 @@ from roguewave.wavephysics.fluidproperties import WATER_DENSITY, GRAVITATIONAL_A
 from scipy.signal import butter
 import os
 from roguewave.timeseries_analysis.filtering import sos_filter
+from roguewave.timeseries_analysis.sampling import resample
 from roguewave.spotter.parser import _netcdf_filename, save_as_netcdf
 import xarray as xr
 
@@ -155,13 +156,25 @@ def surface_elevation_from_rbr(
     water_density = kwargs.get("density", WATER_DENSITY)
     gravitational_acceleration = kwargs.get("gravitational_acceleration", GRAVITATIONAL_ACCELERATION)
 
+    MINIMUM_SAMPLE_LENGTH = 900
+
+
     dataframes = []
     for group in data['group id'].unique():
         data_group = data[ data['group id'] == group]
         pressure_head_meter = data_group['pressure (pascal)'].values / water_density / gravitational_acceleration
         irregular_time_in_seconds =data_group['time'].values.astype(float)/1e9
 
+        # If the pressure head is not a finite number/nan - exclude
+        if not np.all(np.isfinite(pressure_head_meter)):
+            continue
+
+        # If depth is negative - exclude
         if np.nanmean(data_group['pressure (pascal)'].values) < 0:
+            continue
+
+        # If the sample is too short - exclude
+        if len(irregular_time_in_seconds) < MINIMUM_SAMPLE_LENGTH:
             continue
 
         time_in_seconds,p = sample_irregular_signal(
@@ -171,6 +184,14 @@ def surface_elevation_from_rbr(
         )
 
         dataframe = surface_elevation_from_pressure(p,sampling_frequency,sensor_height=sensor_height,**kwargs)
+
+        # If the surface elevation is ever higher than the depth - exclude
+        if dataframe['surface elevation (meter)'].max() > dataframe['depth (meter)'].max():
+            continue
+
+        # If the surface elevation is ever higher lower than the depth - exclude
+        if dataframe['surface elevation (meter)'].min() < -dataframe['depth (meter)'].max():
+            continue
 
         dataframe['time'] = pandas.to_datetime(time_in_seconds,unit='s')
         dataframe['group id'] = group

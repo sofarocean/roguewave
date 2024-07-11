@@ -1,4 +1,4 @@
-from roguewave.timeseries_analysis.upsampling import upsample
+from roguewave.timeseries_analysis.sampling import upsample
 from numpy import sin, pi, linspace
 from numpy.testing import assert_allclose
 

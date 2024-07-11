@@ -78,7 +78,7 @@ def colocate_points(
                 output.at[index_a, key] = data_entry
 
     # Drop nan entries (no matches) and return dataframe
-    return output.dropna()
+    return output.dropna(how="all")
 
 
 def _construct_tree(dataset: DataFrame, radius: float, time_delta: timedelta) -> KDTree:

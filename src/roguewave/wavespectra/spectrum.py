@@ -290,7 +290,7 @@ class WaveSpectrum(DatasetWrapper):
             length = 1
             shape = (1,)
         else:
-            length = numpy.product(shape)
+            length = numpy.prod(shape)
 
         # Calculate the flattened shape
         new_shape = (length,)

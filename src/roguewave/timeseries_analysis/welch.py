@@ -128,10 +128,10 @@ def estimate_co_spectra(
         fft_length = len(window)
 
     number_of_frequencies = fft_length // 2
-
+    
     nsig = len(signals)
     co_spectra = numpy.empty(
-        (number_of_spectra, nsig, nsig, number_of_frequencies), dtype="complex_"
+        (number_of_spectra, nsig, nsig, number_of_frequencies), dtype=numpy.complex128
     )
     spectral_time = numpy.empty(number_of_spectra)
 
@@ -213,8 +213,8 @@ def calculate_co_spectra(
     nt = len(interpolated_time_base)
 
     # Initialize output and work arrays
-    output = numpy.zeros((nsig, nsig, nyquist_index), dtype="complex_")
-    ffts = numpy.zeros((nsig, nyquist_index), dtype="complex_")
+    output = numpy.zeros((nsig, nsig, nyquist_index), dtype=numpy.complex128)
+    ffts = numpy.zeros((nsig, nyquist_index), dtype=numpy.complex128)
     zero_mean_signals = numpy.zeros((nsig, nt))
 
     # Correct the signals for mean contribution (detrend)

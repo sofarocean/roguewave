@@ -1,3 +1,4 @@
+import numpy
 from numba import njit
 from numpy import (
     empty_like,
@@ -151,7 +152,7 @@ def complex_response(
 
     normalized_omega = 2j * pi * normalized_frequency
 
-    response_factor = zeros_like(normalized_frequency, dtype="complex_")
+    response_factor = zeros_like(normalized_frequency, dtype=numpy.complex128)
     for ii in range(-number_of_explicit_points, number_of_implicit_points):
         response_factor += stencil[ii + number_of_explicit_points] * exp(
             normalized_omega * ii

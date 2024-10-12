@@ -4,6 +4,7 @@ from roguewave.tools.time import to_datetime_utc, to_datetime64
 from roguewavespectrum import (
     Spectrum,
     BuoySpectrum,
+    concatenate_spectra
 )
 
 # model time

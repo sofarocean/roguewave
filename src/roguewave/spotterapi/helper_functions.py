@@ -1,13 +1,14 @@
 from pysofar.sofar import SofarApi
 from typing import List, Dict, MutableMapping, Union, Any
 from pandas import DataFrame
-from numpy import unique, inf, array
+from numpy import unique, inf, array,atleast_1d
 from roguewavespectrum import create_spectrum1d, Spectrum
 from roguewave import (
     to_datetime64,
     to_datetime_utc,
 )
 from pandas import Timestamp
+import xarray as xr
 
 # SofarAPI instance.
 _API = None
@@ -113,18 +114,20 @@ def _get_class(key, data) -> Union[MutableMapping, Spectrum]:
     }
 
     if key == "frequencyData":
-        return create_spectrum1d(
-            coordinates=[
-                ("time", array(to_datetime64([data["timestamp"]]))),
-                ("frequency", array(data["frequency"])),
-            ],
-            variance_density=array(data["varianceDensity"])[None,:],
-            a1=array(data["a1"])[None,:],
-            b1=array(data["b1"])[None,:],
-            a2=array(data["a2"])[None,:],
-            b2=array(data["b2"])[None,:],
-            depth=inf,
+        dataset = xr.Dataset(
+            data_vars={
+                "variance_density": (["time","frequency"], array(data["varianceDensity"])[None, :]),
+                "a1": (["time","frequency"], array(data["a1"])[None, :]),
+                "b1": (["time","frequency"], array(data["b1"])[None, :]),
+                "a2": (["time","frequency"], array(data["a2"])[None, :]),
+                "b2": (["time","frequency"], array(data["b2"])[None, :]),
+                "latitude": (["time"], atleast_1d(data['latitude'])),
+                "longitude": (["time"], atleast_1d(data['longitude'])),
+                "depth": (["time"], atleast_1d([inf])),
+            },
+            coords={"frequency": array(data["frequency"]),"time": array(to_datetime64([data["timestamp"]]))},
         )
+        return Spectrum(dataset)
     else:
         out = {}
         # Here we postprocess non-spectral data. We do three things:

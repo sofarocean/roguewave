@@ -1,5 +1,5 @@
 from roguewave.wavephysics.fluidproperties import AIR, WATER, GRAVITATIONAL_ACCELERATION
-from roguewave.wavespectra.operations import numba_directionally_integrate_spectral_data
+from .integration import numba_directionally_integrate_spectral_data
 from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
     intrinsic_group_speed,

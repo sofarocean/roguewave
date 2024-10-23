@@ -10,7 +10,7 @@ from linearwavetheory import (
 from roguewave.wavephysics.fluidproperties import (
     GRAVITATIONAL_ACCELERATION
 )
-from roguewave.wavespectra.operations import numba_directionally_integrate_spectral_data
+from .integration import numba_directionally_integrate_spectral_data
 
 
 class RomeroWaveBreakingParameters(TypedDict):

@@ -17,7 +17,7 @@ from roguewave.wavephysics.balance.stress import (
     _total_stress_point,
 )
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
-from roguewave.wavespectra.operations import numba_integrate_spectral_data
+from .integration import numba_integrate_spectral_data
 from roguewave.wavephysics.balance.balance import SourceTermBalance
 from xarray import DataArray, Dataset
 from roguewavespectrum import Spectrum

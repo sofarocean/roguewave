@@ -6,7 +6,7 @@ from roguewave.wavephysics.balance.stress import (
     _wave_supported_stress,
     _tail_supported_stress
 )
-from roguewave.wavespectra.operations import numba_integrate_spectral_data
+from .integration import numba_integrate_spectral_data
 from roguewave.wavephysics.balance.source_term import SourceTerm
 from xarray import DataArray, zeros_like, Dataset
 from typing import Literal

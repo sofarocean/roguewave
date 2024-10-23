@@ -1,7 +1,7 @@
 from numpy import pi, empty
 from typing import TypedDict
 from roguewave.wavephysics.balance import Dissipation
-from roguewave.wavespectra.operations import numba_directionally_integrate_spectral_data
+from .integration import  numba_directionally_integrate_spectral_data
 from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
     intrinsic_group_speed,

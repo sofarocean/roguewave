@@ -9,7 +9,7 @@ Authors: Pieter Bart Smit
 import typing
 import numpy
 from typing import Literal
-from roguewavespectrum import Spectrum, Spectrum, WaveSpectrum
+from roguewavespectrum import Spectrum
 from roguewave.wavephysics.balance import SourceTermBalance
 from xarray import Dataset
 from roguewave.wavephysics.roughness import charnock_roughness_length
@@ -75,7 +75,7 @@ def friction_velocity(
 
 
 def estimate_u10_from_spectrum(
-    spectrum: WaveSpectrum,
+    spectrum: Spectrum,
     method: _methods = "peak",
     fmax=0.5,
     power=4,

@@ -196,7 +196,7 @@ def equilibrium_range_values(
         i_max = numpy.min((i_max, nf - number_of_bins))
 
         i_counter = 0
-        shape = list(spectrum.shape())
+        shape = list(spectrum.shape)
         shape[-1] = i_max - i_min
         variance = numpy.zeros(shape) + numpy.inf
 

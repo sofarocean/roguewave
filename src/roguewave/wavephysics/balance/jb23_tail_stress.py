@@ -14,7 +14,7 @@ from numpy import (
     zeros,
     concatenate,
     min,
-    trapz,
+    trapezoid,
 )
 
 from roguewave.wavephysics.balance.solvers import numba_newton_raphson
@@ -139,7 +139,7 @@ def tail_stress_parametrization_jb23(
         wavenumbers, roughness_length, friction_velocity, tail_spectrum, parameters
     )
     integral = (
-        trapz(stress, wavenumbers) + background_stress * parameters["air_density"]
+        trapezoid(stress, wavenumbers) + background_stress * parameters["air_density"]
     )
 
     eastward_stress = integral * stress_east_fac

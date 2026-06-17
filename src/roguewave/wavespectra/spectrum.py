@@ -797,7 +797,7 @@ class WaveSpectrum(DatasetWrapper):
         range = {NAME_F: self._range(fmin, fmax)}
 
         property = property.fillna(0)
-        return numpy.trapz(
+        return numpy.trapezoid(
             property.isel(**range) * self.e.isel(**range), self.frequency[range]
         ) / self.m0(fmin, fmax)
 

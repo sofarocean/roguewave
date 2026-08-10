@@ -89,8 +89,12 @@ def read_header(resource: Resource,
     data["restart_type"] = fort_char.unpack(stream, 4)
 
     # Now we can read the number of spatial points and number of spectral points
-    data["nsea"] = fort_int.unpack(stream, 1)[0]
-    data["nspec"] = fort_int.unpack(stream, 1)[0]
+    # fort_int.unpack returns numpy.int32 scalars; cast to plain Python ints
+    # here so record_size_bytes (and nsea/nspec) match their `int` type
+    # annotation on MetaData and don't silently carry a narrow numpy dtype
+    # into downstream arithmetic (see RestartFile._byte_index).
+    data["nsea"] = int(fort_int.unpack(stream, 1)[0])
+    data["nspec"] = int(fort_int.unpack(stream, 1)[0])
     data['record_size_bytes'] = \
         data["nspec"] * float_size
 

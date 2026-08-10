@@ -303,8 +303,18 @@ class RestartFile(Sequence):
         at index = self._start_record
         :param index: Linear index
         :return: Linear byte index
+
+        Note: `index` is frequently a numpy.int32 scalar (it comes straight off
+        the restart file's int32 sea-point mapping, e.g. via Grid.index() /
+        _fancy_index()). Multiplying that by record_size_bytes can overflow
+        int32 for any reasonably large global grid (e.g. ~626k sea points *
+        5184 bytes/record ~= 3.2e9, > 2**31-1) -- and numpy's scalar
+        promotion keeps the narrower dtype rather than upcasting, so the
+        overflow wraps silently (no exception, easy-to-miss RuntimeWarning)
+        instead of raising. Casting to plain (arbitrary-precision) Python
+        ints before multiplying avoids this entirely.
         """
-        return index * self._meta_data.record_size_bytes
+        return int(index) * int(self._meta_data.record_size_bytes)
 
     def interpolate_in_space(
         self,

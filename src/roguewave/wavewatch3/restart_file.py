@@ -378,6 +378,7 @@ class RestartFile(Sequence):
             data_periodic_coordinates=periodic_coordinates,
             data_period=None,
             data_discont=None,
+            nan_fallback_radius=1,
         )
 
         def _get_depth(indices, _dummy):

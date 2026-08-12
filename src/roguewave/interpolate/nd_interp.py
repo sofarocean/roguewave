@@ -218,17 +218,15 @@ class NdInterpolator:
         if self.nan_fallback_radius == 0 or not numpy.any(weights_sum <= 0.5):
             return primary_result
 
-        fallback_weight_sum, fallback_value_sum = self._radius_neighbor_fallback(
+        failed_point_position, resolved_value = self._radius_neighbor_fallback(
             number_points, indices_1d, weights_1d, weights_sum, points
         )
-        with numpy.errstate(invalid="ignore", divide="ignore"):
-            fallback_result = numpy.where(
-                fallback_weight_sum > 0,
-                fallback_value_sum / fallback_weight_sum,
-                numpy.nan,
-            )
+        if failed_point_position.size == 0:
+            return primary_result
 
-        return numpy.where(weights_sum > 0.5, primary_result, fallback_result)
+        result = primary_result.copy()
+        result[self.output_indexing_full(failed_point_position)] = resolved_value
+        return result
 
     def _point_slice(self, output_shaped_array):
         # weights_sum is constant across passive dimensions for a given point,
@@ -242,13 +240,17 @@ class NdInterpolator:
     ):
         # For a point whose primary lookup failed, inverse-distance-weight
         # whichever of its radius-N neighbors (in source-grid index space)
-        # have valid data instead of returning NaN outright.
+        # have valid data instead of returning NaN outright. Everything here
+        # is sized to the (typically tiny) failed-point subset, not to
+        # number_points -- for a global grid, failed points are a small
+        # fraction of the total, and full-size scratch buffers here would
+        # scale with the whole grid for no reason.
         #
-        # Assumes the interpolation point axis is output axis 0 (i.e.
-        # interp_index_coord_name is the first data_coordinates entry), same
-        # as the primary bilinear loop above: get_data callbacks always
-        # return their point axis first, and output_indexing_full/broadcast
-        # only line up with that when output_index_coord_index == 0.
+        # The one point where this assumes the interpolation point axis is
+        # output axis 0 (i.e. interp_index_coord_name is the first
+        # data_coordinates entry) is the final scatter into result in
+        # _data_interpolator, which mirrors the same assumption the primary
+        # bilinear loop above already makes.
         if (
             "latitude" not in self.interp_coord_names
             or "longitude" not in self.interp_coord_names
@@ -280,10 +282,6 @@ class NdInterpolator:
             indices_1d, bracket_argmax_per_axis[:, None, :], axis=1
         )[:, 0, :]
 
-        output_shape = self.output_shape(number_points)
-        fallback_weight_sum = numpy.zeros(output_shape)
-        fallback_value_sum = numpy.zeros(output_shape, dtype=numpy.float64)
-
         # A point outside the source grid's domain gets NaN (not merely low)
         # bilinear weights, and its bracket indices are meaningless clipped
         # edge values -- exclude it here so out-of-domain queries still
@@ -293,7 +291,18 @@ class NdInterpolator:
             (self._point_slice(weights_sum) <= 0.5) & point_is_in_domain
         )
         if failed_point_position.size == 0:
-            return fallback_weight_sum, fallback_value_sum
+            return failed_point_position, None
+
+        number_of_failed_points = failed_point_position.size
+        passive_shape = tuple(
+            int(size)
+            for axis, size in enumerate(self.output_shape(number_points))
+            if axis != self.output_index_coord_index
+        )
+        fallback_weight_sum = numpy.zeros(number_of_failed_points)
+        fallback_value_sum = numpy.zeros(
+            (number_of_failed_points,) + passive_shape, dtype=numpy.float64
+        )
 
         coincident_source_index_of_failed_points = coincident_source_index_per_axis[
             :, failed_point_position
@@ -317,7 +326,7 @@ class NdInterpolator:
             neighbor_source_index_per_axis = (
                 coincident_source_index_of_failed_points.copy()
             )
-            neighbor_within_bounds = numpy.ones(failed_point_position.size, dtype=bool)
+            neighbor_within_bounds = numpy.ones(number_of_failed_points, dtype=bool)
             for axis_index in range(self.interp_ndims):
                 neighbor_source_index_per_axis[axis_index] += neighbor_offset[
                     axis_index
@@ -359,7 +368,6 @@ class NdInterpolator:
                 continue
 
             usable_local_position = in_bounds_local_position[neighbor_value_is_valid]
-            usable_global_position = failed_point_position[usable_local_position]
 
             neighbor_latitude_value = latitude_values[
                 neighbor_source_index_per_axis_in_bounds[latitude_axis_index][
@@ -383,28 +391,27 @@ class NdInterpolator:
                 0.0,
             )
 
-            usable_global_mask = numpy.zeros(number_points, dtype=bool)
-            usable_global_mask[usable_global_position] = True
-
-            weight_by_point = numpy.zeros(number_points)
-            weight_by_point[usable_global_position] = neighbor_inverse_distance_weight
-
-            value_by_point = numpy.zeros(
-                (number_points,) + neighbor_value.shape[1:], dtype=numpy.float64
-            )
-            value_by_point[usable_global_position] = neighbor_value[
-                neighbor_value_is_valid
-            ]
+            usable_value = neighbor_value[neighbor_value_is_valid]
+            weight_broadcast_shape = (-1,) + (1,) * (usable_value.ndim - 1)
 
             fallback_weight_sum[
-                self.output_indexing_full(usable_global_mask)
-            ] += weight_by_point[self.output_indexing_broadcast(usable_global_mask)]
-            fallback_value_sum[self.output_indexing_full(usable_global_mask)] += (
-                weight_by_point[self.output_indexing_broadcast(usable_global_mask)]
-                * value_by_point[self.output_indexing_full(usable_global_mask)]
+                usable_local_position
+            ] += neighbor_inverse_distance_weight
+            fallback_value_sum[usable_local_position] += (
+                neighbor_inverse_distance_weight.reshape(weight_broadcast_shape)
+                * usable_value
             )
 
-        return fallback_weight_sum, fallback_value_sum
+        weight_broadcast_shape = (-1,) + (1,) * (fallback_value_sum.ndim - 1)
+        with numpy.errstate(invalid="ignore", divide="ignore"):
+            resolved_value = numpy.where(
+                fallback_weight_sum.reshape(weight_broadcast_shape) > 0,
+                fallback_value_sum
+                / fallback_weight_sum.reshape(weight_broadcast_shape),
+                numpy.nan,
+            )
+
+        return failed_point_position, resolved_value
 
     def _periodic_data_interpolator(self, number_points, indices_1d, weights_1d):
         # We keep a running sum of the weights, if a point is excluded because it

@@ -403,6 +403,14 @@ class RestartFile(Sequence):
         Input can be either a single latitude and longitude pair, or a
         numpy array of latitudes and longitudes.
 
+        When a target point's source grid point is masked/land, this falls
+        back to an inverse-distance-weighted blend of its radius-1 neighbors
+        (see NdInterpolator's nan_fallback_radius) rather than returning NaN
+        outright. A point can still come back NaN if none of its radius-1
+        neighbors have data either -- a genuine domain gap, not a coastal
+        artifact. See fill_missing_spectra to replace those with a WW3
+        cold-start-style spectrum instead of leaving them as NaN.
+
         :param latitude: latitudes to get interpolated spectra
         :param longitude: longitudes to get interpolated spectra
         :return: Interpolated spectra. Returned data is of  type float32 and

@@ -36,8 +36,76 @@ from roguewave.interpolate.nd_interp import NdInterpolator
 from datetime import datetime
 from functools import cache
 from roguewave.tools.time import to_datetime64
+from roguewave.tools.grid import midpoint_rule_step
 from xarray import Dataset, DataArray
 from roguewavespectrum import Spectrum
+
+_GRAVITATIONAL_ACCELERATION = 9.81
+
+
+def _cos_power_directional_density(
+    direction_degrees: numpy.ndarray,
+    mean_direction_degrees: float,
+    spreading_power: float,
+) -> numpy.ndarray:
+    """
+    cos^spreading_power(direction - mean_direction) for |direction - mean_direction|
+    <= 90 degrees, zero beyond -- normalized so the density sums to 1 over the
+    (assumed uniform) direction bins, matching ww3_strt ITYPE 1's directional shape.
+    """
+    signed_angle_difference = (
+        (direction_degrees - mean_direction_degrees + 180.0) % 360.0
+    ) - 180.0
+    raw_density = numpy.where(
+        numpy.abs(signed_angle_difference) <= 90.0,
+        numpy.cos(numpy.radians(signed_angle_difference)) ** spreading_power,
+        0.0,
+    )
+    direction_bin_width_degrees = 360.0 / len(direction_degrees)
+    return raw_density / (numpy.sum(raw_density) * direction_bin_width_degrees)
+
+
+def _gaussian_frequency_density(
+    frequency: numpy.ndarray, peak_frequency: float, frequency_spread: float
+) -> numpy.ndarray:
+    """
+    Gaussian bump in frequency around peak_frequency, normalized so the density
+    integrates to 1 over the (possibly non-uniform) frequency bins, matching
+    ww3_strt ITYPE 1's frequency shape.
+    """
+    raw_density = numpy.exp(
+        -((frequency - peak_frequency) ** 2) / (2 * frequency_spread**2)
+    )
+    frequency_bin_width = midpoint_rule_step(frequency)
+    return raw_density / numpy.sum(raw_density * frequency_bin_width)
+
+
+def _jonswap_frequency_density(
+    frequency: numpy.ndarray,
+    peak_frequency: float,
+    alpha: float,
+    gamma: float,
+    sigma_a: float,
+    sigma_b: float,
+) -> numpy.ndarray:
+    """
+    Standard five-parameter JONSWAP spectrum, matching ww3_strt ITYPE 2's
+    ALFA/FP/GAMMA/SIGA/SIGB parameterization. Unlike the Gaussian shape above,
+    alpha sets the absolute energy level directly -- this is not renormalized.
+    """
+    sigma = numpy.where(frequency <= peak_frequency, sigma_a, sigma_b)
+    peak_enhancement = gamma ** numpy.exp(
+        -((frequency - peak_frequency) ** 2) / (2 * sigma**2 * peak_frequency**2)
+    )
+    pierson_moskowitz = (
+        alpha
+        * _GRAVITATIONAL_ACCELERATION**2
+        * (2 * numpy.pi) ** -4
+        * frequency**-5
+        * numpy.exp(-1.25 * (peak_frequency / frequency) ** 4)
+    )
+    return pierson_moskowitz * peak_enhancement
+
 
 MAXIMUM_NUMBER_OF_WORKERS = 10
 
@@ -430,6 +498,99 @@ class RestartFile(Sequence):
                     "direction": self.direction,
                 },
             )
+        )
+
+    def fill_missing_spectra(
+        self, spectrum: Spectrum, fill_type: str = "calm", **fill_parameters
+    ) -> Spectrum:
+        """
+        Fill points in `spectrum` (as returned by interpolate_in_space) that
+        are still entirely NaN -- e.g. a domain gap with no nearby source data
+        at all -- with a WW3 cold-start-style parametric spectrum, rather than
+        leaving them as NaN. Points that already have data are left untouched.
+
+        fill_type options, matching ww3_strt's cold-start initial-condition
+        types (these are roguewave's own implementations of the same named
+        spectral shapes, not a port of WW3's Fortran):
+
+        - "calm" (default, matches ITYPE 5): zero energy everywhere.
+        - "user_defined" (matches ITYPE 4): broadcast a caller-supplied
+          spectrum to every missing point. Parameter: spectral_values, an
+          array shaped (number_of_frequencies, number_of_directions).
+        - "gaussian" (matches ITYPE 1): Gaussian in frequency, cos-power in
+          direction, normalized to a target significant wave height.
+          Parameters: peak_frequency, frequency_spread, mean_direction,
+          directional_spreading_power, significant_wave_height.
+        - "jonswap" (matches ITYPE 2): standard five-parameter JONSWAP, cos-
+          power in direction. Parameters: alpha, peak_frequency, gamma,
+          sigma_a, sigma_b, mean_direction, directional_spreading_power.
+
+        :param spectrum: a Spectrum shaped (points, frequency, direction),
+            as returned by interpolate_in_space.
+        :param fill_type: one of "calm", "user_defined", "gaussian", "jonswap".
+        :param fill_parameters: parameters for the chosen fill_type, see above.
+        :return: a copy of spectrum with missing points filled.
+        """
+        filled_spectrum = spectrum.copy()
+        variable = filled_spectrum.directional_variance_density
+        values = variable.values.copy()
+
+        point_is_missing = numpy.all(numpy.isnan(values), axis=(1, 2))
+        if numpy.any(point_is_missing):
+            values[point_is_missing, :, :] = self._fill_spectrum(
+                fill_type, **fill_parameters
+            )
+            filled_spectrum.dataset[variable.name] = (variable.dims, values)
+
+        return filled_spectrum
+
+    def _fill_spectrum(self, fill_type: str, **fill_parameters) -> numpy.ndarray:
+        if fill_type == "calm":
+            return numpy.zeros((self.number_of_frequencies, self.number_of_directions))
+
+        if fill_type == "user_defined":
+            spectral_values = numpy.asarray(fill_parameters["spectral_values"])
+            expected_shape = (self.number_of_frequencies, self.number_of_directions)
+            if spectral_values.shape != expected_shape:
+                raise ValueError(
+                    f"spectral_values must have shape {expected_shape}, got "
+                    f"{spectral_values.shape}"
+                )
+            return spectral_values
+
+        if fill_type in ("gaussian", "jonswap"):
+            directional_density = _cos_power_directional_density(
+                self.direction,
+                fill_parameters["mean_direction"],
+                fill_parameters["directional_spreading_power"],
+            )
+
+            if fill_type == "gaussian":
+                frequency_density = _gaussian_frequency_density(
+                    self.frequency,
+                    fill_parameters["peak_frequency"],
+                    fill_parameters["frequency_spread"],
+                )
+                target_variance = (
+                    fill_parameters["significant_wave_height"] / 4.0
+                ) ** 2
+                return target_variance * numpy.outer(
+                    frequency_density, directional_density
+                )
+            else:
+                frequency_density = _jonswap_frequency_density(
+                    self.frequency,
+                    fill_parameters["peak_frequency"],
+                    fill_parameters["alpha"],
+                    fill_parameters["gamma"],
+                    fill_parameters["sigma_a"],
+                    fill_parameters["sigma_b"],
+                )
+                return numpy.outer(frequency_density, directional_density)
+
+        raise ValueError(
+            f"Unknown fill_type '{fill_type}'; expected one of "
+            "'calm', 'user_defined', 'gaussian', 'jonswap'"
         )
 
     def to_wavenumber_action_density(

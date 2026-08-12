@@ -313,14 +313,18 @@ class NdInterpolator:
         target_latitude = points["latitude"][failed_point_position]
         target_longitude = points["longitude"][failed_point_position]
 
+        # Includes the zero offset (the coincident node itself): for a
+        # general, non-grid-aligned bilinear miss, the coincident node can be
+        # valid and still fall below the weights_sum > 0.5 threshold (e.g. if
+        # it is the single largest of four roughly-even corner weights), and
+        # is then the best available candidate, not a redundant recheck. For
+        # today's grid-aligned use case this is a no-op: the coincident node
+        # always has weight exactly 0 or 1, so it is either already handled
+        # by the primary lookup or invalid here too.
         radius = self.nan_fallback_radius
-        neighbor_offsets = [
-            offset
-            for offset in itertools.product(
-                range(-radius, radius + 1), repeat=self.interp_ndims
-            )
-            if any(offset)
-        ]
+        neighbor_offsets = list(
+            itertools.product(range(-radius, radius + 1), repeat=self.interp_ndims)
+        )
 
         for neighbor_offset in neighbor_offsets:
             neighbor_source_index_per_axis = (

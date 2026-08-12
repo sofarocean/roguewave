@@ -1,8 +1,31 @@
+import itertools
 from typing import Tuple, Callable, List
 import numpy
 from roguewave.tools.math import wrapped_difference
 from roguewave.tools.grid import enclosing_points_1d
 from roguewave.interpolate.general import interpolation_weights_1d
+
+_EARTH_RADIUS_KILOMETERS = 6371.0
+
+
+def _haversine_distance_kilometers(
+    latitude_a: numpy.ndarray,
+    longitude_a: numpy.ndarray,
+    latitude_b: numpy.ndarray,
+    longitude_b: numpy.ndarray,
+) -> numpy.ndarray:
+    latitude_a_radians = numpy.radians(latitude_a)
+    latitude_b_radians = numpy.radians(latitude_b)
+    delta_latitude_radians = numpy.radians(latitude_b - latitude_a)
+    delta_longitude_radians = numpy.radians(longitude_b - longitude_a)
+
+    haversine_term = (
+        numpy.sin(delta_latitude_radians / 2) ** 2
+        + numpy.cos(latitude_a_radians)
+        * numpy.cos(latitude_b_radians)
+        * numpy.sin(delta_longitude_radians / 2) ** 2
+    )
+    return 2 * _EARTH_RADIUS_KILOMETERS * numpy.arcsin(numpy.sqrt(haversine_term))
 
 
 class NdInterpolator:
@@ -17,6 +40,7 @@ class NdInterpolator:
         data_period=None,
         data_discont=None,
         nearest_neighbour=False,
+        nan_fallback_radius=0,
     ):
 
         self.get_data = get_data
@@ -29,6 +53,7 @@ class NdInterpolator:
         self.data_period = data_period
         self.data_discont = data_discont
         self.nearest_neighbour = nearest_neighbour
+        self.nan_fallback_radius = nan_fallback_radius
 
     @property
     def passive_coordinate_names(self):
@@ -184,7 +209,182 @@ class NdInterpolator:
             )
 
         with numpy.errstate(invalid="ignore", divide="ignore"):
-            return numpy.where(weights_sum > 0.5, interp_val / weights_sum, numpy.nan)
+            primary_result = numpy.where(
+                weights_sum > 0.5, interp_val / weights_sum, numpy.nan
+            )
+
+        if self.nan_fallback_radius == 0 or not numpy.any(weights_sum <= 0.5):
+            return primary_result
+
+        fallback_weight_sum, fallback_value_sum = self._radius_neighbor_fallback(
+            number_points, indices_1d, weights_1d, weights_sum
+        )
+        with numpy.errstate(invalid="ignore", divide="ignore"):
+            fallback_result = numpy.where(
+                fallback_weight_sum > 0,
+                fallback_value_sum / fallback_weight_sum,
+                numpy.nan,
+            )
+
+        return numpy.where(weights_sum > 0.5, primary_result, fallback_result)
+
+    def _point_slice(self, output_shaped_array):
+        # weights_sum is constant across passive dimensions for a given point,
+        # so any single passive index recovers the per-point value.
+        indexer = [0] * self.output_ndims
+        indexer[self.output_index_coord_index] = slice(None)
+        return output_shaped_array[tuple(indexer)]
+
+    def _radius_neighbor_fallback(
+        self, number_points, indices_1d, weights_1d, weights_sum
+    ):
+        # For a point whose primary lookup failed, inverse-distance-weight
+        # whichever of its radius-N neighbors (in source-grid index space)
+        # have valid data instead of returning NaN outright.
+        if (
+            "latitude" not in self.interp_coord_names
+            or "longitude" not in self.interp_coord_names
+        ):
+            raise NotImplementedError(
+                "nan_fallback_radius requires 'latitude' and 'longitude' among "
+                "the interpolation coordinates"
+            )
+
+        coordinate_value_by_name = dict(self.data_coordinates)
+        latitude_values = coordinate_value_by_name["latitude"]
+        longitude_values = coordinate_value_by_name["longitude"]
+        latitude_axis_index = self.interp_coord_names.index("latitude")
+        longitude_axis_index = self.interp_coord_names.index("longitude")
+
+        axis_length_by_axis = [
+            len(coordinate_value_by_name[coordinate_name])
+            for coordinate_name in self.interp_coord_names
+        ]
+        axis_period_by_axis = [
+            self.coordinate_period(coordinate_name)
+            for coordinate_name in self.interp_coord_names
+        ]
+
+        # Whichever of the two bilinear bracket points carries the larger
+        # weight is the nearest source-grid index on that axis.
+        bracket_argmax_per_axis = numpy.argmax(weights_1d, axis=1)
+        coincident_source_index_per_axis = numpy.take_along_axis(
+            indices_1d, bracket_argmax_per_axis[:, None, :], axis=1
+        )[:, 0, :]
+
+        output_shape = self.output_shape(number_points)
+        fallback_weight_sum = numpy.zeros(output_shape)
+        fallback_value_sum = numpy.zeros(output_shape, dtype=numpy.float64)
+
+        failed_point_position = numpy.flatnonzero(self._point_slice(weights_sum) <= 0.5)
+        if failed_point_position.size == 0:
+            return fallback_weight_sum, fallback_value_sum
+
+        coincident_source_index_of_failed_points = coincident_source_index_per_axis[
+            :, failed_point_position
+        ]
+        target_latitude = latitude_values[
+            coincident_source_index_of_failed_points[latitude_axis_index]
+        ]
+        target_longitude = longitude_values[
+            coincident_source_index_of_failed_points[longitude_axis_index]
+        ]
+
+        radius = self.nan_fallback_radius
+        neighbor_offsets = [
+            offset
+            for offset in itertools.product(
+                range(-radius, radius + 1), repeat=self.interp_ndims
+            )
+            if any(offset)
+        ]
+
+        for neighbor_offset in neighbor_offsets:
+            neighbor_source_index_per_axis = (
+                coincident_source_index_of_failed_points.copy()
+            )
+            neighbor_within_bounds = numpy.ones(failed_point_position.size, dtype=bool)
+            for axis_index in range(self.interp_ndims):
+                neighbor_source_index_per_axis[axis_index] += neighbor_offset[
+                    axis_index
+                ]
+                if axis_period_by_axis[axis_index] is not None:
+                    neighbor_source_index_per_axis[axis_index] %= axis_length_by_axis[
+                        axis_index
+                    ]
+                else:
+                    neighbor_within_bounds &= (
+                        neighbor_source_index_per_axis[axis_index] >= 0
+                    ) & (
+                        neighbor_source_index_per_axis[axis_index]
+                        < axis_length_by_axis[axis_index]
+                    )
+
+            if not numpy.any(neighbor_within_bounds):
+                continue
+
+            in_bounds_local_position = numpy.flatnonzero(neighbor_within_bounds)
+            neighbor_query_indices = [
+                neighbor_source_index_per_axis[axis_index][neighbor_within_bounds]
+                for axis_index in range(self.interp_ndims)
+            ]
+            neighbor_value = self.get_data(
+                neighbor_query_indices, self.interp_coord_dim_indices
+            )
+            neighbor_value_is_valid = numpy.all(
+                ~numpy.isnan(neighbor_value),
+                axis=self.output_passive_coord_dim_indices,
+            )
+            if not numpy.any(neighbor_value_is_valid):
+                continue
+
+            usable_local_position = in_bounds_local_position[neighbor_value_is_valid]
+            usable_global_position = failed_point_position[usable_local_position]
+
+            neighbor_latitude_value = latitude_values[
+                neighbor_source_index_per_axis[latitude_axis_index][
+                    neighbor_value_is_valid
+                ]
+            ]
+            neighbor_longitude_value = longitude_values[
+                neighbor_source_index_per_axis[longitude_axis_index][
+                    neighbor_value_is_valid
+                ]
+            ]
+            neighbor_distance_kilometers = _haversine_distance_kilometers(
+                target_latitude[usable_local_position],
+                target_longitude[usable_local_position],
+                neighbor_latitude_value,
+                neighbor_longitude_value,
+            )
+            neighbor_inverse_distance_weight = numpy.where(
+                neighbor_distance_kilometers > 0,
+                1.0 / neighbor_distance_kilometers,
+                0.0,
+            )
+
+            usable_global_mask = numpy.zeros(number_points, dtype=bool)
+            usable_global_mask[usable_global_position] = True
+
+            weight_by_point = numpy.zeros(number_points)
+            weight_by_point[usable_global_position] = neighbor_inverse_distance_weight
+
+            value_by_point = numpy.zeros(
+                (number_points,) + neighbor_value.shape[1:], dtype=numpy.float64
+            )
+            value_by_point[usable_global_position] = neighbor_value[
+                neighbor_value_is_valid
+            ]
+
+            fallback_weight_sum[
+                self.output_indexing_full(usable_global_mask)
+            ] += weight_by_point[self.output_indexing_broadcast(usable_global_mask)]
+            fallback_value_sum[self.output_indexing_full(usable_global_mask)] += (
+                weight_by_point[self.output_indexing_broadcast(usable_global_mask)]
+                * value_by_point[self.output_indexing_full(usable_global_mask)]
+            )
+
+        return fallback_weight_sum, fallback_value_sum
 
     def _periodic_data_interpolator(self, number_points, indices_1d, weights_1d):
         # We keep a running sum of the weights, if a point is excluded because it

@@ -175,9 +175,11 @@ class NdInterpolator:
                 number_points, indices_1d, weights_1d
             )
         else:
-            return self._data_interpolator(number_points, indices_1d, weights_1d)
+            return self._data_interpolator(
+                number_points, indices_1d, weights_1d, points
+            )
 
-    def _data_interpolator(self, number_points, indices_1d, weights_1d):
+    def _data_interpolator(self, number_points, indices_1d, weights_1d, points):
 
         # We keep a running sum of the weights, if a point is excluded because it
         # contains no data (NaN) the weights will no longer add up to 1 - and we
@@ -217,7 +219,7 @@ class NdInterpolator:
             return primary_result
 
         fallback_weight_sum, fallback_value_sum = self._radius_neighbor_fallback(
-            number_points, indices_1d, weights_1d, weights_sum
+            number_points, indices_1d, weights_1d, weights_sum, points
         )
         with numpy.errstate(invalid="ignore", divide="ignore"):
             fallback_result = numpy.where(
@@ -236,11 +238,17 @@ class NdInterpolator:
         return output_shaped_array[tuple(indexer)]
 
     def _radius_neighbor_fallback(
-        self, number_points, indices_1d, weights_1d, weights_sum
+        self, number_points, indices_1d, weights_1d, weights_sum, points
     ):
         # For a point whose primary lookup failed, inverse-distance-weight
         # whichever of its radius-N neighbors (in source-grid index space)
         # have valid data instead of returning NaN outright.
+        #
+        # Assumes the interpolation point axis is output axis 0 (i.e.
+        # interp_index_coord_name is the first data_coordinates entry), same
+        # as the primary bilinear loop above: get_data callbacks always
+        # return their point axis first, and output_indexing_full/broadcast
+        # only line up with that when output_index_coord_index == 0.
         if (
             "latitude" not in self.interp_coord_names
             or "longitude" not in self.interp_coord_names
@@ -276,19 +284,25 @@ class NdInterpolator:
         fallback_weight_sum = numpy.zeros(output_shape)
         fallback_value_sum = numpy.zeros(output_shape, dtype=numpy.float64)
 
-        failed_point_position = numpy.flatnonzero(self._point_slice(weights_sum) <= 0.5)
+        # A point outside the source grid's domain gets NaN (not merely low)
+        # bilinear weights, and its bracket indices are meaningless clipped
+        # edge values -- exclude it here so out-of-domain queries still
+        # return NaN instead of a fabricated nearest-edge value.
+        point_is_in_domain = numpy.all(numpy.isfinite(weights_1d), axis=(0, 1))
+        failed_point_position = numpy.flatnonzero(
+            (self._point_slice(weights_sum) <= 0.5) & point_is_in_domain
+        )
         if failed_point_position.size == 0:
             return fallback_weight_sum, fallback_value_sum
 
         coincident_source_index_of_failed_points = coincident_source_index_per_axis[
             :, failed_point_position
         ]
-        target_latitude = latitude_values[
-            coincident_source_index_of_failed_points[latitude_axis_index]
-        ]
-        target_longitude = longitude_values[
-            coincident_source_index_of_failed_points[longitude_axis_index]
-        ]
+        # Distances are measured from the actually-requested point, not the
+        # coincident source node -- for a general (non-grid-aligned) bilinear
+        # miss these are not the same location.
+        target_latitude = points["latitude"][failed_point_position]
+        target_longitude = points["longitude"][failed_point_position]
 
         radius = self.nan_fallback_radius
         neighbor_offsets = [
@@ -324,8 +338,14 @@ class NdInterpolator:
                 continue
 
             in_bounds_local_position = numpy.flatnonzero(neighbor_within_bounds)
+            # Subset to the in-bounds candidates now, once, so every array
+            # below (neighbor_value, neighbor_value_is_valid, and the
+            # per-axis index lookups) is sized consistently.
+            neighbor_source_index_per_axis_in_bounds = neighbor_source_index_per_axis[
+                :, neighbor_within_bounds
+            ]
             neighbor_query_indices = [
-                neighbor_source_index_per_axis[axis_index][neighbor_within_bounds]
+                neighbor_source_index_per_axis_in_bounds[axis_index]
                 for axis_index in range(self.interp_ndims)
             ]
             neighbor_value = self.get_data(
@@ -342,12 +362,12 @@ class NdInterpolator:
             usable_global_position = failed_point_position[usable_local_position]
 
             neighbor_latitude_value = latitude_values[
-                neighbor_source_index_per_axis[latitude_axis_index][
+                neighbor_source_index_per_axis_in_bounds[latitude_axis_index][
                     neighbor_value_is_valid
                 ]
             ]
             neighbor_longitude_value = longitude_values[
-                neighbor_source_index_per_axis[longitude_axis_index][
+                neighbor_source_index_per_axis_in_bounds[longitude_axis_index][
                     neighbor_value_is_valid
                 ]
             ]

@@ -278,6 +278,15 @@ class RestartFile(Sequence):
         if isinstance(indices, Sequence):
             indices = numpy.array(indices, dtype="int32")
 
+        if len(indices) == 0:
+            # numpy.array([]) on an empty list of spectra collapses to shape
+            # (0,) instead of (0, number_of_frequencies, number_of_directions),
+            # which xarray then rejects as a dimension-size conflict.
+            return numpy.empty(
+                (0, self.number_of_frequencies, self.number_of_directions),
+                dtype=self._dtype,
+            )
+
         indices = indices + self._start_record
         slices = [
             slice(self._byte_index(index), self._byte_index(index + 1), 1)

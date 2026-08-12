@@ -97,10 +97,18 @@ def test_default_radius_zero_preserves_current_nan_behavior():
 
 
 def test_fallback_wraps_around_periodic_longitude():
+    # Target is at index 0, an array endpoint: its "west" neighbor (offset
+    # -1) only exists by wrapping around to index 2 via the modulo in
+    # _radius_neighbor_fallback. A masked target in the middle of the array
+    # would never exercise that wrap, since both its immediate neighbors are
+    # already in-bounds without it.
     latitude_values = numpy.array([0.0])
     longitude_values = numpy.array([0.0, 1.0, 2.0])
     grid_value = numpy.array([[90.0, 100.0, 10.0]])
-    grid_mask = numpy.array([[True, False, True]])  # target (index 1) masked
+    # index 0 (target) masked; index 1 (offset +1, no wrap needed) also
+    # masked so the only valid neighbor is index 2, reached solely via the
+    # offset -1 -> -1 % 3 == 2 wraparound.
+    grid_mask = numpy.array([[False, False, True]])
 
     interpolator = NdInterpolator(
         get_data=_make_get_data(grid_value, grid_mask),
@@ -116,9 +124,9 @@ def test_fallback_wraps_around_periodic_longitude():
     )
 
     result = interpolator.interpolate(
-        {"latitude": numpy.array([0.0]), "longitude": numpy.array([1.0])}
+        {"latitude": numpy.array([0.0]), "longitude": numpy.array([0.0])}
     )
 
-    # Both radius-1 neighbors (index 0 to the west, index 2 wrapping around
-    # to the east) are valid and equidistant, so the result is their average.
-    assert numpy.abs(result[0] - 50.0) < 1e-6
+    # The only valid neighbor is index 2, reachable only by wrapping; with a
+    # single valid neighbor the IDW blend degenerates to that exact value.
+    assert numpy.abs(result[0] - 10.0) < 1e-6

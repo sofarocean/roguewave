@@ -1,6 +1,8 @@
 from roguewave.wavewatch3.io import (
     write_partial_restart_file,
     reassemble_restart_file_from_parts,
+    clone_restart_file,
+    open_restart_file,
 )
 import os
 
@@ -39,6 +41,25 @@ def test_local_partial_write():
             slice(i_start, i_end, 1),
             True,
         )
+
+
+def test_clone_restart_file():
+    # Regression test for #15: write_restart_file used to raise IndexError
+    # when given a Spectrum/Dataset (e.g. via clone_restart_file's use of
+    # RestartFile.__getitem__), because it read .variance_density instead of
+    # .directional_variance_density.
+    restart_file = clone_remote()
+    local_file = os.path.join(TEST_DIR, LOCAL_FILE_NAME)
+    model_definition_file = os.path.join(TEST_DIR, "mod_def.ww3")
+    output = "cloned_restart_test.file"
+
+    clone_restart_file(local_file, model_definition_file, output)
+
+    try:
+        cloned = open_restart_file(output, model_definition_file)
+        assert cloned.number_of_spatial_points == restart_file.number_of_spatial_points
+    finally:
+        os.remove(output)
 
 
 def test_local_reassemble():

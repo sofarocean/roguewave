@@ -154,7 +154,7 @@ def write_restart_file(
     :return: None
     """
     if isinstance(spectra, (Dataset, Spectrum)):
-        spectra = spectra.variance_density.values
+        spectra = spectra.directional_variance_density.values
     elif isinstance(spectra, DataArray):
         spectra = spectra.values
 

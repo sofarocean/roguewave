@@ -1,7 +1,16 @@
+from datetime import datetime, timezone
+
+import numpy
+import pytest
+
+from roguewave.wavewatch3.grid_tools import Grid
 from roguewave.wavewatch3.io import (
     write_partial_restart_file,
+    write_restart_file,
     reassemble_restart_file_from_parts,
 )
+from roguewave.wavewatch3.restart_file import RestartFile
+from roguewave.wavewatch3.restart_file_metadata import MetaData
 import os
 
 from tests.restart_files import (
@@ -12,6 +21,118 @@ from tests.restart_files import (
     file_hash,
     clone_remote,
 )
+
+
+def _make_minimal_restart_file(number_of_frequencies, number_of_directions):
+    """
+    A fully synthetic, in-memory RestartFile with an unequal number of
+    frequencies and directions, so shape-validation bugs that only show up
+    when the two counts differ (e.g. #12) can be exercised without a real
+    restart file on disk or S3 (the checked-in fixture used elsewhere in
+    this file has number_of_frequencies == number_of_directions == 36,
+    which cannot distinguish the two axes).
+    """
+    frequencies = numpy.linspace(0.1, 0.2, number_of_frequencies)
+    directions = numpy.linspace(0.0, 360.0, number_of_directions, endpoint=False)
+    latitude = numpy.array([0.0, 1.0])
+    longitude = numpy.array([0.0, 1.0])
+
+    to_linear_index = numpy.array([[0, -1], [-1, -1]])
+    to_point_index = numpy.array([[0], [0]])  # [ilon, ilat] for linear index 0
+
+    grid = Grid(
+        number_of_spatial_points=1,
+        frequencies=frequencies,
+        directions=directions,
+        latitude=latitude,
+        longitude=longitude,
+        depth=numpy.array([100.0]),
+        mask=numpy.array([[1, 0], [0, 0]]),
+        _to_linear_index=to_linear_index,
+        _to_point_index=to_point_index,
+    )
+    meta_data = MetaData(
+        name="test",
+        version="1",
+        grid_name="test",
+        restart_type="test",
+        nsea=1,
+        nspec=number_of_frequencies * number_of_directions,
+        record_size_bytes=number_of_frequencies * number_of_directions * 4,
+        time=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        byte_order="<",
+        float_size=4,
+    )
+    return RestartFile(grid=grid, meta_data=meta_data, resource=None)
+
+
+def test_write_restart_file_validates_against_direction_count():
+    # Regression test for #12: write_restart_file validated the directions
+    # axis (shape[2]) against number_of_frequencies instead of
+    # number_of_directions, so a validly-shaped spectra array on a grid
+    # where the two counts differ raised a spurious ValueError.
+    restart_file = _make_minimal_restart_file(
+        number_of_frequencies=2, number_of_directions=4
+    )
+    spectra = numpy.zeros((1, 2, 4), dtype="float32")
+    output = "unused_write_restart_file_target.file"
+
+    try:
+        with pytest.raises(AttributeError):
+            # A real write can't complete against this fixture's
+            # resource=None -- reaching that failure (rather than the
+            # shape-validation ValueError) confirms the valid shape passed
+            # validation.
+            write_restart_file(
+                spectra,
+                output,
+                restart_file,
+                spectra_are_frequence_energy_density=False,
+            )
+    finally:
+        if os.path.exists(output):
+            os.remove(output)
+
+    # A genuinely wrong direction count is still correctly rejected.
+    with pytest.raises(ValueError, match="directions"):
+        write_restart_file(
+            numpy.zeros((1, 2, 3), dtype="float32"),
+            output,
+            restart_file,
+            spectra_are_frequence_energy_density=False,
+        )
+
+
+def test_write_partial_restart_file_validates_against_direction_count():
+    # Regression test for #12, write_partial_restart_file's copy of the
+    # same bug.
+    restart_file = _make_minimal_restart_file(
+        number_of_frequencies=2, number_of_directions=4
+    )
+    spectra = numpy.zeros((1, 2, 4), dtype="float32")
+    output = "unused_write_partial_restart_file_target.file"
+
+    try:
+        with pytest.raises(AttributeError):
+            write_partial_restart_file(
+                spectra,
+                output,
+                restart_file,
+                slice(0, 1, 1),
+                spectra_are_frequence_energy_density=False,
+            )
+    finally:
+        if os.path.exists(output):
+            os.remove(output)
+
+    with pytest.raises(ValueError, match="directions"):
+        write_partial_restart_file(
+            numpy.zeros((1, 2, 3), dtype="float32"),
+            output,
+            restart_file,
+            slice(0, 1, 1),
+            spectra_are_frequence_energy_density=False,
+        )
 
 
 def test_clone_remote():

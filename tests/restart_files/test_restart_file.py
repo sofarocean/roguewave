@@ -1,7 +1,95 @@
 from tests.restart_files import clone_remote, bytes_hash
 from roguewave import Spectrum
+from roguewave.wavewatch3.grid_tools import Grid
+from roguewave.wavewatch3.restart_file import RestartFile
+from roguewave.wavewatch3.restart_file_metadata import MetaData
 from datetime import datetime, timezone
 import numpy
+
+
+class _FakeResource:
+    """
+    Minimal resource stand-in: interpolate_in_space's spectral-data path
+    reads through RestartFile.__getitem__/_fancy_index, which only needs
+    read_range to return zero-filled records of the right size -- the
+    spectral values themselves are irrelevant to this depth-only
+    regression test.
+    """
+
+    def __init__(self, record_size_bytes):
+        self._record_size_bytes = record_size_bytes
+
+    def read_range(self, slices):
+        return [bytes(self._record_size_bytes) for _ in slices]
+
+
+def _make_two_cell_restart_file():
+    """
+    A synthetic, in-memory RestartFile with two stacked 2x2 lat/lon
+    bilinear cells sharing a latitude row: cell A ((0,0)-(1,1)) is fully
+    sea at depth=100m; cell B ((1,0)-(2,1)) has one masked/land corner at
+    (2,1). Interpolating at both cells' centers in a single call exercises
+    the real (not re-implemented) nested _get_depth closure while never
+    sending an empty index array to _fancy_index for any one bilinear
+    corner role -- every role has at least one valid point via cell A, so
+    this doesn't depend on the unrelated empty-fancy-index bug (#19,
+    already fixed on cg/nan_filter_restart_interpolation, out of scope
+    here).
+    """
+    number_of_frequencies = 2
+    number_of_directions = 2
+    frequencies = numpy.array([0.1, 0.2])
+    directions = numpy.array([0.0, 180.0])
+    latitude = numpy.array([0.0, 1.0, 2.0])
+    longitude = numpy.array([0.0, 1.0])
+
+    # [ilat, ilon] -> linear index; (2, 1) is masked/land.
+    to_linear_index = numpy.array([[0, 1], [2, 3], [4, -1]])
+    # linear index -> [ilon, ilat]
+    to_point_index = numpy.array([[0, 1, 0, 1, 0], [0, 0, 1, 1, 2]])
+
+    grid = Grid(
+        number_of_spatial_points=5,
+        frequencies=frequencies,
+        directions=directions,
+        latitude=latitude,
+        longitude=longitude,
+        depth=numpy.array([100.0, 100.0, 100.0, 100.0, 100.0]),
+        mask=numpy.array([[1, 1], [1, 1], [1, 0]]),
+        _to_linear_index=to_linear_index,
+        _to_point_index=to_point_index,
+    )
+    meta_data = MetaData(
+        name="test",
+        version="1",
+        grid_name="test",
+        restart_type="test",
+        nsea=5,
+        nspec=number_of_frequencies * number_of_directions,
+        record_size_bytes=number_of_frequencies * number_of_directions * 4,
+        time=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        byte_order="<",
+        float_size=4,
+    )
+    resource = _FakeResource(meta_data.record_size_bytes)
+    return RestartFile(grid=grid, meta_data=meta_data, resource=resource)
+
+
+def test_interpolate_in_space_excludes_masked_corner_from_depth():
+    # Regression test for #14: _get_depth initialized its output buffer
+    # with zeros and never excluded masked/land corners, so they were
+    # silently averaged into the bilinear depth interpolation as depth=0
+    # instead of being excluded like the sibling _get_data getter does.
+    restart_file = _make_two_cell_restart_file()
+
+    spectrum = restart_file.interpolate_in_space(
+        latitude=numpy.array([0.5, 1.5]), longitude=numpy.array([0.5, 0.5])
+    )
+
+    # Cell A (all valid corners) and cell B (one masked corner) are both
+    # 100m everywhere they're not masked; the masked corner in cell B must
+    # not pull its weighted average down towards 0.
+    assert numpy.all(numpy.abs(spectrum.depth.values - 100.0) < 1e-6)
 
 
 def test_coordinates():

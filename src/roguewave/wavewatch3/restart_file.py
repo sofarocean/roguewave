@@ -387,6 +387,7 @@ class RestartFile(Sequence):
             output = numpy.zeros(len(indices[0]))
             mask = index >= 0
             output[mask] = self.depth[index[mask]]
+            output[~mask] = numpy.nan
             return output
 
         depth_interpolator = NdInterpolator(

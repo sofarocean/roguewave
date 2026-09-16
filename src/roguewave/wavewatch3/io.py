@@ -174,7 +174,7 @@ def write_restart_file(
             "source resource file contains"
         )
 
-    if shape[2] != parent_restart_file.number_of_frequencies:
+    if shape[2] != parent_restart_file.number_of_directions:
         raise ValueError(
             "Input spectra have more directions than the "
             "source resource file contains"
@@ -251,7 +251,7 @@ def write_partial_restart_file(
             "source resource file contains"
         )
 
-    if shape[2] != parent_restart_file.number_of_frequencies:
+    if shape[2] != parent_restart_file.number_of_directions:
         raise ValueError(
             "Input spectra have more directions than the "
             "source resource file contains"

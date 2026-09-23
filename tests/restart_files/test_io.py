@@ -1,8 +1,10 @@
+from roguewave.wavewatch3 import open_restart_file
 from roguewave.wavewatch3.io import (
     write_partial_restart_file,
     reassemble_restart_file_from_parts,
 )
 import os
+import shutil
 
 from tests.restart_files import (
     REMOTE_HASH,
@@ -57,6 +59,50 @@ def test_local_reassemble():
     assert file_hash(output) == REASSEMBLED_HASH
 
     os.remove(output)
+    for filename in names:
+        os.remove(filename)
+
+
+def test_local_reassemble_in_place():
+    # Regression test: target_file aliasing source_restart_file's own path
+    # used to corrupt the output, because create_resource(target_file, "wb")
+    # truncated the file before source_restart_file.header_bytes()/
+    # .tail_bytes() were read back from it. Uses its own throwaway copy of
+    # the fixture (not the shared cached restart001.ww3 that clone_remote()
+    # reuses across tests), since this test overwrites the file it reads
+    # from, and creates its own partial chunks rather than relying on
+    # test_local_partial_write's leftover files (already removed by
+    # test_local_reassemble by the time this runs).
+    clone_remote()
+    in_place_copy = os.path.join(TEST_DIR, "restart001_inplace_test.ww3")
+    shutil.copyfile(os.path.join(TEST_DIR, LOCAL_FILE_NAME), in_place_copy)
+    restart_file = open_restart_file(
+        in_place_copy, os.path.join(TEST_DIR, "mod_def.ww3")
+    )
+
+    names = []
+    number_of_chunks = 100
+    chunksize = restart_file.number_of_spatial_points // number_of_chunks
+    if number_of_chunks * chunksize < restart_file.number_of_spatial_points:
+        number_of_chunks += 1
+
+    for ii in range(0, number_of_chunks):
+        i_start = ii * chunksize
+        i_end = min((ii + 1) * chunksize, restart_file.number_of_spatial_points)
+        name = f"inplace_chunk{ii:04d}"
+        write_partial_restart_file(
+            restart_file[i_start:i_end],
+            name,
+            restart_file,
+            slice(i_start, i_end, 1),
+            True,
+        )
+        names.append(name)
+
+    reassemble_restart_file_from_parts(in_place_copy, names, restart_file)
+    assert file_hash(in_place_copy) == REASSEMBLED_HASH
+
+    os.remove(in_place_copy)
     for filename in names:
         os.remove(filename)
 

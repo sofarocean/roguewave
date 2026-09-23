@@ -115,10 +115,16 @@ def reassemble_restart_file_from_parts(target_file, locations, source_restart_fi
     with ThreadPool(processes=10) as pool:
         data = list(tqdm(pool.imap(_worker, locations), total=len(locations)))
 
+    # Read these before opening target_file: target_file may be the same path
+    # as source_restart_file's own resource, and opening it for writing below
+    # would truncate it first, corrupting these reads.
+    header_bytes = source_restart_file.header_bytes()
+    tail_bytes = source_restart_file.tail_bytes()
+
     # note that file is a Resource Object here.
     with create_resource(target_file, "wb") as resource:
         # Write the header
-        resource.write(source_restart_file.header_bytes())
+        resource.write(header_bytes)
 
         # Write the partial spectra sorted by start index of the spectra
         for i_start, partial_spectra in tqdm(
@@ -128,7 +134,7 @@ def reassemble_restart_file_from_parts(target_file, locations, source_restart_fi
             resource.write(partial_spectra.tobytes("C"))
 
         # write the tail
-        resource.write(source_restart_file.tail_bytes())
+        resource.write(tail_bytes)
 
 
 def write_restart_file(
@@ -188,14 +194,20 @@ def write_restart_file(
         )
         spectra[:, :, :] = spectra[:, :, :] * conversion_factor
 
+    # Read these before opening target_file: target_file may be the same path
+    # as parent_restart_file's own resource, and opening it for writing below
+    # would truncate it first, corrupting these reads.
+    header_bytes = parent_restart_file.header_bytes()
+    tail_bytes = parent_restart_file.tail_bytes()
+
     with create_resource(target_file, "wb") as file:
         # Use the parent file to get the valid header.
-        file.write(parent_restart_file.header_bytes())
+        file.write(header_bytes)
         file.write(spectra.tobytes("C"))
         # Use the parent file to get the "tail", i.e. all the information
         # stored in the restart file after the header. Currently *I* do not
         # know what this information exactly is.
-        file.write(parent_restart_file.tail_bytes())
+        file.write(tail_bytes)
 
 
 def write_partial_restart_file(
